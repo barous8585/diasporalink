@@ -1,7 +1,7 @@
 # ── Configuration Netlify pour DiasporaLink Frontend ──────
 
 [build]
-  base    = "frontend"
+
   publish = "frontend"
   command = "echo 'Pas de build — HTML/CSS/JS vanilla'"
 
