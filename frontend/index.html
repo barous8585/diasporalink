@@ -15,22 +15,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="/css/app.css" />
-  <style>
-    * { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
-    input, select, textarea { -webkit-tap-highlight-color: transparent; }
-  </style>
 </head>
 <body>
 <div id="app">
-  <div class="status-bar">
-    <span class="time" id="status-time">09:41</span>
-    <div class="status-icons">
-      <svg viewBox="0 0 24 24"><rect x="1" y="16" width="3" height="5"/><rect x="6" y="12" width="3" height="9"/><rect x="11" y="8" width="3" height="13"/><rect x="16" y="4" width="3" height="17"/></svg>
-      <svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
-      <svg viewBox="0 0 24 24"><rect x="2" y="7" width="18" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13" stroke="white" stroke-width="2"/><rect x="4" y="9" width="12" height="6" rx="1" fill="white"/></svg>
-    </div>
-  </div>
-
   <div class="screens-wrapper">
     <div class="screen" id="screen-home"></div>
     <div class="screen" id="screen-pickup"></div>
@@ -40,59 +27,12 @@
     <div class="screen" id="screen-profile"></div>
   </div>
 
-  <nav class="bottom-nav">
-    <button class="nav-item active" onclick="Router.go('home')">
-      <div class="nav-icon">
-        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      </div>
-      <span class="nav-label">Accueil</span>
-    </button>
-    <button class="nav-item" onclick="Router.go('pickup')">
-      <div class="nav-icon">
-        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-      </div>
-      <span class="nav-label">Envoyer</span>
-    </button>
-    <button class="nav-item" onclick="Router.go('tracking')" style="position:relative">
-      <div class="nav-icon">
-        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      </div>
-      <span class="nav-label">Suivi</span>
-      <div class="nav-dot"></div>
-    </button>
-    <button class="nav-item" onclick="Router.go('messages')">
-      <div class="nav-icon">
-        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      </div>
-      <span class="nav-label">Messages</span>
-    </button>
-    <button class="nav-item" onclick="Router.go('profile')">
-      <div class="nav-icon">
-        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      </div>
-      <span class="nav-label">Profil</span>
-    </button>
-  </nav>
+  <nav class="bottom-nav" id="main-nav"></nav>
 </div>
 
 <script src="/js/store.js"></script>
 <script src="/js/router.js"></script>
 <script src="/js/screens.js"></script>
 <script src="/js/app.js"></script>
-
-<script>
-  // Empêche le zoom sur double-tap Android
-  let lastTouchEnd = 0;
-  document.addEventListener('touchend', function(e) {
-    const now = Date.now();
-    if (now - lastTouchEnd <= 300) e.preventDefault();
-    lastTouchEnd = now;
-  }, { passive: false });
-
-  // Empêche le pull-to-refresh
-  document.addEventListener('touchmove', function(e) {
-    if (e.touches.length > 1) e.preventDefault();
-  }, { passive: false });
-</script>
 </body>
 </html>
