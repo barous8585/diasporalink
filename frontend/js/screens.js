@@ -1,22 +1,22 @@
 const I = {
-  box:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`,
-  check:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`,
-  plane:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 3L3 10.5l6.75 2.25L12 21l3-6.75L21 3z"/></svg>`,
-  map:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
-  clock:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
-  chat:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
-  user:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-  bell:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
-  lock:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
-  pin:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
-  send:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
-  chevron: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>`,
-  clothes: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg>`,
-  phone:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
-  doc:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
-  food:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`,
-  logout:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
-  circle:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
+  box:     `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`,
+  check:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  plane:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L3 10.5l6.75 2.25L12 21l3-6.75L21 3z"/></svg>`,
+  map:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+  clock:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  chat:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+  user:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+  bell:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+  lock:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  pin:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+  send:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+  chevron: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`,
+  clothes: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg>`,
+  phone:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
+  doc:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+  food:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`,
+  logout:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
+  circle:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>`,
 };
 
 function renderHome(el) {
@@ -69,12 +69,12 @@ function renderHome(el) {
       </div>
       <div class="section">
         <div class="section-header"><span class="section-title">Destinations</span></div>
-        <div class="card" style="padding:14px 16px">
-          <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div class="card" style="padding:16px">
+          <div style="display:flex;gap:20px;flex-wrap:wrap">
             ${countries.slice(0,6).map(c=>`
-              <div onclick="selectDestAndGo('${c.code}')" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer">
-                <div style="font-size:26px">${c.flag}</div>
-                <div style="font-size:10px;font-weight:500;color:var(--muted)">${c.name.split(' ')[0]}</div>
+              <div onclick="selectDestAndGo('${c.code}')" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;min-width:44px">
+                <span style="font-size:28px;line-height:1">${c.flag}</span>
+                <span style="font-size:11px;font-weight:500;color:var(--muted)">${c.name.split(' ')[0]}</span>
               </div>`).join('')}
           </div>
         </div>
@@ -87,19 +87,19 @@ function renderPickup(el) {
   const form = Store.get('pickupForm');
   const { countries, slots } = Store.get();
   const pkgs = [
-    { key:'clothes', label:'Vêtements', icon:'clothes' },
-    { key:'electronics', label:'Électronique', icon:'phone' },
-    { key:'documents', label:'Documents', icon:'doc' },
-    { key:'food', label:'Alimentaire', icon:'food' },
-    { key:'medicine', label:'Médicaments', icon:'box' },
-    { key:'mixed', label:'Mixte', icon:'box' },
+    { key:'clothes',     label:'Vêtements',   icon:'clothes' },
+    { key:'electronics', label:'Électronique', icon:'phone'   },
+    { key:'documents',   label:'Documents',   icon:'doc'     },
+    { key:'food',        label:'Alimentaire', icon:'food'    },
+    { key:'medicine',    label:'Médicaments', icon:'box'     },
+    { key:'mixed',       label:'Mixte',       icon:'box'     },
   ];
   el.innerHTML = `
     <div class="screen-header">
       <div class="header-top">
         <button class="header-back" onclick="Router.back()">←</button>
         <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:32px"></div>
+        <div style="width:36px"></div>
       </div>
       <div class="header-title">Planifier un pick-up</div>
       <div class="header-sub">Étape 1 sur 2</div>
@@ -111,7 +111,9 @@ function renderPickup(el) {
           <div class="form-block">
             <div class="map-box">
               <div class="map-grid"></div>
-              <div class="map-pin-wrap"><div class="map-pin">${I.pin}</div></div>
+              <div class="map-pin-wrap">
+                <div class="map-pin">${I.pin}</div>
+              </div>
               <div class="map-chip">${I.clock} Dispo demain</div>
             </div>
             <div class="field">
@@ -143,7 +145,8 @@ function renderPickup(el) {
             <div class="country-grid" id="country-grid">
               ${countries.map(c=>`
                 <div class="country-chip ${form.country===c.code?'on':''}" onclick="selectCountry('${c.code}')">
-                  <span class="flag">${c.flag}</span>${c.name.split(' ')[0]}
+                  <span class="flag">${c.flag}</span>
+                  <span>${c.name.split(' ')[0]}</span>
                 </div>`).join('')}
             </div>
             <div class="field">
@@ -154,7 +157,7 @@ function renderPickup(el) {
                 </select>
               </div>
             </div>
-            <div class="field mt12">
+            <div class="field" style="margin-top:12px">
               <label class="label">Nom du destinataire</label>
               <input class="input" id="f-rname" type="text" value="${form.recipientName}" placeholder="Prénom Nom" />
             </div>
@@ -173,7 +176,8 @@ function renderPickup(el) {
             <div class="pkg-grid" id="pkg-grid">
               ${pkgs.map(p=>`
                 <div class="pkg-chip ${form.packageType===p.key?'on':''}" onclick="selectPkg('${p.key}')">
-                  <div class="pkg-icon">${I[p.icon]}</div>${p.label}
+                  <div class="pkg-icon">${I[p.icon]}</div>
+                  <span>${p.label}</span>
                 </div>`).join('')}
             </div>
             <div class="field-row">
@@ -197,14 +201,20 @@ function renderPickup(el) {
           </div>
         </div>
       </div>
-      <div class="section mt16"><button class="btn btn-primary" onclick="submitPickup()">Continuer vers le paiement</button></div>
+      <div class="section" style="margin-top:16px">
+        <button class="btn btn-primary" onclick="submitPickup()">Continuer vers le paiement</button>
+      </div>
     </div>`;
   updatePrice();
   bindPickup();
 }
 
 function bindPickup() {
-  const map = [['f-address','address'],['f-date','date'],['f-slot','slot'],['f-city','destinationCity'],['f-rname','recipientName'],['f-rphone','recipientPhone'],['f-weight','weight'],['f-value','value']];
+  const map = [
+    ['f-address','address'],['f-date','date'],['f-slot','slot'],
+    ['f-city','destinationCity'],['f-rname','recipientName'],
+    ['f-rphone','recipientPhone'],['f-weight','weight'],['f-value','value']
+  ];
   map.forEach(([id,key]) => {
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', ()=>{ Store.set('pickupForm',{[key]:el.value}); if(['f-weight','f-value'].includes(id)) updatePrice(); });
@@ -260,7 +270,7 @@ function renderPayment(el) {
       <div class="header-top">
         <button class="header-back" onclick="Router.back()">←</button>
         <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:32px"></div>
+        <div style="width:36px"></div>
       </div>
       <div class="header-title">Paiement</div>
       <div class="header-sub">Étape 2 sur 2</div>
@@ -269,13 +279,13 @@ function renderPayment(el) {
       <div class="section" style="padding-top:16px">
         <div class="section-title" style="margin-bottom:10px">Récapitulatif</div>
         <div class="card">
-          <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)">
-            <span style="font-size:24px">${country?.flag}</span>
-            <div>
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)">
+            <span style="font-size:28px;line-height:1">${country?.flag}</span>
+            <div style="flex:1">
               <div style="font-size:14px;font-weight:600">${country?.name} · ${form.destinationCity}</div>
-              <div style="font-size:12px;color:var(--muted)">${form.recipientName} · ${form.weight} kg</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">${form.recipientName} · ${form.weight} kg</div>
             </div>
-            <span class="badge badge-grey" style="margin-left:auto">${Store.get('slots').find(s=>s.key===form.slot)?.label}</span>
+            <span class="badge badge-grey">${Store.get('slots').find(s=>s.key===form.slot)?.label}</span>
           </div>
           <div class="form-block">
             <div class="recap-line"><span class="lbl">Pick-up à domicile</span><span>${f(p.pickup)}</span></div>
@@ -323,14 +333,14 @@ function renderPayment(el) {
                 <input class="input" type="password" maxlength="3" placeholder="•••" />
               </div>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--hint)">
-              ${I.lock} Paiement sécurisé · SSL 256 bits
+            <div style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:var(--hint)">
+              ${I.lock} <span>Paiement sécurisé · SSL 256 bits</span>
             </div>
           </div>
         </div>
       </div>
-      <div class="section mt16 gap8">
-        <button class="btn btn-primary" onclick="confirmPayment()">${I.lock} Payer ${f(p.total)}</button>
+      <div class="section" style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn-primary" onclick="confirmPayment()">Payer ${f(p.total)}</button>
         <button class="btn btn-ghost" onclick="Router.back()">Modifier la commande</button>
       </div>
     </div>`;
@@ -350,7 +360,7 @@ function renderTracking(el) {
       <div class="header-top">
         <button class="header-back" onclick="Router.back()">←</button>
         <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:32px"></div>
+        <div style="width:36px"></div>
       </div>
       <div class="header-title">Suivi de colis</div>
     </div>
@@ -360,7 +370,7 @@ function renderTracking(el) {
           <div class="track-alert-id">#${active.id}</div>
           <div class="track-alert-dest">${active.destination} · ${active.recipient}</div>
           <span class="badge badge-go">${active.statusLabel}</span>
-          <div class="track-loc">${I.map} Actuellement à Roissy CDG · Vol AF541</div>
+          <div class="track-loc">${I.map} <span>Actuellement à Roissy CDG · Vol AF541</span></div>
         </div>
         <div class="section">
           <div class="section-title" style="margin-bottom:10px">Étapes</div>
@@ -385,8 +395,8 @@ function renderTracking(el) {
             </div>
           </div>
         </div>
-        <div class="section mt12">
-          <button class="btn btn-outline" onclick="Router.go('messages')">${I.chat} Contacter le livreur</button>
+        <div class="section" style="margin-top:12px">
+          <button class="btn btn-outline" onclick="Router.go('messages')">${I.chat} <span>Contacter le livreur</span></button>
         </div>`:''}
       <div class="section" style="margin-top:16px">
         <div class="section-title" style="margin-bottom:10px">Tous mes envois</div>
@@ -416,13 +426,13 @@ function renderMessages(el) {
       <div class="header-top">
         <button class="header-back" onclick="Router.back()">←</button>
         <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:32px"></div>
+        <div style="width:36px"></div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-        <div style="width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+        <div style="width:9px;height:9px;border-radius:50%;background:#4ade80;flex-shrink:0"></div>
         <div>
           <div style="font-size:14px;font-weight:600;color:white">Colis #DL-2048</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.5)">Moussa Diallo · Livreur</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.5)">Moussa Diallo · Livreur</div>
         </div>
       </div>
     </div>
@@ -479,7 +489,7 @@ function renderProfile(el) {
       <div class="header-top">
         <button class="header-back" onclick="Router.back()">←</button>
         <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:32px"></div>
+        <div style="width:36px"></div>
       </div>
       <div class="profile-top">
         <div class="profile-av">${user.initials}</div>
@@ -524,9 +534,9 @@ function renderProfile(el) {
             </div>`).join('')}
         </div>
       </div>
-      <div class="section mt8">
+      <div class="section" style="margin-top:8px;margin-bottom:8px">
         <div class="card">
-          <div class="menu-row" onclick="showToast('Déconnexion…')" style="color:var(--danger)">
+          <div class="menu-row" onclick="showToast('Déconnexion…')">
             <div class="menu-ico" style="background:#FDECEA">${I.logout}</div>
             <div class="menu-txt"><h4 style="color:var(--danger)">Se déconnecter</h4></div>
           </div>
