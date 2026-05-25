@@ -1,639 +1,540 @@
-// ── SCREENS ────────────────────────────────────────────────────────────────
+const I = {
+  box:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`,
+  check:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`,
+  plane:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 3L3 10.5l6.75 2.25L12 21l3-6.75L21 3z"/></svg>`,
+  map:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+  clock:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  chat:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+  user:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+  bell:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+  lock:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  pin:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+  send:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+  chevron: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>`,
+  clothes: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg>`,
+  phone:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
+  doc:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+  food:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`,
+  logout:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
+  circle:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
+};
 
-// ─── HOME ──────────────────────────────────────────────────────────────────
 function renderHome(el) {
-  const { user, colis } = Store.get();
-
+  const { user, colis, countries } = Store.get();
   el.innerHTML = `
     <div class="screen-header">
       <div class="header-top">
         <div class="logo">Diaspora<span>Link</span></div>
         <div class="header-avatar" onclick="Router.go('profile')">${user.initials}</div>
       </div>
-      <div class="header-greeting">Bonjour, ${user.name.split(' ')[0]} 👋</div>
-      <div class="header-title">Où envoyez-vous votre colis ?</div>
+      <div class="header-greeting">Bonjour, ${user.name.split(' ')[0]}</div>
+      <div class="header-title">Que souhaitez-vous faire ?</div>
     </div>
-
     <div class="screen-body">
-      <div class="hero-banner">
+      <div class="hero">
         <div class="hero-text">
-          <h3>Pick-up à domicile</h3>
-          <p>On vient chercher votre colis, où que vous soyez en France.</p>
+          <h3>Nouveau pick-up</h3>
+          <p>Collecte à domicile · Livraison en Afrique</p>
         </div>
-        <button class="hero-cta" onclick="Router.go('pickup')">Planifier</button>
+        <button class="hero-btn" onclick="Router.go('pickup')">Planifier</button>
       </div>
-
-      <div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <span class="section-title">Mes colis</span>
-          <span style="font-size:13px;color:var(--brand);cursor:pointer;font-weight:500" onclick="Router.go('tracking')">Voir tout</span>
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">Mes envois</span>
+          <button class="section-link" onclick="Router.go('tracking')">Voir tout</button>
         </div>
-        <div class="card" style="padding:12px 16px">
+        <div class="card">
           ${colis.map(c => `
-            <div class="colis-item" onclick="Router.go('tracking')">
-              <div class="colis-icon-wrap">${c.flag}</div>
-              <div class="colis-info">
-                <h4>#${c.id}</h4>
-                <p>${c.destination} · ${c.recipient}</p>
+            <div class="colis-row" onclick="Router.go('tracking')">
+              <div class="colis-icon">${I.box}</div>
+              <div class="colis-main">
+                <div class="colis-id">#${c.id}</div>
+                <div class="colis-dest">${c.destination} · ${c.recipient}</div>
               </div>
               <div class="colis-right">
-                <span class="badge badge-${c.status === 'delivered' ? 'success' : c.status === 'transit' ? 'warning' : 'info'}">${c.statusLabel}</span>
+                <span class="badge badge-${c.status==='delivered'?'ok':c.status==='transit'?'go':'info'}">${c.statusLabel}</span>
               </div>
-            </div>
-          `).join('')}
+              <span class="chevron">${I.chevron}</span>
+            </div>`).join('')}
         </div>
       </div>
-
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-val">${user.totalShipments}</div>
-          <div class="stat-lbl">Colis envoyés</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val">9 pays</div>
-          <div class="stat-lbl">Destinations actives</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val green">${user.rating} ★</div>
-          <div class="stat-lbl">Votre note</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val">~8j</div>
-          <div class="stat-lbl">Délai moyen</div>
+      <div class="section">
+        <div class="section-header"><span class="section-title">Statistiques</span></div>
+        <div class="stats-row">
+          <div class="stat"><div class="stat-val">${user.totalShipments}</div><div class="stat-lbl">Colis envoyés</div></div>
+          <div class="stat"><div class="stat-val">9</div><div class="stat-lbl">Pays desservis</div></div>
+          <div class="stat"><div class="stat-val g">${user.rating}</div><div class="stat-lbl">Note moyenne</div></div>
+          <div class="stat"><div class="stat-val">~8j</div><div class="stat-lbl">Délai moyen</div></div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-label">Destinations populaires</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          ${Store.get('countries').slice(0,5).map(c => `
-            <div onclick="selectDestAndGo('${c.code}')" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-width:48px">
-              <div style="font-size:28px">${c.flag}</div>
-              <div style="font-size:10px;color:var(--text-secondary);font-weight:500">${c.name.split(' ')[0]}</div>
-            </div>
-          `).join('')}
-          <div onclick="Router.go('pickup')" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-width:48px">
-            <div style="font-size:28px;width:40px;height:40px;border-radius:50%;background:var(--surface2);border:1px dashed var(--border-med);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-hint)">+</div>
-            <div style="font-size:10px;color:var(--text-secondary);font-weight:500">Plus</div>
+      <div class="section">
+        <div class="section-header"><span class="section-title">Destinations</span></div>
+        <div class="card" style="padding:14px 16px">
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            ${countries.slice(0,6).map(c=>`
+              <div onclick="selectDestAndGo('${c.code}')" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer">
+                <div style="font-size:26px">${c.flag}</div>
+                <div style="font-size:10px;font-weight:500;color:var(--muted)">${c.name.split(' ')[0]}</div>
+              </div>`).join('')}
           </div>
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
+window.selectDestAndGo = (code) => { Store.set('pickupForm', { country: code }); Router.go('pickup'); };
 
-function selectDestAndGo(code) {
-  Store.set('pickupForm', { country: code });
-  Router.go('pickup');
-}
-window.selectDestAndGo = selectDestAndGo;
-
-// ─── PICKUP ────────────────────────────────────────────────────────────────
 function renderPickup(el) {
   const form = Store.get('pickupForm');
-  const countries = Store.get('countries');
-  const slots = Store.get('slots');
-  const packageTypes = Store.get('packageTypes');
-
+  const { countries, slots } = Store.get();
+  const pkgs = [
+    { key:'clothes', label:'Vêtements', icon:'clothes' },
+    { key:'electronics', label:'Électronique', icon:'phone' },
+    { key:'documents', label:'Documents', icon:'doc' },
+    { key:'food', label:'Alimentaire', icon:'food' },
+    { key:'medicine', label:'Médicaments', icon:'box' },
+    { key:'mixed', label:'Mixte', icon:'box' },
+  ];
   el.innerHTML = `
     <div class="screen-header">
       <div class="header-top">
         <button class="header-back" onclick="Router.back()">←</button>
         <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:36px"></div>
+        <div style="width:32px"></div>
       </div>
       <div class="header-title">Planifier un pick-up</div>
-      <div class="header-subtitle">Étape 1 sur 2</div>
+      <div class="header-sub">Étape 1 sur 2</div>
     </div>
-
     <div class="screen-body">
-      <!-- Map -->
-      <div class="card" style="padding:14px">
-        <div class="card-label">Adresse de collecte</div>
-        <div class="map-placeholder" style="margin-bottom:14px">
-          <div class="map-pin-emoji">📍</div>
-          <div class="map-eta-chip">🕐 Disponible demain</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Adresse complète</label>
-          <input class="form-input" id="f-address" type="text" value="${form.address}" placeholder="Numéro, rue, ville..." />
-        </div>
-        <div class="form-row" style="margin-top:10px">
-          <div class="form-group">
-            <label class="form-label">Date souhaitée</label>
-            <input class="form-input" id="f-date" type="date" value="${form.date}" min="${new Date().toISOString().split('T')[0]}" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Créneau</label>
-            <div class="select-wrap">
-              <select class="form-select" id="f-slot">
-                ${slots.map(s => `<option value="${s.key}" ${form.slot===s.key?'selected':''}>${s.label}</option>`).join('')}
-              </select>
+      <div class="section" style="padding-top:16px">
+        <div class="section-title" style="margin-bottom:10px">Adresse de collecte</div>
+        <div class="card">
+          <div class="form-block">
+            <div class="map-box">
+              <div class="map-grid"></div>
+              <div class="map-pin-wrap"><div class="map-pin">${I.pin}</div></div>
+              <div class="map-chip">${I.clock} Dispo demain</div>
+            </div>
+            <div class="field">
+              <label class="label">Adresse</label>
+              <input class="input" id="f-address" type="text" value="${form.address}" placeholder="Numéro, rue, ville…" />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="label">Date</label>
+                <input class="input" id="f-date" type="date" value="${form.date}" min="${new Date().toISOString().split('T')[0]}" />
+              </div>
+              <div class="field">
+                <label class="label">Créneau</label>
+                <div class="select-wrap">
+                  <select class="select" id="f-slot">
+                    ${slots.map(s=>`<option value="${s.key}" ${form.slot===s.key?'selected':''}>${s.label}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- Destination -->
-      <div class="card">
-        <div class="card-label">Pays de destination</div>
-        <div class="destination-countries" id="country-grid">
-          ${countries.map(c => `
-            <div class="country-chip ${form.country===c.code?'selected':''}" onclick="selectCountry('${c.code}')">
-              <span class="flag">${c.flag}</span>
-              <span>${c.name.split(' ')[0]}</span>
+      <div class="section">
+        <div class="section-title" style="margin-bottom:10px">Destination</div>
+        <div class="card">
+          <div class="form-block">
+            <label class="label">Pays</label>
+            <div class="country-grid" id="country-grid">
+              ${countries.map(c=>`
+                <div class="country-chip ${form.country===c.code?'on':''}" onclick="selectCountry('${c.code}')">
+                  <span class="flag">${c.flag}</span>${c.name.split(' ')[0]}
+                </div>`).join('')}
             </div>
-          `).join('')}
-        </div>
-        <div style="margin-top:12px" class="form-group">
-          <label class="form-label">Ville de livraison</label>
-          <div class="select-wrap">
-            <select class="form-select" id="f-city">
-              ${(countries.find(c=>c.code===form.country)?.cities||[]).map(city=>`<option ${form.destinationCity===city?'selected':''}>${city}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-        <div style="margin-top:10px" class="form-group">
-          <label class="form-label">Nom du destinataire</label>
-          <input class="form-input" id="f-recipient-name" type="text" value="${form.recipientName}" placeholder="Prénom Nom" />
-        </div>
-        <div style="margin-top:10px" class="form-group">
-          <label class="form-label">Téléphone du destinataire</label>
-          <input class="form-input" id="f-recipient-phone" type="tel" value="${form.recipientPhone}" placeholder="+221 7X XXX XX XX" />
-        </div>
-      </div>
-
-      <!-- Package -->
-      <div class="card">
-        <div class="card-label">Type de colis</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
-          ${packageTypes.map(p => `
-            <div onclick="selectPkgType('${p.key}')" class="country-chip ${form.packageType===p.key?'selected':''}" style="flex-direction:column;gap:3px">
-              <span style="font-size:20px">${p.icon}</span>
-              <span style="font-size:10px">${p.label.split(' ')[0]}</span>
+            <div class="field">
+              <label class="label">Ville</label>
+              <div class="select-wrap">
+                <select class="select" id="f-city">
+                  ${(countries.find(c=>c.code===form.country)?.cities||[]).map(v=>`<option ${form.destinationCity===v?'selected':''}>${v}</option>`).join('')}
+                </select>
+              </div>
             </div>
-          `).join('')}
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Poids estimé (kg)</label>
-            <input class="form-input" id="f-weight" type="number" min="0.1" step="0.5" value="${form.weight}" placeholder="5" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Valeur déclarée (€)</label>
-            <input class="form-input" id="f-value" type="number" min="0" value="${form.value}" placeholder="150" />
+            <div class="field mt12">
+              <label class="label">Nom du destinataire</label>
+              <input class="input" id="f-rname" type="text" value="${form.recipientName}" placeholder="Prénom Nom" />
+            </div>
+            <div class="field">
+              <label class="label">Téléphone</label>
+              <input class="input" id="f-rphone" type="tel" value="${form.recipientPhone}" placeholder="+221 7X XXX XX XX" />
+            </div>
           </div>
         </div>
       </div>
-
-      <!-- Price preview -->
-      <div class="card" id="price-preview" style="background:var(--brand-pale);border-color:rgba(29,158,117,0.2)">
-        <div class="card-label">Estimation tarifaire</div>
-        <div id="price-rows"></div>
+      <div class="section">
+        <div class="section-title" style="margin-bottom:10px">Colis</div>
+        <div class="card">
+          <div class="form-block">
+            <label class="label">Type de contenu</label>
+            <div class="pkg-grid" id="pkg-grid">
+              ${pkgs.map(p=>`
+                <div class="pkg-chip ${form.packageType===p.key?'on':''}" onclick="selectPkg('${p.key}')">
+                  <div class="pkg-icon">${I[p.icon]}</div>${p.label}
+                </div>`).join('')}
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="label">Poids (kg)</label>
+                <input class="input" id="f-weight" type="number" min="0.1" step="0.5" value="${form.weight}" placeholder="5" />
+              </div>
+              <div class="field">
+                <label class="label">Valeur (€)</label>
+                <input class="input" id="f-value" type="number" min="0" value="${form.value}" placeholder="150" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <button class="btn btn-primary" onclick="submitPickup()">
-        Continuer vers le paiement →
-      </button>
-    </div>
-  `;
-
-  updatePricePreview();
-  bindPickupInputs();
+      <div class="section">
+        <div class="card" style="border-left:3px solid var(--green)">
+          <div class="form-block">
+            <div class="section-title" style="margin-bottom:10px">Estimation</div>
+            <div id="price-rows"></div>
+          </div>
+        </div>
+      </div>
+      <div class="section mt16"><button class="btn btn-primary" onclick="submitPickup()">Continuer vers le paiement</button></div>
+    </div>`;
+  updatePrice();
+  bindPickup();
 }
 
-function bindPickupInputs() {
-  const ids = ['f-address','f-date','f-slot','f-city','f-recipient-name','f-recipient-phone','f-weight','f-value'];
-  const keys = ['address','date','slot','destinationCity','recipientName','recipientPhone','weight','value'];
-  ids.forEach((id, i) => {
+function bindPickup() {
+  const map = [['f-address','address'],['f-date','date'],['f-slot','slot'],['f-city','destinationCity'],['f-rname','recipientName'],['f-rphone','recipientPhone'],['f-weight','weight'],['f-value','value']];
+  map.forEach(([id,key]) => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('input', () => {
-      Store.set('pickupForm', { [keys[i]]: el.value });
-      if (id === 'f-weight' || id === 'f-value') updatePricePreview();
-    });
+    if(el) el.addEventListener('input', ()=>{ Store.set('pickupForm',{[key]:el.value}); if(['f-weight','f-value'].includes(id)) updatePrice(); });
   });
 }
 
 function selectCountry(code) {
-  Store.set('pickupForm', { country: code });
-  document.querySelectorAll('#country-grid .country-chip').forEach(c => {
-    c.classList.toggle('selected', c.getAttribute('onclick').includes(`'${code}'`));
-  });
-  const countries = Store.get('countries');
-  const cities = countries.find(c=>c.code===code)?.cities || [];
+  Store.set('pickupForm',{country:code});
+  document.querySelectorAll('#country-grid .country-chip').forEach(c=>c.classList.toggle('on',c.getAttribute('onclick').includes(`'${code}'`)));
+  const cities = Store.get('countries').find(c=>c.code===code)?.cities||[];
   const sel = document.getElementById('f-city');
-  if (sel) sel.innerHTML = cities.map(city=>`<option>${city}</option>`).join('');
-  updatePricePreview();
+  if(sel) sel.innerHTML = cities.map(v=>`<option>${v}</option>`).join('');
+  updatePrice();
 }
 window.selectCountry = selectCountry;
 
-function selectPkgType(key) {
-  Store.set('pickupForm', { packageType: key });
-  document.querySelectorAll('#screen-pickup .country-chip[onclick^="selectPkgType"]').forEach(el => {
-    el.classList.toggle('selected', el.getAttribute('onclick').includes(`'${key}'`));
-  });
+function selectPkg(key) {
+  Store.set('pickupForm',{packageType:key});
+  document.querySelectorAll('#pkg-grid .pkg-chip').forEach(c=>c.classList.toggle('on',c.getAttribute('onclick').includes(`'${key}'`)));
 }
-window.selectPkgType = selectPkgType;
+window.selectPkg = selectPkg;
 
-function updatePricePreview() {
+function updatePrice() {
   const p = Store.computePrice();
-  const container = document.getElementById('price-rows');
-  if (!container) return;
-  const fmt = v => v.toFixed(2) + ' €';
-  container.innerHTML = `
-    <div class="recap-row"><span class="label">Pick-up à domicile</span><span class="amount">${fmt(p.pickup)}</span></div>
-    <div class="recap-row"><span class="label">Transport (${Store.get('pickupForm').weight||'?'} kg)</span><span class="amount">${p.transport>0?fmt(p.transport):'—'}</span></div>
-    ${p.insurance>0?`<div class="recap-row"><span class="label">Assurance colis</span><span class="amount">${fmt(p.insurance)}</span></div>`:''}
-    <div class="recap-total"><span class="label">Total estimé</span><span class="amount">${p.total>Store.get('pickupFee')?fmt(p.total):'—'}</span></div>
-  `;
+  const el = document.getElementById('price-rows');
+  if(!el) return;
+  const f = v => v.toFixed(2)+' €';
+  const w = Store.get('pickupForm').weight;
+  el.innerHTML = `
+    <div class="recap-line"><span class="lbl">Pick-up à domicile</span><span>${f(p.pickup)}</span></div>
+    <div class="recap-line"><span class="lbl">Transport${w?' · '+w+' kg':''}</span><span>${p.transport>0?f(p.transport):'—'}</span></div>
+    ${p.insurance>0?`<div class="recap-line"><span class="lbl">Assurance</span><span>${f(p.insurance)}</span></div>`:''}
+    <div class="recap-total"><span class="lbl">Total estimé</span><span class="amt">${p.total>p.pickup?f(p.total):'—'}</span></div>`;
 }
-window.updatePricePreview = updatePricePreview;
+window.updatePrice = updatePrice;
 
 function submitPickup() {
-  const form = Store.get('pickupForm');
-  if (!form.date) { showToast('Veuillez choisir une date de pick-up'); return; }
-  if (!form.recipientName) { showToast('Veuillez saisir le nom du destinataire'); return; }
-  if (!form.weight) { showToast('Veuillez indiquer le poids du colis'); return; }
+  const f = Store.get('pickupForm');
+  if(!f.date) return showToast('Veuillez choisir une date');
+  if(!f.recipientName) return showToast('Nom du destinataire requis');
+  if(!f.weight) return showToast('Poids du colis requis');
   Router.go('payment');
 }
 window.submitPickup = submitPickup;
 
-// ─── PAYMENT ───────────────────────────────────────────────────────────────
 function renderPayment(el) {
-  const price = Store.computePrice();
+  const p = Store.computePrice();
   const form = Store.get('pickupForm');
-  const countries = Store.get('countries');
-  const country = countries.find(c=>c.code===form.country);
-  const fmt = v => v.toFixed(2) + ' €';
-
+  const country = Store.get('countries').find(c=>c.code===form.country);
+  const f = v => v.toFixed(2)+' €';
   el.innerHTML = `
     <div class="screen-header">
       <div class="header-top">
         <button class="header-back" onclick="Router.back()">←</button>
         <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:36px"></div>
+        <div style="width:32px"></div>
       </div>
       <div class="header-title">Paiement</div>
-      <div class="header-subtitle">Étape 2 sur 2</div>
+      <div class="header-sub">Étape 2 sur 2</div>
     </div>
-
     <div class="screen-body">
-      <!-- Summary -->
-      <div class="card">
-        <div class="card-label">Récapitulatif de commande</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px;background:var(--brand-pale);border-radius:var(--radius-md)">
-          <span style="font-size:24px">${country?.flag||'📦'}</span>
-          <div>
-            <div style="font-size:14px;font-weight:500">${country?.name||''} · ${form.destinationCity||''}</div>
-            <div style="font-size:12px;color:var(--text-secondary)">Pour : ${form.recipientName} · ${form.weight} kg</div>
+      <div class="section" style="padding-top:16px">
+        <div class="section-title" style="margin-bottom:10px">Récapitulatif</div>
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)">
+            <span style="font-size:24px">${country?.flag}</span>
+            <div>
+              <div style="font-size:14px;font-weight:600">${country?.name} · ${form.destinationCity}</div>
+              <div style="font-size:12px;color:var(--muted)">${form.recipientName} · ${form.weight} kg</div>
+            </div>
+            <span class="badge badge-grey" style="margin-left:auto">${Store.get('slots').find(s=>s.key===form.slot)?.label}</span>
           </div>
-          <span class="badge badge-neutral" style="margin-left:auto">${Store.get('slots').find(s=>s.key===form.slot)?.label||''}</span>
-        </div>
-        <div class="recap-row"><span class="label">Pick-up à domicile</span><span class="amount">${fmt(price.pickup)}</span></div>
-        <div class="recap-row"><span class="label">Transport (${form.weight} kg · ${country?.name})</span><span class="amount">${fmt(price.transport)}</span></div>
-        ${price.insurance>0?`<div class="recap-row"><span class="label">Assurance colis</span><span class="amount">${fmt(price.insurance)}</span></div>`:''}
-        <div class="recap-total"><span class="label">Total</span><span class="amount">${fmt(price.total)}</span></div>
-      </div>
-
-      <!-- Payment method -->
-      <div class="card">
-        <div class="card-label">Mode de paiement</div>
-        <div class="pay-method selected" onclick="selectPay(this)">
-          <div class="pay-icon-wrap">💳</div>
-          <div class="pay-info">
-            <h4>Carte bancaire</h4>
-            <p>Visa · Mastercard · Maestro</p>
+          <div class="form-block">
+            <div class="recap-line"><span class="lbl">Pick-up à domicile</span><span>${f(p.pickup)}</span></div>
+            <div class="recap-line"><span class="lbl">Transport · ${form.weight} kg</span><span>${f(p.transport)}</span></div>
+            ${p.insurance>0?`<div class="recap-line"><span class="lbl">Assurance</span><span>${f(p.insurance)}</span></div>`:''}
+            <div class="recap-total"><span class="lbl">Total</span><span class="amt">${f(p.total)}</span></div>
           </div>
-          <input type="radio" class="pay-radio" name="pay" checked />
-        </div>
-        <div class="pay-method" onclick="selectPay(this)">
-          <div class="pay-icon-wrap">📱</div>
-          <div class="pay-info">
-            <h4>Mobile Money</h4>
-            <p>Wave, Orange Money, MTN</p>
-          </div>
-          <input type="radio" class="pay-radio" name="pay" />
-        </div>
-        <div class="pay-method" onclick="selectPay(this)">
-          <div class="pay-icon-wrap">🏦</div>
-          <div class="pay-info">
-            <h4>Virement SEPA</h4>
-            <p>Délai : 1 jour ouvré</p>
-          </div>
-          <input type="radio" class="pay-radio" name="pay" />
         </div>
       </div>
-
-      <!-- Card details -->
-      <div class="card" id="card-details-section">
-        <div class="card-label">Coordonnées carte</div>
-        <div class="form-group">
-          <label class="form-label">Numéro de carte</label>
-          <input class="form-input" id="f-cardnum" type="text" maxlength="19" placeholder="1234 5678 9012 3456" oninput="formatCardNum(this)" />
-        </div>
-        <div class="form-row" style="margin-top:10px">
-          <div class="form-group">
-            <label class="form-label">Date d'expiration</label>
-            <input class="form-input" type="text" maxlength="5" placeholder="MM/AA" oninput="formatExpiry(this)" />
+      <div class="section">
+        <div class="section-title" style="margin-bottom:10px">Moyen de paiement</div>
+        <div class="card">
+          <div class="pay-row on" onclick="selectPay(this)">
+            <div class="pay-logo">💳</div>
+            <div class="pay-info"><h4>Carte bancaire</h4><p>Visa · Mastercard</p></div>
+            <input type="radio" class="pay-radio" name="pay" checked />
           </div>
-          <div class="form-group">
-            <label class="form-label">CVV</label>
-            <input class="form-input" type="text" maxlength="3" placeholder="•••" />
+          <div class="pay-row" onclick="selectPay(this)">
+            <div class="pay-logo">📱</div>
+            <div class="pay-info"><h4>Mobile Money</h4><p>Wave · Orange Money</p></div>
+            <input type="radio" class="pay-radio" name="pay" />
           </div>
-        </div>
-        <div style="margin-top:12px;display:flex;align-items:center;gap:6px">
-          <span style="font-size:18px">🔒</span>
-          <span style="font-size:11px;color:var(--text-hint)">Paiement sécurisé · Chiffrement SSL 256 bits</span>
+          <div class="pay-row" onclick="selectPay(this)">
+            <div class="pay-logo">🏦</div>
+            <div class="pay-info"><h4>Virement SEPA</h4><p>Délai 1 jour ouvré</p></div>
+            <input type="radio" class="pay-radio" name="pay" />
+          </div>
         </div>
       </div>
-
-      <button class="btn btn-primary" onclick="confirmPayment()">
-        🔒 Payer ${fmt(price.total)}
-      </button>
-      <button class="btn btn-ghost" style="margin-top:8px" onclick="Router.back()">Modifier la commande</button>
-    </div>
-  `;
+      <div class="section">
+        <div class="section-title" style="margin-bottom:10px">Coordonnées carte</div>
+        <div class="card">
+          <div class="form-block">
+            <div class="field">
+              <label class="label">Numéro de carte</label>
+              <input class="input" type="text" maxlength="19" placeholder="1234 5678 9012 3456" oninput="fmtCard(this)" />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="label">Expiration</label>
+                <input class="input" type="text" maxlength="5" placeholder="MM/AA" oninput="fmtExp(this)" />
+              </div>
+              <div class="field">
+                <label class="label">CVV</label>
+                <input class="input" type="password" maxlength="3" placeholder="•••" />
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--hint)">
+              ${I.lock} Paiement sécurisé · SSL 256 bits
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section mt16 gap8">
+        <button class="btn btn-primary" onclick="confirmPayment()">${I.lock} Payer ${f(p.total)}</button>
+        <button class="btn btn-ghost" onclick="Router.back()">Modifier la commande</button>
+      </div>
+    </div>`;
 }
+function selectPay(el) { document.querySelectorAll('.pay-row').forEach(r=>r.classList.remove('on')); el.classList.add('on'); el.querySelector('input').checked=true; }
+window.selectPay=selectPay;
+window.fmtCard=el=>{ let v=el.value.replace(/\D/g,'').slice(0,16); el.value=v.replace(/(.{4})/g,'$1 ').trim(); };
+window.fmtExp=el=>{ let v=el.value.replace(/\D/g,'').slice(0,4); if(v.length>=2) v=v.slice(0,2)+'/'+v.slice(2); el.value=v; };
+function confirmPayment() { showToast('Paiement confirmé — pick-up planifié'); setTimeout(()=>Router.go('tracking'),1400); }
+window.confirmPayment=confirmPayment;
 
-function selectPay(el) {
-  document.querySelectorAll('.pay-method').forEach(m => m.classList.remove('selected'));
-  el.classList.add('selected');
-  el.querySelector('input[type=radio]').checked = true;
-}
-window.selectPay = selectPay;
-
-function formatCardNum(el) {
-  let v = el.value.replace(/\D/g,'').slice(0,16);
-  el.value = v.replace(/(.{4})/g,'$1 ').trim();
-}
-window.formatCardNum = formatCardNum;
-
-function formatExpiry(el) {
-  let v = el.value.replace(/\D/g,'').slice(0,4);
-  if (v.length >= 2) v = v.slice(0,2) + '/' + v.slice(2);
-  el.value = v;
-}
-window.formatExpiry = formatExpiry;
-
-function confirmPayment() {
-  showToast('Paiement confirmé ✓ Pick-up planifié !');
-  setTimeout(() => Router.go('tracking'), 1500);
-}
-window.confirmPayment = confirmPayment;
-
-// ─── TRACKING ──────────────────────────────────────────────────────────────
 function renderTracking(el) {
   const colis = Store.get('colis');
-  const active = colis.find(c => c.status === 'transit');
-
+  const active = colis.find(c=>c.status==='transit');
   el.innerHTML = `
     <div class="screen-header">
       <div class="header-top">
         <button class="header-back" onclick="Router.back()">←</button>
         <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:36px"></div>
+        <div style="width:32px"></div>
       </div>
       <div class="header-title">Suivi de colis</div>
     </div>
-
     <div class="screen-body">
-      ${active ? `
-        <div class="card" style="border-color:rgba(239,159,39,0.3);background:linear-gradient(135deg,var(--surface),#fffdf5)">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-            <div>
-              <div style="font-size:11px;color:var(--text-hint);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Colis actif · #${active.id}</div>
-              <div style="font-family:var(--font-display);font-size:17px;font-weight:700;margin-top:3px">${active.destination}</div>
-              <div style="font-size:13px;color:var(--text-secondary)">Pour : ${active.recipient}</div>
+      ${active?`
+        <div class="track-alert">
+          <div class="track-alert-id">#${active.id}</div>
+          <div class="track-alert-dest">${active.destination} · ${active.recipient}</div>
+          <span class="badge badge-go">${active.statusLabel}</span>
+          <div class="track-loc">${I.map} Actuellement à Roissy CDG · Vol AF541</div>
+        </div>
+        <div class="section">
+          <div class="section-title" style="margin-bottom:10px">Étapes</div>
+          <div class="card">
+            <div style="padding:16px">
+              <div class="tl">
+                ${active.steps.map((s,i)=>{
+                  const isLast=i===active.steps.length-1;
+                  const dotCls=s.done?'done':s.active?'now':'';
+                  const ico=s.done?I.check:s.active?I.plane:I.circle;
+                  return `<div class="tl-row">
+                    <div class="tl-left">
+                      <div class="tl-dot ${dotCls}">${ico}</div>
+                      ${!isLast?`<div class="tl-line ${s.done?'done':''}"></div>`:''}
+                    </div>
+                    <div class="tl-content ${s.active?'now':''}">
+                      <h4>${s.label}</h4><p>${s.detail}</p>
+                    </div>
+                  </div>`;
+                }).join('')}
+              </div>
             </div>
-            <span class="badge badge-warning">${active.flag} ${active.statusLabel}</span>
-          </div>
-          <div style="background:var(--accent-light);border-radius:var(--radius-md);padding:10px 12px;font-size:13px;color:var(--accent-dark);display:flex;align-items:center;gap:8px">
-            <span style="font-size:16px">✈️</span>
-            <span>Actuellement à Roissy CDG · Vol AF541</span>
           </div>
         </div>
-
+        <div class="section mt12">
+          <button class="btn btn-outline" onclick="Router.go('messages')">${I.chat} Contacter le livreur</button>
+        </div>`:''}
+      <div class="section" style="margin-top:16px">
+        <div class="section-title" style="margin-bottom:10px">Tous mes envois</div>
         <div class="card">
-          <div class="card-label">Étapes de livraison</div>
-          <div class="timeline">
-            ${active.steps.map((step, i) => {
-              const isLast = i === active.steps.length - 1;
-              const dotClass = step.done ? 'done' : step.active ? 'active' : 'todo';
-              const icon = step.done ? '✓' : step.active ? '✈' : '○';
-              const lineClass = step.done ? 'done' : '';
-              return `
-                <div class="tl-step">
-                  <div class="tl-left">
-                    <div class="tl-dot ${dotClass}">${icon}</div>
-                    ${!isLast ? `<div class="tl-line ${lineClass}"></div>` : ''}
-                  </div>
-                  <div class="tl-content ${step.active?'active':''}">
-                    <h4>${step.label}</h4>
-                    <p>${step.detail}</p>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-
-        <button class="btn btn-outline" onclick="Router.go('messages')">
-          💬 Contacter le livreur
-        </button>
-      ` : ''}
-
-      <div>
-        <div class="section-title" style="margin-bottom:10px">Tous mes colis</div>
-        <div class="card" style="padding:12px 16px">
-          ${colis.map(c => `
-            <div class="colis-item">
-              <div class="colis-icon-wrap">${c.flag}</div>
-              <div class="colis-info">
-                <h4>#${c.id}</h4>
-                <p>${c.destination} · ${c.date}</p>
+          ${colis.map(c=>`
+            <div class="colis-row">
+              <div class="colis-icon">${I.box}</div>
+              <div class="colis-main">
+                <div class="colis-id">#${c.id}</div>
+                <div class="colis-dest">${c.destination}</div>
               </div>
               <div class="colis-right">
                 <div class="colis-price">${c.price.toFixed(2)} €</div>
-                <span class="badge badge-${c.status==='delivered'?'success':c.status==='transit'?'warning':'info'}" style="font-size:10px">${c.statusLabel}</span>
+                <div class="colis-date">${c.date}</div>
               </div>
-            </div>
-          `).join('')}
+              <span class="chevron">${I.chevron}</span>
+            </div>`).join('')}
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
-// ─── MESSAGES ──────────────────────────────────────────────────────────────
 function renderMessages(el) {
-  const messages = Store.get('messages');
-
-  el.innerHTML = `
-    <div class="screen-header">
-      <div class="header-top">
-        <button class="header-back" onclick="Router.back()">←</button>
-        <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:36px"></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:2px">
-        <div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:18px">🚚</div>
-        <div>
-          <div style="font-family:var(--font-display);font-size:16px;font-weight:700;color:white">Colis #DL-2048</div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.65)">Moussa Diallo · En ligne</div>
-        </div>
-        <div style="margin-left:auto">
-          <div style="width:8px;height:8px;border-radius:50%;background:#4ade80;margin-left:8px"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="screen-body" id="chat-body" style="padding-bottom:8px">
-      <div class="chat-list" id="chat-list">
-        ${messages.map(m => renderMessage(m)).join('')}
-      </div>
-    </div>
-
-    <div class="chat-input-area">
-      <input class="chat-text-input" id="chat-input" type="text" placeholder="Votre message…" onkeydown="chatKeydown(event)" />
-      <button class="chat-send-btn" onclick="sendMessage()">➤</button>
-    </div>
-  `;
-
-  // Scroll to bottom
-  setTimeout(() => {
-    const body = document.getElementById('chat-body');
-    if (body) body.scrollTop = body.scrollHeight;
-  }, 50);
-}
-
-function renderMessage(m) {
-  if (m.from === 'system') {
-    return `<div class="chat-bubble system"><div class="bubble-text">${m.text}</div><div class="bubble-time">${m.time}</div></div>`;
-  }
-  if (m.from === 'agent') {
-    return `<div class="chat-bubble agent"><div class="bubble-sender">${m.sender}</div><div class="bubble-text">${m.text}</div><div class="bubble-time">${m.time}</div></div>`;
-  }
-  return `<div class="chat-bubble user"><div class="bubble-text">${m.text}</div><div class="bubble-time right">${m.time}</div></div>`;
-}
-
-function sendMessage() {
-  const input = document.getElementById('chat-input');
-  if (!input || !input.value.trim()) return;
-  const text = input.value.trim();
-  const time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const msg = { id: Date.now(), from: 'user', text, time };
   const msgs = Store.get('messages');
-  msgs.push(msg);
-  Store.set('messages', msgs);
-  const list = document.getElementById('chat-list');
-  if (list) {
-    const div = document.createElement('div');
-    div.innerHTML = renderMessage(msg);
-    list.appendChild(div.firstChild);
-  }
-  input.value = '';
-  const body = document.getElementById('chat-body');
-  if (body) body.scrollTop = body.scrollHeight;
-
-  // Simulate reply after 1.5s
-  setTimeout(() => {
-    const reply = { id: Date.now()+1, from: 'agent', sender: 'Moussa · Votre livreur', text: 'Message bien reçu ! Je vous tiens informé de l\'avancement.', time: new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) };
-    msgs.push(reply);
-    Store.set('messages', msgs);
-    const list2 = document.getElementById('chat-list');
-    if (list2) {
-      const div2 = document.createElement('div');
-      div2.innerHTML = renderMessage(reply);
-      list2.appendChild(div2.firstChild);
-      const body2 = document.getElementById('chat-body');
-      if (body2) body2.scrollTop = body2.scrollHeight;
-    }
-  }, 1500);
-}
-window.sendMessage = sendMessage;
-
-function chatKeydown(e) { if (e.key === 'Enter') sendMessage(); }
-window.chatKeydown = chatKeydown;
-
-// ─── PROFILE ───────────────────────────────────────────────────────────────
-function renderProfile(el) {
-  const user = Store.get('user');
-  const colis = Store.get('colis');
-
   el.innerHTML = `
     <div class="screen-header">
       <div class="header-top">
         <button class="header-back" onclick="Router.back()">←</button>
         <div class="logo">Diaspora<span>Link</span></div>
-        <div style="width:36px"></div>
+        <div style="width:32px"></div>
       </div>
-      <div class="profile-header-ext">
-        <div class="profile-avatar-lg">${user.initials}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+        <div style="width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0"></div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:white">Colis #DL-2048</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.5)">Moussa Diallo · Livreur</div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-body" id="chat-body" style="padding-bottom:0">
+      <div class="chat-list" id="chat-list">
+        ${msgs.map(m=>msgHtml(m)).join('')}
+      </div>
+    </div>
+    <div class="chat-bar">
+      <input class="chat-input" id="chat-in" type="text" placeholder="Votre message…" onkeydown="chatKey(event)" />
+      <button class="chat-send" onclick="sendMsg()">${I.send}</button>
+    </div>`;
+  setTimeout(()=>{ const b=document.getElementById('chat-body'); if(b) b.scrollTop=b.scrollHeight; },50);
+}
+
+function msgHtml(m) {
+  if(m.from==='system') return `<div class="bubble bubble-sys"><div class="bubble-body">${m.text}</div><div class="bubble-time">${m.time}</div></div>`;
+  if(m.from==='agent') return `<div class="bubble bubble-agent"><div class="bubble-sender">${m.sender}</div><div class="bubble-body">${m.text}</div><div class="bubble-time">${m.time}</div></div>`;
+  return `<div class="bubble bubble-user"><div class="bubble-body">${m.text}</div><div class="bubble-time">${m.time}</div></div>`;
+}
+
+function sendMsg() {
+  const inp=document.getElementById('chat-in');
+  if(!inp||!inp.value.trim()) return;
+  const time=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const msg={id:Date.now(),from:'user',text:inp.value.trim(),time};
+  const msgs=Store.get('messages'); msgs.push(msg); Store.set('messages',msgs);
+  const list=document.getElementById('chat-list');
+  if(list){const d=document.createElement('div');d.innerHTML=msgHtml(msg);list.appendChild(d.firstChild);}
+  inp.value='';
+  const b=document.getElementById('chat-body');if(b) b.scrollTop=b.scrollHeight;
+  setTimeout(()=>{
+    const reply={id:Date.now()+1,from:'agent',sender:'Moussa · Livreur',text:'Message reçu, je vous tiens informé.',time:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})};
+    msgs.push(reply);Store.set('messages',msgs);
+    const l2=document.getElementById('chat-list');
+    if(l2){const d2=document.createElement('div');d2.innerHTML=msgHtml(reply);l2.appendChild(d2.firstChild);}
+    const b2=document.getElementById('chat-body');if(b2) b2.scrollTop=b2.scrollHeight;
+  },1500);
+}
+window.sendMsg=sendMsg;
+window.chatKey=e=>{if(e.key==='Enter') sendMsg();};
+
+function renderProfile(el) {
+  const { user, colis } = Store.get();
+  const menuItems = [
+    {icon:'user', label:'Informations personnelles', sub:'Nom, téléphone, adresse'},
+    {icon:'pin',  label:'Adresses enregistrées',     sub:user.address},
+    {icon:'bell', label:'Notifications',             sub:'Push, SMS, Email'},
+    {icon:'lock', label:'Sécurité',                  sub:'Mot de passe, biométrie'},
+    {icon:'doc',  label:'Conditions & confidentialité', sub:'CGU, données personnelles'},
+  ];
+  el.innerHTML = `
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="header-back" onclick="Router.back()">←</button>
+        <div class="logo">Diaspora<span>Link</span></div>
+        <div style="width:32px"></div>
+      </div>
+      <div class="profile-top">
+        <div class="profile-av">${user.initials}</div>
         <div>
           <div class="profile-name">${user.name}</div>
           <div class="profile-email">${user.email}</div>
         </div>
       </div>
     </div>
-
     <div class="screen-body">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-val">${user.totalShipments}</div>
-          <div class="stat-lbl">Envois totaux</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val">${user.totalSpent} €</div>
-          <div class="stat-lbl">Total dépensé</div>
+      <div class="section" style="padding-top:16px">
+        <div class="stats-row">
+          <div class="stat"><div class="stat-val">${user.totalShipments}</div><div class="stat-lbl">Envois totaux</div></div>
+          <div class="stat"><div class="stat-val">${user.totalSpent} €</div><div class="stat-lbl">Total dépensé</div></div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-label">Historique des envois</div>
-        ${colis.map(c => `
-          <div class="colis-item">
-            <div class="colis-icon-wrap">${c.flag}</div>
-            <div class="colis-info">
-              <h4>#${c.id}</h4>
-              <p>${c.destination} · ${c.date}</p>
-            </div>
-            <div class="colis-right">
-              <div class="colis-price">${c.price.toFixed(2)} €</div>
-              <span class="badge badge-${c.status==='delivered'?'success':c.status==='transit'?'warning':'info'}" style="font-size:10px">${c.statusLabel}</span>
-            </div>
-          </div>
-        `).join('')}
+      <div class="section">
+        <div class="section-title" style="margin-bottom:10px">Historique</div>
+        <div class="card">
+          ${colis.map(c=>`
+            <div class="colis-row">
+              <div class="colis-icon">${I.box}</div>
+              <div class="colis-main">
+                <div class="colis-id">#${c.id}</div>
+                <div class="colis-dest">${c.destination} · ${c.date}</div>
+              </div>
+              <div class="colis-right">
+                <div class="colis-price">${c.price.toFixed(2)} €</div>
+                <span class="badge badge-${c.status==='delivered'?'ok':'go'}" style="font-size:10px">${c.statusLabel}</span>
+              </div>
+            </div>`).join('')}
+        </div>
       </div>
-
-      <div class="card">
-        <div class="card-label">Mon compte</div>
-        ${[
-          { icon:'👤', label:'Informations personnelles', sub:'Nom, téléphone, adresse' },
-          { icon:'📍', label:'Adresses enregistrées', sub:'${user.address}' },
-          { icon:'👥', label:'Mes destinataires', sub:'Gérer mes contacts famille' },
-          { icon:'🔔', label:'Notifications', sub:'Push, SMS, Email' },
-          { icon:'🔒', label:'Sécurité', sub:'Mot de passe, biométrie' },
-          { icon:'📋', label:'Conditions & confidentialité', sub:'CGU, politique données' },
-        ].map(item => `
-          <div class="menu-item">
-            <div class="menu-icon">${item.icon}</div>
-            <div class="menu-text">
-              <h4>${item.label}</h4>
-              <p>${item.sub}</p>
-            </div>
-            <span class="menu-arrow">›</span>
-          </div>
-        `).join('')}
+      <div class="section">
+        <div class="section-title" style="margin-bottom:10px">Paramètres</div>
+        <div class="card">
+          ${menuItems.map(item=>`
+            <div class="menu-row">
+              <div class="menu-ico">${I[item.icon]}</div>
+              <div class="menu-txt"><h4>${item.label}</h4><p>${item.sub}</p></div>
+              <div class="menu-arr">${I.chevron}</div>
+            </div>`).join('')}
+        </div>
       </div>
-
-      <button class="btn btn-ghost" style="color:var(--coral);border-color:var(--coral)" onclick="showToast('Déconnexion…')">
-        Se déconnecter
-      </button>
-    </div>
-  `;
+      <div class="section mt8">
+        <div class="card">
+          <div class="menu-row" onclick="showToast('Déconnexion…')" style="color:var(--danger)">
+            <div class="menu-ico" style="background:#FDECEA">${I.logout}</div>
+            <div class="menu-txt"><h4 style="color:var(--danger)">Se déconnecter</h4></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
-// Register all screens
 Router.register('home',     { render: renderHome });
 Router.register('pickup',   { render: renderPickup });
 Router.register('payment',  { render: renderPayment });
