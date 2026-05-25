@@ -28,8 +28,13 @@
   --nav-h: 64px;
 }
 
-html, body {
+html {
   height: 100%;
+  height: -webkit-fill-available;
+}
+body {
+  height: 100%;
+  min-height: -webkit-fill-available;
   font-family: var(--font);
   background: #ECECEA;
   color: var(--text);
@@ -40,32 +45,18 @@ html, body {
 }
 
 #app {
+  width: 100%;
   max-width: 430px;
   margin: 0 auto;
   height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   flex-direction: column;
   background: var(--white);
   overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
-
-/* STATUS BAR */
-.status-bar {
-  height: 44px;
-  background: var(--green-dark);
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  padding: 0 20px 8px;
-  flex-shrink: 0;
-}
-.status-bar .time {
-  font-size: 13px;
-  font-weight: 600;
-  color: white;
-}
-.status-icons { display: flex; gap: 6px; align-items: center; }
-.status-icons svg { width: 15px; height: 15px; fill: white; opacity: 0.9; }
 
 /* SCREENS */
 .screens-wrapper { flex: 1; position: relative; overflow: hidden; }
@@ -151,11 +142,8 @@ html, body {
   user-select: none;
 }
 .nav-icon {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
 }
 .nav-icon img { width: 24px; height: 24px; display: block; }
 .nav-label { font-size: 10px; color: var(--hint); font-weight: 500; }
@@ -249,9 +237,7 @@ html, body {
   width: 40px; height: 40px;
   background: var(--green-light);
   border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
 .colis-icon img { width: 20px; height: 20px; display: block; }
