@@ -1,0 +1,31 @@
+{
+  "name": "DiasporaLink",
+  "short_name": "DiasporaLink",
+  "description": "Envoyez des colis à votre famille en Afrique, simplement.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F6E56",
+  "theme_color": "#0F6E56",
+  "orientation": "portrait-primary",
+  "lang": "fr",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["logistics", "shopping", "travel"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Planifier un pick-up",
+      "short_name": "Pick-up",
+      "url": "/?screen=pickup",
+      "description": "Planifier un nouveau pick-up"
+    },
+    {
+      "name": "Suivi de colis",
+      "short_name": "Suivi",
+      "url": "/?screen=tracking",
+      "description": "Suivre mes colis"
+    }
+  ]
+}
