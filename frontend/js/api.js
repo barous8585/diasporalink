@@ -17,14 +17,18 @@ async function request(method, path, body = null, auth = true) {
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
 
-  try {
-    const res = await fetch(`${API_URL}${path}`, opts);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Erreur serveur');
-    return data;
-  } catch (err) {
-    throw err;
+  const res = await fetch(`${API_URL}${path}`, opts);
+  let data = {};
+  try { data = await res.json(); } catch(e) {}
+
+  if (!res.ok) {
+    const msg = data.message
+      || data.erreurs?.[0]?.msg
+      || data.error
+      || `Erreur ${res.status}`;
+    throw new Error(msg);
   }
+  return data;
 }
 
 // ── AUTH ───────────────────────────────────────────────────
@@ -38,24 +42,24 @@ const Auth = {
     return data;
   },
 
-  moi: () => request('GET', '/auth/moi'),
+  moi:         () => request('GET', '/auth/moi'),
   deconnecter: () => clear(),
   estConnecte: () => !!getToken(),
 };
 
 // ── COLIS ──────────────────────────────────────────────────
 const Colis = {
-  creer:        (data) => request('POST', '/colis', data),
-  mesColis:     ()     => request('GET', '/colis'),
-  unColis:      (id)   => request('GET', `/colis/${id}`),
-  suiviPublic:  (num)  => request('GET', `/colis/suivi/${num}`, null, false),
-  tarif:        (pays, poids, valeur) =>
+  creer:       (data)               => request('POST', '/colis', data),
+  mesColis:    ()                   => request('GET', '/colis'),
+  unColis:     (id)                 => request('GET', `/colis/${id}`),
+  suiviPublic: (num)                => request('GET', `/colis/suivi/${num}`, null, false),
+  tarif:       (pays, poids, valeur) =>
     request('GET', `/colis/tarif?pays=${pays}&poids=${poids}&valeur=${valeur || 0}`, null, false),
 };
 
 // ── MESSAGES ───────────────────────────────────────────────
 const Messages = {
-  lire:    (colisId) => request('GET', `/messages/${colisId}`),
+  lire:    (colisId)        => request('GET',  `/messages/${colisId}`),
   envoyer: (colisId, texte) => request('POST', `/messages/${colisId}`, { texte }),
 };
 
@@ -66,8 +70,8 @@ const Config = {
 
 // ── UTILISATEUR ────────────────────────────────────────────
 const Utilisateur = {
-  profil:          ()     => request('GET', '/utilisateurs/moi'),
-  mettreAJour:     (data) => request('PATCH', '/utilisateurs/moi', data),
+  profil:      ()     => request('GET',   '/utilisateurs/moi'),
+  mettreAJour: (data) => request('PATCH', '/utilisateurs/moi', data),
 };
 
-window.API   = { Auth, Colis, Messages, Config, Utilisateur, getUser, getToken, setToken, setUser, clear };
+window.API = { Auth, Colis, Messages, Config, Utilisateur, getUser, getToken, setToken, setUser, clear };
