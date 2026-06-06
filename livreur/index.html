@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#116647" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="DiasporaLink Pro" />
+  <title>DiasporaLink — Livreur</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --green:       #1A8C64;
+      --green-dark:  #116647;
+      --green-light: #EAF5F0;
+      --white: #fff;
+      --off:   #F7F7F5;
+      --line:  #E4E4E0;
+      --text:  #1A1A18;
+      --muted: #6B6B66;
+      --hint:  #A0A09A;
+      --danger:#C0392B;
+      --warn:  #B7680A;
+      --nav-h: 64px;
+      --font: 'Inter', -apple-system, sans-serif;
+    }
+
+    html { height: 100%; height: -webkit-fill-available; }
+    body {
+      height: 100%; min-height: -webkit-fill-available;
+      font-family: var(--font); background: var(--off);
+      color: var(--text); font-size: 15px; line-height: 1.5;
+      overscroll-behavior: none; -webkit-font-smoothing: antialiased;
+    }
+
+    #app {
+      max-width: 430px; margin: 0 auto;
+      height: 100dvh; min-height: -webkit-fill-available;
+      display: flex; flex-direction: column;
+      background: var(--white); overflow: hidden;
+      padding-top: env(safe-area-inset-top);
+    }
+
+    /* ── SCREENS ── */
+    .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .screen.active { display: flex; }
+
+    /* ── AUTH ── */
+    .auth-wrap { flex: 1; display: flex; flex-direction: column; background: var(--green-dark); }
+    .auth-top {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 40px 30px; gap: 8px;
+    }
+    .auth-logo { font-size: 36px; font-weight: 700; color: white; letter-spacing: -1px; }
+    .auth-logo span { color: rgba(255,255,255,0.4); font-weight: 300; }
+    .auth-badge {
+      background: rgba(255,255,255,0.15); border-radius: 20px;
+      padding: 4px 14px; font-size: 12px; color: rgba(255,255,255,0.7);
+    }
+    .auth-sheet {
+      background: var(--white); border-radius: 20px 20px 0 0;
+      padding: 28px 24px; padding-bottom: calc(28px + env(safe-area-inset-bottom));
+    }
+    .auth-sheet h2 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    .auth-sheet p  { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
+    .phone-row { display: flex; gap: 8px; }
+    .country-code {
+      height: 48px; padding: 0 12px;
+      border: 1px solid var(--line); border-radius: 8px;
+      font-family: var(--font); font-size: 15px;
+      background: var(--off); white-space: nowrap;
+      display: flex; align-items: center;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--green-dark);
+      padding: 14px 18px 18px; flex-shrink: 0;
+    }
+    .header-top {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 12px;
+    }
+    .logo { font-size: 16px; font-weight: 600; color: white; }
+    .logo span { color: rgba(255,255,255,0.4); font-weight: 400; }
+    .logo-badge {
+      font-size: 10px; background: rgba(255,255,255,0.15);
+      border-radius: 4px; padding: 2px 7px; color: rgba(255,255,255,0.7);
+      margin-left: 6px; vertical-align: middle;
+    }
+    .header-avatar {
+      width: 36px; height: 36px; background: rgba(255,255,255,0.15);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600; color: white; cursor: pointer;
+    }
+    .header-greeting { font-size: 12px; color: rgba(255,255,255,0.55); margin-bottom: 2px; }
+    .header-title { font-size: 21px; font-weight: 600; color: white; letter-spacing: -0.4px; }
+    .header-back {
+      width: 36px; height: 36px; background: rgba(255,255,255,0.12);
+      border: none; border-radius: 8px; color: white; font-size: 20px;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+
+    /* ── BODY ── */
+    .body {
+      flex: 1; overflow-y: auto; background: var(--off);
+      -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
+      padding-bottom: calc(var(--nav-h) + 16px);
+    }
+    .body::-webkit-scrollbar { display: none; }
+    .body-inner { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* ── NAV ── */
+    .nav {
+      height: var(--nav-h); background: var(--white);
+      border-top: 1px solid var(--line); display: flex;
+      align-items: center; flex-shrink: 0;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .nav-btn {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; gap: 4px;
+      background: none; border: none; cursor: pointer; padding: 8px 4px;
+    }
+    .nav-btn .ni { font-size: 22px; }
+    .nav-btn span { font-size: 10px; color: var(--hint); font-weight: 500; }
+    .nav-btn.active span { color: var(--green); font-weight: 600; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--white); border: 1px solid var(--line);
+      border-radius: 8px; overflow: hidden;
+    }
+
+    /* ── COLIS ROW ── */
+    .colis-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-bottom: 1px solid var(--line);
+      cursor: pointer; min-height: 72px;
+    }
+    .colis-row:last-child { border-bottom: none; }
+    .colis-row:active { background: var(--off); }
+    .colis-icon {
+      width: 44px; height: 44px; background: var(--green-light);
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: 20px; flex-shrink: 0;
+    }
+    .colis-main { flex: 1; min-width: 0; }
+    .colis-id { font-size: 14px; font-weight: 600; }
+    .colis-dest { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .colis-addr { font-size: 11px; color: var(--hint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .colis-right { text-align: right; flex-shrink: 0; }
+
+    /* ── BADGE ── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 4px 9px; border-radius: 4px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-ok   { background: #EAF5F0; color: #116647; }
+    .badge-go   { background: #FEF3E2; color: #B7680A; }
+    .badge-grey { background: #EFEFED; color: #6B6B66; }
+    .badge-info { background: #E8EEF8; color: #1B4FA8; }
+    .badge-urgent { background: #FDECEA; color: #C0392B; }
+
+    /* ── BUTTONS ── */
+    .btn {
+      height: 50px; width: 100%; border-radius: 8px; border: none;
+      font-family: var(--font); font-size: 15px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn:active { opacity: 0.8; }
+    .btn-primary { background: var(--green); color: white; }
+    .btn-outline { background: white; color: var(--green); border: 1.5px solid var(--green); }
+    .btn-ghost   { background: var(--off); color: var(--text); border: 1px solid var(--line); }
+    .btn-danger  { background: #FDECEA; color: var(--danger); border: 1px solid #F5C6C2; }
+
+    /* ── FORM ── */
+    .label {
+      display: block; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .input, .select {
+      width: 100%; height: 48px; padding: 0 14px;
+      border: 1px solid var(--line); border-radius: 8px;
+      font-family: var(--font); font-size: 16px;
+      color: var(--text); background: var(--white);
+      appearance: none; -webkit-appearance: none;
+    }
+    .input:focus, .select:focus {
+      outline: none; border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(26,140,100,0.1);
+    }
+    .select-wrap { position: relative; }
+    .select-wrap::after {
+      content: ''; position: absolute; right: 14px; top: 50%;
+      transform: translateY(-50%);
+      border-left: 4px solid transparent; border-right: 4px solid transparent;
+      border-top: 5px solid var(--muted); pointer-events: none;
+    }
+
+    /* ── SECTION ── */
+    .section-title {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px;
+    }
+
+    /* ── STATS ── */
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat {
+      background: var(--white); border: 1px solid var(--line);
+      border-radius: 8px; padding: 14px;
+    }
+    .stat-val { font-size: 24px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+    .stat-val.g { color: var(--green); }
+    .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ── DETAIL ── */
+    .detail-row {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-row .lbl { color: var(--muted); flex-shrink: 0; margin-right: 12px; }
+    .detail-row .val { font-weight: 500; text-align: right; }
+
+    /* ── OTP ── */
+    .otp-group { display: flex; gap: 10px; justify-content: center; margin: 20px 0; }
+    .otp-input {
+      width: 46px; height: 54px; border: 1.5px solid var(--line);
+      border-radius: 8px; text-align: center; font-family: var(--font);
+      font-size: 22px; font-weight: 600; color: var(--text);
+      background: var(--white); -webkit-appearance: none;
+    }
+    .otp-input:focus { outline: none; border-color: var(--green); }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; bottom: 80px; left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: #1A1A18; color: white;
+      padding: 11px 18px; border-radius: 8px;
+      font-size: 14px; font-weight: 500;
+      opacity: 0; pointer-events: none;
+      transition: all 0.25s; z-index: 9999; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.ok  { background: var(--green); }
+    .toast.err { background: var(--danger); }
+
+    /* ── LOADER ── */
+    .loader-overlay {
+      position: fixed; inset: 0; background: rgba(255,255,255,0.85);
+      display: none; align-items: center; justify-content: center; z-index: 9998;
+    }
+    .loader-overlay.show { display: flex; }
+    .spin {
+      width: 36px; height: 36px;
+      border: 3px solid var(--green-light); border-top-color: var(--green);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── EMPTY ── */
+    .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty .ei { font-size: 36px; margin-bottom: 10px; }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; align-items: flex-end; justify-content: center; z-index: 200;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white; border-radius: 16px 16px 0 0;
+      width: 100%; max-width: 430px;
+      padding: 24px; padding-bottom: calc(24px + env(safe-area-inset-bottom));
+      max-height: 85vh; overflow-y: auto;
+    }
+    .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── AUTH ──────────────────────────────── -->
+  <div class="screen active" id="screen-auth">
+    <div class="auth-wrap">
+      <div class="auth-top">
+        <div class="auth-logo">Diaspora<span>Link</span></div>
+        <div class="auth-badge">Espace Livreur</div>
+      </div>
+      <div class="auth-sheet" id="auth-phone-sheet">
+        <h2>Connexion livreur</h2>
+        <p>Entrez votre numéro pour recevoir un code</p>
+        <div style="margin-bottom:16px">
+          <label class="label">Téléphone</label>
+          <div class="phone-row">
+            <div class="country-code">🇫🇷 +33</div>
+            <input class="input" id="auth-phone" type="tel" placeholder="6 12 34 56 78" inputmode="numeric" />
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="envoyerOTP()">Recevoir le code</button>
+      </div>
+      <div class="auth-sheet" id="auth-otp-sheet" style="display:none">
+        <h2>Code de vérification</h2>
+        <p id="otp-desc">Code envoyé au +33...</p>
+        <div class="otp-group">
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+        </div>
+        <button class="btn btn-primary" onclick="verifierOTP()">Confirmer</button>
+        <button class="btn btn-ghost" style="margin-top:10px" onclick="envoyerOTP()">Renvoyer le code</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── APP ───────────────────────────────── -->
+  <div class="screen" id="screen-app">
+
+    <!-- ACCUEIL LIVREUR -->
+    <div class="screen active" id="screen-home">
+      <div class="header">
+        <div class="header-top">
+          <div>
+            <div class="logo">Diaspora<span>Link</span><span class="logo-badge">PRO</span></div>
+          </div>
+          <div class="header-avatar" id="home-avatar" onclick="navGo('profil')">ML</div>
+        </div>
+        <div class="header-greeting" id="home-greeting">Bonjour !</div>
+        <div class="header-title">Mes pick-ups du jour</div>
+      </div>
+      <div class="body">
+        <div class="body-inner">
+          <div class="stats" id="home-stats">
+            <div class="stat"><div class="stat-val" id="stat-today">0</div><div class="stat-lbl">Aujourd'hui</div></div>
+            <div class="stat"><div class="stat-val g" id="stat-done">0</div><div class="stat-lbl">Collectés</div></div>
+          </div>
+
+          <div>
+            <div class="section-title">À collecter aujourd'hui</div>
+            <div class="card" id="pickups-list">
+              <div class="empty"><div class="ei">📦</div><p>Aucun pick-up assigné</p></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-title">En transit</div>
+            <div class="card" id="transit-list">
+              <div class="empty"><div class="ei">🚚</div><p>Aucun colis en transit</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCANNER / CONFIRMER COLLECTE -->
+    <div class="screen" id="screen-scan">
+      <div class="header">
+        <div class="header-top">
+          <button class="header-back" onclick="navGo('home')">‹</button>
+          <div class="logo">Diaspora<span>Link</span><span class="logo-badge">PRO</span></div>
+          <div style="width:36px"></div>
+        </div>
+        <div class="header-title">Confirmer la collecte</div>
+      </div>
+      <div class="body">
+        <div class="body-inner">
+          <div class="card">
+            <div style="padding:16px">
+              <label class="label">Numéro de suivi</label>
+              <input class="input" id="scan-numero" type="text" placeholder="DL-1000" oninput="this.value=this.value.toUpperCase()" />
+            </div>
+          </div>
+
+          <div class="card" id="scan-detail" style="display:none">
+            <div class="detail-row"><span class="lbl">Client</span><span class="val" id="scan-client">—</span></div>
+            <div class="detail-row"><span class="lbl">Adresse</span><span class="val" id="scan-adresse">—</span></div>
+            <div class="detail-row"><span class="lbl">Destination</span><span class="val" id="scan-dest">—</span></div>
+            <div class="detail-row"><span class="lbl">Poids</span><span class="val" id="scan-poids">—</span></div>
+            <div class="detail-row"><span class="lbl">Type</span><span class="val" id="scan-type">—</span></div>
+          </div>
+
+          <button class="btn btn-primary" onclick="rechercherColis()">Rechercher</button>
+          <button class="btn btn-outline" id="btn-confirmer" style="display:none" onclick="confirmerCollecte()">
+            ✓ Confirmer la collecte
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MES LIVRAISONS -->
+    <div class="screen" id="screen-livraisons">
+      <div class="header">
+        <div class="header-top">
+          <button class="header-back" onclick="navGo('home')">‹</button>
+          <div class="logo">Diaspora<span>Link</span><span class="logo-badge">PRO</span></div>
+          <div style="width:36px"></div>
+        </div>
+        <div class="header-title">Historique</div>
+      </div>
+      <div class="body">
+        <div class="body-inner">
+          <div class="card" id="livraisons-list">
+            <div class="empty"><div class="ei">📋</div><p>Chargement...</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFIL LIVREUR -->
+    <div class="screen" id="screen-profil">
+      <div class="header">
+        <div class="header-top">
+          <button class="header-back" onclick="navGo('home')">‹</button>
+          <div class="logo">Diaspora<span>Link</span><span class="logo-badge">PRO</span></div>
+          <div style="width:36px"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+          <div style="width:48px;height:48px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:white" id="profil-av">ML</div>
+          <div>
+            <div style="font-size:17px;font-weight:600;color:white" id="profil-nom">—</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.55)" id="profil-tel">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="body-inner">
+          <div class="stats">
+            <div class="stat"><div class="stat-val g" id="profil-collectes">0</div><div class="stat-lbl">Collectes</div></div>
+            <div class="stat"><div class="stat-val" id="profil-total">0</div><div class="stat-lbl">Total traités</div></div>
+          </div>
+          <div class="card">
+            <div class="colis-row" onclick="deconnexion()">
+              <div style="flex:1;font-size:14px;font-weight:500;color:var(--danger)">Se déconnecter</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NAV BAS -->
+    <nav class="nav">
+      <button class="nav-btn active" data-s="home" onclick="navGo('home')">
+        <div class="ni">🏠</div><span>Accueil</span>
+      </button>
+      <button class="nav-btn" data-s="scan" onclick="navGo('scan')">
+        <div class="ni">📷</div><span>Collecte</span>
+      </button>
+      <button class="nav-btn" data-s="livraisons" onclick="navGo('livraisons')">
+        <div class="ni">📋</div><span>Historique</span>
+      </button>
+      <button class="nav-btn" data-s="profil" onclick="navGo('profil')">
+        <div class="ni">👤</div><span>Profil</span>
+      </button>
+    </nav>
+  </div>
+
+</div>
+
+<!-- MODAL MAJ STATUT -->
+<div class="modal-overlay" id="modal-statut">
+  <div class="modal">
+    <h3>Mettre à jour le statut</h3>
+    <div style="margin-bottom:14px">
+      <label class="label">Statut</label>
+      <div class="select-wrap">
+        <select class="select" id="new-statut">
+          <option value="collecte">Collecté ✓</option>
+          <option value="en_transit">En transit 🚚</option>
+          <option value="arrive">Arrivé à destination 🛬</option>
+          <option value="livre">Livré au destinataire ✅</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:20px">
+      <label class="label">Note</label>
+      <input class="input" id="note-statut" type="text" placeholder="Ex: Collecté à 9h30" />
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" style="height:44px" onclick="fermerModal()">Annuler</button>
+      <button class="btn btn-primary" style="height:44px" onclick="confirmerStatut()">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="loader-overlay" id="loader"><div class="spin"></div></div>
+
+<script>
+const API_URL = 'https://diasporalink-api.onrender.com/api';
+let TOKEN = localStorage.getItem('dl_livreur_token');
+let USER  = JSON.parse(localStorage.getItem('dl_livreur_user') || 'null');
+let MON_TEL = '';
+let COLIS_ACTIF = null;
+let MES_COLIS = [];
+
+// ── UTILS ──────────────────────────────────
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+function showLoader() { document.getElementById('loader').classList.add('show'); }
+function hideLoader() { document.getElementById('loader').classList.remove('show'); }
+function fermerModal() { document.getElementById('modal-statut').classList.remove('show'); }
+
+async function apiCall(method, path, body=null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (TOKEN) headers['Authorization'] = `Bearer ${TOKEN}`;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${API_URL}${path}`, opts);
+  let data = {};
+  try { data = await res.json(); } catch(e) {}
+  if (!res.ok) throw new Error(data.message || 'Erreur');
+  return data;
+}
+
+function badge(statut) {
+  const map = {
+    en_attente: ['badge-grey','En attente'],
+    confirme:   ['badge-info','Confirmé'],
+    collecte:   ['badge-info','Collecté'],
+    en_transit: ['badge-go','En transit'],
+    arrive:     ['badge-go','Arrivé'],
+    livre:      ['badge-ok','Livré'],
+    annule:     ['badge-grey','Annulé'],
+  };
+  const [cls, label] = map[statut] || ['badge-grey', statut];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function formatDate(d) {
+  return new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' });
+}
+
+// ── OTP INPUTS ─────────────────────────────
+function setupOTP() {
+  const inputs = document.querySelectorAll('.otp-input');
+  inputs.forEach((inp, i) => {
+    inp.addEventListener('input', () => {
+      inp.value = inp.value.replace(/\D/,'');
+      if (inp.value && i < inputs.length-1) inputs[i+1].focus();
+    });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i-1].focus();
+    });
+  });
+}
+
+function getOTP() {
+  return Array.from(document.querySelectorAll('.otp-input')).map(i => i.value).join('');
+}
+
+function formatTel() {
+  const raw = document.getElementById('auth-phone').value.replace(/\D/g,'');
+  return '+33' + (raw.startsWith('0') ? raw.slice(1) : raw);
+}
+
+// ── AUTH ───────────────────────────────────
+async function envoyerOTP() {
+  const tel = formatTel();
+  if (tel.length < 10) return toast('Numéro invalide', 'err');
+  MON_TEL = tel;
+  showLoader();
+  try {
+    await fetch(`${API_URL}/auth/envoyer-otp`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telephone: tel })
+    });
+    document.getElementById('auth-phone-sheet').style.display = 'none';
+    document.getElementById('auth-otp-sheet').style.display = 'block';
+    document.getElementById('otp-desc').textContent = `Code envoyé au ${tel}`;
+    document.querySelector('.otp-input').focus();
+  } catch(e) {
+    toast('Erreur envoi SMS', 'err');
+  } finally { hideLoader(); }
+}
+
+async function verifierOTP() {
+  const code = getOTP();
+  if (code.length !== 6) return toast('Entrez les 6 chiffres', 'err');
+  showLoader();
+  try {
+    const res = await fetch(`${API_URL}/auth/verifier-otp`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telephone: MON_TEL, code })
+    });
+    const data = await res.json();
+    if (data.token) {
+      TOKEN = data.token;
+      USER  = data.utilisateur;
+      localStorage.setItem('dl_livreur_token', TOKEN);
+      localStorage.setItem('dl_livreur_user', JSON.stringify(USER));
+      afficherApp();
+    } else {
+      toast(data.message || 'Code invalide', 'err');
+    }
+  } catch(e) {
+    toast('Erreur vérification', 'err');
+  } finally { hideLoader(); }
+}
+
+function deconnexion() {
+  localStorage.removeItem('dl_livreur_token');
+  localStorage.removeItem('dl_livreur_user');
+  TOKEN = null; USER = null;
+  location.reload();
+}
+
+function afficherApp() {
+  document.getElementById('screen-auth').classList.remove('active');
+  document.getElementById('screen-app').classList.add('active');
+  if (USER) {
+    const initiales = (USER.prenom[0] + USER.nom[0]).toUpperCase();
+    document.getElementById('home-avatar').textContent  = initiales;
+    document.getElementById('profil-av').textContent    = initiales;
+    document.getElementById('home-greeting').textContent = `Bonjour, ${USER.prenom} 👋`;
+    document.getElementById('profil-nom').textContent   = `${USER.prenom} ${USER.nom}`;
+    document.getElementById('profil-tel').textContent   = USER.telephone;
+  }
+  navGo('home');
+}
+
+// ── NAVIGATION ─────────────────────────────
+const SCREENS_APP = ['home','scan','livraisons','profil'];
+
+function navGo(s) {
+  SCREENS_APP.forEach(sc => {
+    document.getElementById(`screen-${sc}`)?.classList.toggle('active', sc === s);
+  });
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.s === s);
+  });
+  if (s === 'home')       chargerAccueil();
+  if (s === 'livraisons') chargerLivraisons();
+  if (s === 'profil')     chargerProfil();
+}
+
+// ── ACCUEIL ────────────────────────────────
+async function chargerAccueil() {
+  showLoader();
+  try {
+    const data = await apiCall('GET', '/colis');
+    MES_COLIS = data.colis || [];
+
+    const today = new Date().toDateString();
+    const pickupsAujourdhui = MES_COLIS.filter(c => {
+      const d = new Date(c.dateCollecte).toDateString();
+      return d === today && (c.statut === 'confirme' || c.statut === 'en_attente');
+    });
+    const collectes = MES_COLIS.filter(c => c.statut === 'collecte');
+    const enTransit = MES_COLIS.filter(c => c.statut === 'en_transit');
+
+    document.getElementById('stat-today').textContent = pickupsAujourdhui.length;
+    document.getElementById('stat-done').textContent  = collectes.length;
+
+    // Pick-ups du jour
+    const pickupEl = document.getElementById('pickups-list');
+    if (!pickupsAujourdhui.length) {
+      pickupEl.innerHTML = `<div class="empty"><div class="ei">✅</div><p>Pas de pick-up prévu aujourd'hui</p></div>`;
+    } else {
+      pickupEl.innerHTML = pickupsAujourdhui.map(c => `
+        <div class="colis-row" onclick="voirCollisDetail('${c._id}')">
+          <div class="colis-icon">📦</div>
+          <div class="colis-main">
+            <div class="colis-id">#${c.numeroSuivi}</div>
+            <div class="colis-dest">${c.villeDestination}, ${c.paysDestination}</div>
+            <div class="colis-addr">📍 ${c.adresseCollecte}</div>
+          </div>
+          <div class="colis-right">
+            ${badge(c.statut)}
+            <div style="font-size:11px;color:var(--hint);margin-top:4px">${c.poidsKg}kg</div>
+          </div>
+        </div>`).join('');
+    }
+
+    // En transit
+    const transitEl = document.getElementById('transit-list');
+    if (!enTransit.length) {
+      transitEl.innerHTML = `<div class="empty"><div class="ei">🚚</div><p>Aucun colis en transit</p></div>`;
+    } else {
+      transitEl.innerHTML = enTransit.map(c => `
+        <div class="colis-row" onclick="voirCollisDetail('${c._id}')">
+          <div class="colis-icon">🚚</div>
+          <div class="colis-main">
+            <div class="colis-id">#${c.numeroSuivi}</div>
+            <div class="colis-dest">${c.villeDestination}, ${c.paysDestination}</div>
+          </div>
+          <div class="colis-right">${badge(c.statut)}</div>
+        </div>`).join('');
+    }
+
+  } catch(e) {
+    toast('Erreur chargement', 'err');
+  } finally { hideLoader(); }
+}
+
+// ── DETAIL COLIS ───────────────────────────
+async function voirCollisDetail(id) {
+  showLoader();
+  try {
+    const data = await apiCall('GET', `/colis/${id}`);
+    COLIS_ACTIF = data.colis;
+    const c = data.colis;
+
+    // Remplir l'écran scan avec les détails
+    document.getElementById('scan-numero').value = c.numeroSuivi;
+    document.getElementById('scan-client').textContent  = c.nomDestinataire;
+    document.getElementById('scan-adresse').textContent = c.adresseCollecte;
+    document.getElementById('scan-dest').textContent    = `${c.villeDestination}, ${c.paysDestination}`;
+    document.getElementById('scan-poids').textContent   = `${c.poidsKg} kg`;
+    document.getElementById('scan-type').textContent    = c.typeColis;
+    document.getElementById('scan-detail').style.display = 'block';
+    document.getElementById('btn-confirmer').style.display = 'flex';
+    navGo('scan');
+  } catch(e) {
+    toast('Erreur chargement', 'err');
+  } finally { hideLoader(); }
+}
+
+// ── RECHERCHER COLIS ───────────────────────
+async function rechercherColis() {
+  const num = document.getElementById('scan-numero').value.trim().toUpperCase();
+  if (!num) return toast('Entrez un numéro de suivi', 'err');
+  showLoader();
+  try {
+    const data = await apiCall('GET', `/colis/suivi/${num}`);
+    COLIS_ACTIF = data.colis;
+    const c = data.colis;
+    document.getElementById('scan-client').textContent  = c.nomDestinataire || '—';
+    document.getElementById('scan-adresse').textContent = c.adresseCollecte || '—';
+    document.getElementById('scan-dest').textContent    = `${c.villeDestination}, ${c.paysDestination}`;
+    document.getElementById('scan-poids').textContent   = `${c.poidsKg} kg`;
+    document.getElementById('scan-type').textContent    = c.typeColis || '—';
+    document.getElementById('scan-detail').style.display = 'block';
+    document.getElementById('btn-confirmer').style.display = 'flex';
+  } catch(e) {
+    toast('Colis introuvable', 'err');
+  } finally { hideLoader(); }
+}
+
+// ── CONFIRMER COLLECTE ─────────────────────
+function confirmerCollecte() {
+  document.getElementById('new-statut').value = 'collecte';
+  document.getElementById('modal-statut').classList.add('show');
+}
+
+async function confirmerStatut() {
+  if (!COLIS_ACTIF) return;
+  const statut = document.getElementById('new-statut').value;
+  const note   = document.getElementById('note-statut').value;
+  const statusMap = { collecte:1, en_transit:2, arrive:3, livre:4 };
+
+  showLoader();
+  try {
+    await apiCall('PATCH', `/colis/${COLIS_ACTIF._id}/statut`, {
+      statut, indexEtape: statusMap[statut] || 1, detailEtape: note
+    });
+    toast('Statut mis à jour ✓', 'ok');
+    fermerModal();
+    document.getElementById('scan-detail').style.display = 'none';
+    document.getElementById('btn-confirmer').style.display = 'none';
+    document.getElementById('scan-numero').value = '';
+    document.getElementById('note-statut').value = '';
+    COLIS_ACTIF = null;
+    navGo('home');
+  } catch(e) {
+    toast(e.message || 'Erreur', 'err');
+  } finally { hideLoader(); }
+}
+
+// ── HISTORIQUE ─────────────────────────────
+async function chargerLivraisons() {
+  showLoader();
+  try {
+    const data = await apiCall('GET', '/colis');
+    const colis = data.colis || [];
+    const el = document.getElementById('livraisons-list');
+    if (!colis.length) {
+      el.innerHTML = `<div class="empty"><div class="ei">📋</div><p>Aucune livraison</p></div>`;
+      return;
+    }
+    el.innerHTML = colis.map(c => `
+      <div class="colis-row">
+        <div class="colis-icon">📦</div>
+        <div class="colis-main">
+          <div class="colis-id">#${c.numeroSuivi}</div>
+          <div class="colis-dest">${c.villeDestination}, ${c.paysDestination}</div>
+          <div class="colis-addr">${formatDate(c.createdAt)}</div>
+        </div>
+        <div class="colis-right">${badge(c.statut)}</div>
+      </div>`).join('');
+  } catch(e) {
+    toast('Erreur', 'err');
+  } finally { hideLoader(); }
+}
+
+// ── PROFIL ─────────────────────────────────
+async function chargerProfil() {
+  try {
+    const data = await apiCall('GET', '/colis');
+    const colis = data.colis || [];
+    document.getElementById('profil-collectes').textContent = colis.filter(c => c.statut === 'collecte' || c.statut === 'livre').length;
+    document.getElementById('profil-total').textContent = colis.length;
+  } catch(e) {}
+}
+
+// ── INIT ───────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  setupOTP();
+  if (TOKEN && USER) {
+    afficherApp();
+  }
+});
+</script>
+</body>
+</html>

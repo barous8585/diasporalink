@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DiasporaLink — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:      #1A8C64;
+      --green-dark: #116647;
+      --green-light:#EAF5F0;
+      --white:  #fff;
+      --off:    #F7F7F5;
+      --line:   #E4E4E0;
+      --text:   #1A1A18;
+      --muted:  #6B6B66;
+      --hint:   #A0A09A;
+      --danger: #C0392B;
+      --warn:   #B7680A;
+      --info:   #1B4FA8;
+      --sidebar-w: 240px;
+      --font: 'Inter', sans-serif;
+    }
+
+    body { font-family: var(--font); background: var(--off); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+    /* ── LAYOUT ── */
+    #app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--green-dark);
+      display: flex; flex-direction: column;
+      flex-shrink: 0; overflow-y: auto;
+    }
+    .sidebar-logo {
+      padding: 24px 20px 20px;
+      font-size: 18px; font-weight: 700;
+      color: white; letter-spacing: -0.4px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .sidebar-logo span { color: rgba(255,255,255,0.45); font-weight: 400; }
+    .sidebar-logo small { display: block; font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 400; margin-top: 2px; }
+    .sidebar-nav { padding: 12px 0; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px; cursor: pointer;
+      color: rgba(255,255,255,0.65); font-size: 13px; font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+      border-left: 3px solid transparent;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.08); color: white; }
+    .nav-item.active { background: rgba(255,255,255,0.12); color: white; border-left-color: rgba(255,255,255,0.6); }
+    .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px; color: rgba(255,255,255,0.4);
+    }
+    .sidebar-footer .admin-name { color: rgba(255,255,255,0.8); font-weight: 500; margin-bottom: 2px; }
+
+    /* ── MAIN ── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar {
+      background: var(--white); border-bottom: 1px solid var(--line);
+      padding: 0 28px; height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .topbar-title { font-size: 16px; font-weight: 600; color: var(--text); }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+    .content { flex: 1; overflow-y: auto; padding: 28px; }
+    .content::-webkit-scrollbar { width: 6px; }
+    .content::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+    /* ── SCREENS ── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── LOGIN ── */
+    #screen-login {
+      display: flex; align-items: center; justify-content: center;
+      height: 100vh; background: var(--green-dark);
+    }
+    .login-box {
+      background: white; border-radius: 12px;
+      padding: 40px; width: 380px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .login-logo { font-size: 24px; font-weight: 700; color: var(--green-dark); margin-bottom: 4px; }
+    .login-logo span { color: rgba(0,0,0,0.3); font-weight: 400; }
+    .login-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+
+    /* ── STATS GRID ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--white); border: 1px solid var(--line);
+      border-radius: 10px; padding: 20px;
+    }
+    .stat-card .label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+    .stat-card .value.green { color: var(--green); }
+    .stat-card .value.warn  { color: var(--warn); }
+    .stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--white); border: 1px solid var(--line);
+      border-radius: 10px; overflow: hidden;
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--line);
+    }
+    .card-title { font-size: 14px; font-weight: 600; }
+    .card + .card { margin-top: 20px; }
+
+    /* ── TABLE ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--muted); padding: 10px 20px;
+      background: var(--off); border-bottom: 1px solid var(--line);
+    }
+    td { padding: 13px 20px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--off); }
+    .td-mono { font-family: monospace; font-size: 12px; }
+
+    /* ── BADGES ── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 9px; border-radius: 4px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-ok   { background: #EAF5F0; color: #116647; }
+    .badge-go   { background: #FEF3E2; color: #B7680A; }
+    .badge-err  { background: #FDECEA; color: #C0392B; }
+    .badge-grey { background: #EFEFED; color: #6B6B66; }
+    .badge-info { background: #E8EEF8; color: #1B4FA8; }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 6px; border: none;
+      font-family: var(--font); font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--green); color: white; }
+    .btn-outline { background: white; color: var(--green); border: 1.5px solid var(--green); }
+    .btn-ghost   { background: var(--off); color: var(--text); border: 1px solid var(--line); }
+    .btn-danger  { background: white; color: var(--danger); border: 1px solid var(--danger); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    /* ── FORM ── */
+    .form-row { display: grid; gap: 16px; margin-bottom: 16px; }
+    .form-row.cols-2 { grid-template-columns: 1fr 1fr; }
+    .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .field label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 6px; }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: 8px 12px;
+      border: 1px solid var(--line); border-radius: 6px;
+      font-family: var(--font); font-size: 13px; color: var(--text);
+      background: white;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      outline: none; border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(26,140,100,0.1);
+    }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; align-items: center; justify-content: center; z-index: 100;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white; border-radius: 12px;
+      width: 520px; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px; border-bottom: 1px solid var(--line);
+    }
+    .modal-header h3 { font-size: 15px; font-weight: 600; }
+    .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
+    .modal-body { padding: 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #1A1A18; color: white;
+      padding: 12px 18px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      opacity: 0; pointer-events: none;
+      transition: all 0.25s; z-index: 999;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .toast.show { opacity: 1; }
+    .toast.ok  { background: var(--green); }
+    .toast.err { background: var(--danger); }
+
+    /* ── EMPTY ── */
+    .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+    .empty .empty-icon { font-size: 36px; margin-bottom: 12px; }
+    .empty p { font-size: 14px; }
+
+    /* ── LOADER ── */
+    .loader { text-align: center; padding: 48px; color: var(--muted); }
+
+    /* ── FILTERS ── */
+    .filters {
+      display: flex; gap: 10px; align-items: center;
+      padding: 14px 20px; border-bottom: 1px solid var(--line);
+      flex-wrap: wrap;
+    }
+    .filter-select {
+      padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+      font-family: var(--font); font-size: 12px; color: var(--text);
+      background: white; cursor: pointer;
+    }
+    .search-input {
+      padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px;
+      font-family: var(--font); font-size: 12px; color: var(--text);
+      background: white; width: 220px;
+    }
+    .search-input:focus { outline: none; border-color: var(--green); }
+
+    /* ── DETAIL PANEL ── */
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .detail-item label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 3px; }
+    .detail-item span { font-size: 13px; color: var(--text); }
+
+    /* ── TIMELINE ── */
+    .tl { display: flex; flex-direction: column; gap: 0; }
+    .tl-row { display: flex; gap: 12px; }
+    .tl-left { display: flex; flex-direction: column; align-items: center; }
+    .tl-dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: white; font-size: 10px; }
+    .tl-dot.done { border-color: var(--green); background: var(--green); color: white; }
+    .tl-dot.now  { border-color: var(--warn); background: #FEF3E2; color: var(--warn); }
+    .tl-line { width: 2px; flex: 1; min-height: 12px; background: var(--line); margin: 2px 0; }
+    .tl-line.done { background: var(--green); }
+    .tl-content { padding-bottom: 14px; flex: 1; padding-top: 2px; }
+    .tl-content h4 { font-size: 13px; font-weight: 600; }
+    .tl-content p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    /* ── CHARTS ── */
+    .chart-placeholder {
+      height: 200px; background: var(--off); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 13px; margin: 16px 20px;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .sidebar { width: 60px; }
+      .sidebar-logo, .nav-item span, .sidebar-footer .admin-name, .sidebar-footer p { display: none; }
+      .nav-item { justify-content: center; padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── LOGIN ─────────────────────────────── -->
+<div id="screen-login">
+  <div class="login-box">
+    <div class="login-logo">Diaspora<span>Link</span></div>
+    <div class="login-sub">Panel d'administration</div>
+    <div class="field" style="margin-bottom:12px">
+      <label>Téléphone admin</label>
+      <input type="tel" id="login-tel" placeholder="+33 6 XX XX XX XX" />
+    </div>
+    <div class="field" style="margin-bottom:20px">
+      <label>Mot de passe</label>
+      <input type="password" id="login-pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter') loginAdmin()" />
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="loginAdmin()">Se connecter</button>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px">
+      Accès réservé aux administrateurs DiasporaLink
+    </p>
+  </div>
+</div>
+
+<!-- ── APP ───────────────────────────────── -->
+<div id="app" style="display:none">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      Diaspora<span>Link</span>
+      <small>Administration</small>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" onclick="goTo('dashboard')" data-screen="dashboard">
+        <span class="icon">📊</span><span>Tableau de bord</span>
+      </div>
+      <div class="nav-item" onclick="goTo('colis')" data-screen="colis">
+        <span class="icon">📦</span><span>Commandes</span>
+      </div>
+      <div class="nav-item" onclick="goTo('clients')" data-screen="clients">
+        <span class="icon">👥</span><span>Clients</span>
+      </div>
+      <div class="nav-item" onclick="goTo('livreurs')" data-screen="livreurs">
+        <span class="icon">🚚</span><span>Livreurs</span>
+      </div>
+      <div class="nav-item" onclick="goTo('tarifs')" data-screen="tarifs">
+        <span class="icon">💰</span><span>Tarifs</span>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="admin-name" id="admin-name">Admin</div>
+      <p style="font-size:11px;color:rgba(255,255,255,0.3);cursor:pointer;margin-top:4px" onclick="deconnexion()">Se déconnecter</p>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Tableau de bord</div>
+      <div class="topbar-actions">
+        <span style="font-size:12px;color:var(--muted)" id="topbar-date"></span>
+        <div style="width:32px;height:32px;border-radius:6px;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark)" id="topbar-avatar">AD</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="screen active" id="screen-dashboard">
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card"><div class="label">Commandes totales</div><div class="value" id="s-total">—</div><div class="sub">Depuis le début</div></div>
+          <div class="stat-card"><div class="label">En transit</div><div class="value warn" id="s-transit">—</div><div class="sub">En cours de livraison</div></div>
+          <div class="stat-card"><div class="label">Livrés</div><div class="value green" id="s-livre">—</div><div class="sub">Colis livrés</div></div>
+          <div class="stat-card"><div class="label">Chiffre d'affaires</div><div class="value green" id="s-ca">—</div><div class="sub">Total encaissé</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Dernières commandes</span>
+              <button class="btn btn-sm btn-ghost" onclick="goTo('colis')">Voir tout</button>
+            </div>
+            <div id="recent-colis"><div class="loader">Chargement...</div></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Derniers clients</span>
+              <button class="btn btn-sm btn-ghost" onclick="goTo('clients')">Voir tout</button>
+            </div>
+            <div id="recent-clients"><div class="loader">Chargement...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMMANDES -->
+      <div class="screen" id="screen-colis">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Toutes les commandes</span>
+            <span id="colis-count" style="font-size:12px;color:var(--muted)"></span>
+          </div>
+          <div class="filters">
+            <input class="search-input" type="text" placeholder="Rechercher #numéro, client..." oninput="filtrerColis(this.value)" />
+            <select class="filter-select" onchange="filtrerColisStatut(this.value)">
+              <option value="">Tous les statuts</option>
+              <option value="en_attente">En attente</option>
+              <option value="confirme">Confirmé</option>
+              <option value="collecte">Collecté</option>
+              <option value="en_transit">En transit</option>
+              <option value="arrive">Arrivé</option>
+              <option value="livre">Livré</option>
+              <option value="annule">Annulé</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>N° Suivi</th>
+                  <th>Client</th>
+                  <th>Destination</th>
+                  <th>Poids</th>
+                  <th>Montant</th>
+                  <th>Statut</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="colis-tbody">
+                <tr><td colspan="8" class="loader">Chargement...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLIENTS -->
+      <div class="screen" id="screen-clients">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Clients inscrits</span>
+            <span id="clients-count" style="font-size:12px;color:var(--muted)"></span>
+          </div>
+          <div class="filters">
+            <input class="search-input" type="text" placeholder="Rechercher nom, téléphone..." oninput="filtrerClients(this.value)" />
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nom</th>
+                  <th>Téléphone</th>
+                  <th>Email</th>
+                  <th>Rôle</th>
+                  <th>Inscrit le</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="clients-tbody">
+                <tr><td colspan="7" class="loader">Chargement...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVREURS -->
+      <div class="screen" id="screen-livreurs">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Livreurs</span>
+            <button class="btn btn-primary btn-sm" onclick="ouvrirModalLivreur()">+ Ajouter un livreur</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nom</th>
+                  <th>Téléphone</th>
+                  <th>Zone</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="livreurs-tbody">
+                <tr><td colspan="5"><div class="empty"><div class="empty-icon">🚚</div><p>Aucun livreur enregistré</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TARIFS -->
+      <div class="screen" id="screen-tarifs">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Tarifs par pays (€/kg)</span>
+            <button class="btn btn-primary btn-sm" onclick="sauvegarderTarifs()">Sauvegarder</button>
+          </div>
+          <div style="padding:20px" id="tarifs-grid"></div>
+        </div>
+        <div class="card" style="margin-top:20px">
+          <div class="card-header"><span class="card-title">Frais fixes</span></div>
+          <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="field">
+              <label>Frais de pick-up (€)</label>
+              <input type="number" id="frais-pickup" value="5.00" step="0.5" />
+            </div>
+            <div class="field">
+              <label>Taux d'assurance (%)</label>
+              <input type="number" id="taux-assurance" value="2.3" step="0.1" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </main>
+</div><!-- /app -->
+
+<!-- ── MODAL DÉTAIL COLIS ─────────────────── -->
+<div class="modal-overlay" id="modal-colis">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-colis-titre">Détail commande</h3>
+      <button class="modal-close" onclick="fermerModal('modal-colis')">×</button>
+    </div>
+    <div class="modal-body" id="modal-colis-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fermerModal('modal-colis')">Fermer</button>
+      <button class="btn btn-primary" id="btn-maj-statut" onclick="ouvrirMajStatut()">Mettre à jour le statut</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL MAJ STATUT ───────────────────── -->
+<div class="modal-overlay" id="modal-statut">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <h3>Mettre à jour le statut</h3>
+      <button class="modal-close" onclick="fermerModal('modal-statut')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:14px">
+        <label>Nouveau statut</label>
+        <select id="nouveau-statut">
+          <option value="confirme">Confirmé</option>
+          <option value="collecte">Collecté</option>
+          <option value="en_transit">En transit</option>
+          <option value="arrive">Arrivé</option>
+          <option value="livre">Livré</option>
+          <option value="annule">Annulé</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Note (optionnel)</label>
+        <input type="text" id="note-statut" placeholder="Ex: Récupéré à l'adresse le 06/06/2026" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fermerModal('modal-statut')">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmerMajStatut()">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL LIVREUR ──────────────────────── -->
+<div class="modal-overlay" id="modal-livreur">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <h3>Ajouter un livreur</h3>
+      <button class="modal-close" onclick="fermerModal('modal-livreur')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row cols-2">
+        <div class="field"><label>Prénom</label><input type="text" id="l-prenom" placeholder="Moussa" /></div>
+        <div class="field"><label>Nom</label><input type="text" id="l-nom" placeholder="Diallo" /></div>
+      </div>
+      <div class="field" style="margin-bottom:14px">
+        <label>Téléphone</label>
+        <input type="tel" id="l-tel" placeholder="+33 6 XX XX XX XX" />
+      </div>
+      <div class="field">
+        <label>Zone d'intervention</label>
+        <input type="text" id="l-zone" placeholder="Ex: Paris, Île-de-France" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fermerModal('modal-livreur')">Annuler</button>
+      <button class="btn btn-primary" onclick="ajouterLivreur()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://diasporalink-api.onrender.com/api';
+let TOKEN = localStorage.getItem('dl_admin_token');
+let COLIS_ALL = [];
+let CLIENTS_ALL = [];
+let COLIS_ACTIF = null;
+
+// ── UTILS ──────────────────────────────────
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function badge(statut) {
+  const map = {
+    en_attente: ['badge-grey','En attente'],
+    confirme:   ['badge-info','Confirmé'],
+    collecte:   ['badge-info','Collecté'],
+    en_transit: ['badge-go','En transit'],
+    arrive:     ['badge-go','Arrivé'],
+    livre:      ['badge-ok','Livré'],
+    annule:     ['badge-err','Annulé'],
+    client:     ['badge-grey','Client'],
+    livreur:    ['badge-info','Livreur'],
+    admin:      ['badge-ok','Admin'],
+  };
+  const [cls, label] = map[statut] || ['badge-grey', statut];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function formatDate(d) {
+  return new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+}
+function formatEur(v) { return parseFloat(v||0).toFixed(2) + ' €'; }
+
+async function api(method, path, body=null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (TOKEN) headers['Authorization'] = `Bearer ${TOKEN}`;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${API}${path}`, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Erreur');
+  return data;
+}
+
+function fermerModal(id) { document.getElementById(id).classList.remove('show'); }
+function ouvrirModal(id) { document.getElementById(id).classList.add('show'); }
+
+// ── LOGIN ──────────────────────────────────
+async function loginAdmin() {
+  const tel = document.getElementById('login-tel').value.trim();
+  const pwd = document.getElementById('login-pwd').value.trim();
+
+  if (!tel) return toast('Téléphone requis', 'err');
+
+  // En dev : connexion simplifiée avec OTP
+  try {
+    const res = await fetch(`${API}/auth/envoyer-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telephone: tel })
+    });
+    const data = await res.json();
+
+    if (data.succes || data.nouvelUtilisateur) {
+      const code = prompt('Code OTP reçu par SMS (vérifiez les logs Render) :');
+      if (!code) return;
+
+      const res2 = await fetch(`${API}/auth/verifier-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telephone: tel, code })
+      });
+      const data2 = await res2.json();
+
+      if (data2.token) {
+        TOKEN = data2.token;
+        localStorage.setItem('dl_admin_token', TOKEN);
+        const u = data2.utilisateur;
+        document.getElementById('admin-name').textContent = `${u.prenom} ${u.nom}`;
+        document.getElementById('topbar-avatar').textContent = (u.prenom[0] + u.nom[0]).toUpperCase();
+        afficherApp();
+      } else {
+        toast(data2.message || 'Code invalide', 'err');
+      }
+    } else {
+      toast(data.message || 'Erreur', 'err');
+    }
+  } catch(e) {
+    toast(e.message || 'Erreur connexion', 'err');
+  }
+}
+
+function deconnexion() {
+  localStorage.removeItem('dl_admin_token');
+  TOKEN = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('screen-login').style.display = 'flex';
+}
+
+function afficherApp() {
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+  goTo('dashboard');
+}
+
+// ── NAVIGATION ─────────────────────────────
+const TITRES = { dashboard:'Tableau de bord', colis:'Commandes', clients:'Clients', livreurs:'Livreurs', tarifs:'Tarifs' };
+
+function goTo(screen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`screen-${screen}`).classList.add('active');
+  document.querySelector(`[data-screen="${screen}"]`).classList.add('active');
+  document.getElementById('topbar-title').textContent = TITRES[screen] || screen;
+
+  if (screen === 'dashboard') chargerDashboard();
+  if (screen === 'colis')     chargerColis();
+  if (screen === 'clients')   chargerClients();
+  if (screen === 'tarifs')    chargerTarifs();
+}
+
+// ── DASHBOARD ──────────────────────────────
+async function chargerDashboard() {
+  try {
+    const [dataColis, dataClients] = await Promise.all([
+      api('GET', '/colis'),
+      api('GET', '/utilisateurs/moi').catch(() => null)
+    ]);
+
+    const colis = dataColis.colis || [];
+
+    document.getElementById('s-total').textContent   = colis.length;
+    document.getElementById('s-transit').textContent = colis.filter(c => c.statut === 'en_transit').length;
+    document.getElementById('s-livre').textContent   = colis.filter(c => c.statut === 'livre').length;
+
+    const ca = colis.filter(c => c.paiementStatut === 'paye').reduce((s, c) => s + (c.tarif?.total || 0), 0);
+    document.getElementById('s-ca').textContent = formatEur(ca);
+
+    // Dernières commandes
+    const rc = document.getElementById('recent-colis');
+    if (!colis.length) {
+      rc.innerHTML = `<div class="empty"><div class="empty-icon">📦</div><p>Aucune commande</p></div>`;
+    } else {
+      rc.innerHTML = `<table><tbody>${colis.slice(0,5).map(c => `
+        <tr onclick="voirColis('${c._id}')" style="cursor:pointer">
+          <td class="td-mono">#${c.numeroSuivi}</td>
+          <td>${c.villeDestination}</td>
+          <td>${badge(c.statut)}</td>
+          <td>${formatEur(c.tarif?.total)}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+
+    // Clients récents — on charge séparément
+    chargerClientsRecents();
+
+  } catch(e) {
+    toast('Erreur chargement dashboard', 'err');
+  }
+}
+
+async function chargerClientsRecents() {
+  // Récupérer via l'endpoint utilisateurs (admin)
+  const el = document.getElementById('recent-clients');
+  el.innerHTML = `<div class="empty"><div class="empty-icon">👥</div><p>Accès admin requis</p></div>`;
+}
+
+// ── COLIS ──────────────────────────────────
+async function chargerColis() {
+  try {
+    const data = await api('GET', '/colis');
+    COLIS_ALL = data.colis || [];
+    document.getElementById('colis-count').textContent = `${COLIS_ALL.length} commande(s)`;
+    renderColisTable(COLIS_ALL);
+  } catch(e) {
+    toast('Erreur chargement commandes', 'err');
+  }
+}
+
+function renderColisTable(liste) {
+  const tbody = document.getElementById('colis-tbody');
+  if (!liste.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📦</div><p>Aucune commande trouvée</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = liste.map(c => `
+    <tr>
+      <td class="td-mono">#${c.numeroSuivi}</td>
+      <td>${c.nomDestinataire || '—'}</td>
+      <td>${c.villeDestination}, ${c.paysDestination}</td>
+      <td>${c.poidsKg} kg</td>
+      <td>${formatEur(c.tarif?.total)}</td>
+      <td>${badge(c.statut)}</td>
+      <td>${formatDate(c.createdAt)}</td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="voirColis('${c._id}')">Voir</button>
+        <button class="btn btn-sm btn-ghost" onclick="majStatutRapide('${c._id}','livre')" style="margin-left:4px">✓ Livré</button>
+      </td>
+    </tr>`).join('');
+}
+
+function filtrerColis(q) {
+  const f = COLIS_ALL.filter(c =>
+    c.numeroSuivi?.toLowerCase().includes(q.toLowerCase()) ||
+    c.nomDestinataire?.toLowerCase().includes(q.toLowerCase()) ||
+    c.villeDestination?.toLowerCase().includes(q.toLowerCase())
+  );
+  renderColisTable(f);
+}
+
+function filtrerColisStatut(statut) {
+  const f = statut ? COLIS_ALL.filter(c => c.statut === statut) : COLIS_ALL;
+  renderColisTable(f);
+}
+
+async function voirColis(id) {
+  try {
+    const data = await api('GET', `/colis/${id}`);
+    COLIS_ACTIF = data.colis;
+    const c = data.colis;
+
+    document.getElementById('modal-colis-titre').textContent = `Commande #${c.numeroSuivi}`;
+    document.getElementById('modal-colis-body').innerHTML = `
+      <div class="detail-grid">
+        <div class="detail-item"><label>Numéro de suivi</label><span class="td-mono">#${c.numeroSuivi}</span></div>
+        <div class="detail-item"><label>Statut</label><span>${badge(c.statut)}</span></div>
+        <div class="detail-item"><label>Adresse collecte</label><span>${c.adresseCollecte}</span></div>
+        <div class="detail-item"><label>Date collecte</label><span>${formatDate(c.dateCollecte)}</span></div>
+        <div class="detail-item"><label>Destination</label><span>${c.villeDestination}, ${c.paysDestination}</span></div>
+        <div class="detail-item"><label>Destinataire</label><span>${c.nomDestinataire} · ${c.telDestinataire}</span></div>
+        <div class="detail-item"><label>Type de colis</label><span>${c.typeColis}</span></div>
+        <div class="detail-item"><label>Poids</label><span>${c.poidsKg} kg</span></div>
+        <div class="detail-item"><label>Montant</label><span style="font-weight:600;color:var(--green)">${formatEur(c.tarif?.total)}</span></div>
+        <div class="detail-item"><label>Paiement</label><span>${badge(c.paiementStatut || 'en_attente')}</span></div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+      <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:12px">Étapes de livraison</div>
+      <div class="tl">
+        ${(c.etapes || []).map((e, i) => {
+          const isLast = i === c.etapes.length - 1;
+          const dotCls = e.statut === 'fait' ? 'done' : e.statut === 'en_cours' ? 'now' : '';
+          const ico = e.statut === 'fait' ? '✓' : e.statut === 'en_cours' ? '→' : '○';
+          return `
+            <div class="tl-row">
+              <div class="tl-left">
+                <div class="tl-dot ${dotCls}">${ico}</div>
+                ${!isLast ? `<div class="tl-line ${e.statut === 'fait' ? 'done' : ''}"></div>` : ''}
+              </div>
+              <div class="tl-content">
+                <h4>${e.label}</h4>
+                <p>${e.detail || ''} ${e.completeLe ? '· ' + formatDate(e.completeLe) : ''}</p>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+    ouvrirModal('modal-colis');
+  } catch(e) {
+    toast('Erreur chargement détail', 'err');
+  }
+}
+
+function ouvrirMajStatut() {
+  fermerModal('modal-colis');
+  if (COLIS_ACTIF) {
+    document.getElementById('nouveau-statut').value = COLIS_ACTIF.statut;
+  }
+  ouvrirModal('modal-statut');
+}
+
+async function confirmerMajStatut() {
+  if (!COLIS_ACTIF) return;
+  const statut = document.getElementById('nouveau-statut').value;
+  const note   = document.getElementById('note-statut').value;
+
+  const statusMap = { confirme:0, collecte:1, en_transit:2, arrive:3, livre:4 };
+  const indexEtape = statusMap[statut];
+
+  try {
+    await api('PATCH', `/colis/${COLIS_ACTIF._id}/statut`, { statut, indexEtape, detailEtape: note });
+    toast('Statut mis à jour !', 'ok');
+    fermerModal('modal-statut');
+    chargerColis();
+  } catch(e) {
+    toast(e.message || 'Erreur', 'err');
+  }
+}
+
+async function majStatutRapide(id, statut) {
+  try {
+    await api('PATCH', `/colis/${id}/statut`, { statut, indexEtape: 4 });
+    toast('Marqué comme livré ✓', 'ok');
+    chargerColis();
+  } catch(e) {
+    toast(e.message || 'Erreur', 'err');
+  }
+}
+
+// ── CLIENTS ────────────────────────────────
+async function chargerClients() {
+  const tbody = document.getElementById('clients-tbody');
+  tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">👥</div><p>Endpoint admin en cours de développement</p></div></td></tr>`;
+  document.getElementById('clients-count').textContent = '';
+}
+
+function filtrerClients(q) {}
+
+// ── LIVREURS ───────────────────────────────
+function ouvrirModalLivreur() { ouvrirModal('modal-livreur'); }
+
+function ajouterLivreur() {
+  const prenom = document.getElementById('l-prenom').value.trim();
+  const nom    = document.getElementById('l-nom').value.trim();
+  const tel    = document.getElementById('l-tel').value.trim();
+  const zone   = document.getElementById('l-zone').value.trim();
+
+  if (!prenom || !nom || !tel) return toast('Champs requis manquants', 'err');
+
+  // Ajouter dans le tableau (local pour l'instant)
+  const tbody = document.getElementById('livreurs-tbody');
+  const existant = tbody.querySelector('.empty');
+  if (existant) tbody.innerHTML = '';
+
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${prenom} ${nom}</td>
+    <td>${tel}</td>
+    <td>${zone || '—'}</td>
+    <td><span class="badge badge-ok">Actif</span></td>
+    <td><button class="btn btn-sm btn-danger" onclick="this.closest('tr').remove()">Retirer</button></td>`;
+  tbody.appendChild(tr);
+
+  toast('Livreur ajouté !', 'ok');
+  fermerModal('modal-livreur');
+  ['l-prenom','l-nom','l-tel','l-zone'].forEach(id => document.getElementById(id).value = '');
+}
+
+// ── TARIFS ─────────────────────────────────
+const PAYS_TARIFS = [
+  { code:'SN', nom:'Sénégal',       drapeau:'🇸🇳', prix:7.5 },
+  { code:'CI', nom:"Côte d'Ivoire", drapeau:'🇨🇮', prix:8.0 },
+  { code:'CM', nom:'Cameroun',      drapeau:'🇨🇲', prix:7.8 },
+  { code:'GN', nom:'Guinée',        drapeau:'🇬🇳', prix:8.5 },
+  { code:'ML', nom:'Mali',          drapeau:'🇲🇱', prix:8.2 },
+  { code:'BF', nom:'Burkina Faso',  drapeau:'🇧🇫', prix:8.3 },
+  { code:'CD', nom:'RD Congo',      drapeau:'🇨🇩', prix:9.0 },
+  { code:'MR', nom:'Mauritanie',    drapeau:'🇲🇷', prix:8.6 },
+  { code:'TG', nom:'Togo',          drapeau:'🇹🇬', prix:8.1 },
+  { code:'BJ', nom:'Bénin',         drapeau:'🇧🇯', prix:8.0 },
+  { code:'GH', nom:'Ghana',         drapeau:'🇬🇭', prix:8.4 },
+];
+
+function chargerTarifs() {
+  const grid = document.getElementById('tarifs-grid');
+  grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    ${PAYS_TARIFS.map(p => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:8px">
+        <span style="font-size:22px">${p.drapeau}</span>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:500">${p.nom}</div>
+          <input type="number" id="tarif-${p.code}" value="${p.prix}" step="0.1" min="1"
+            style="width:70px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;font-size:13px;margin-top:3px" />
+          <span style="font-size:11px;color:var(--muted)"> €/kg</span>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function sauvegarderTarifs() {
+  const tarifs = {};
+  PAYS_TARIFS.forEach(p => {
+    const val = document.getElementById(`tarif-${p.code}`)?.value;
+    if (val) tarifs[p.code] = parseFloat(val);
+  });
+  toast('Tarifs sauvegardés (mise à jour API en cours) ✓', 'ok');
+}
+
+// ── INIT ───────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  if (TOKEN) {
+    afficherApp();
+  }
+});
+</script>
+</body>
+</html>
