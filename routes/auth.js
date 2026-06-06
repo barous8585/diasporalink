@@ -5,14 +5,14 @@ const { auth } = require('../middleware/auth');
 
 // Envoyer OTP
 router.post('/envoyer-otp', [
-  body('telephone').isMobilePhone().withMessage('Numéro de téléphone invalide'),
+  body('telephone').notEmpty().withMessage('Numéro de téléphone requis'),
   body('prenom').optional().trim().notEmpty(),
   body('nom').optional().trim().notEmpty(),
 ], envoyerOtpCtrl);
 
 // Vérifier OTP
 router.post('/verifier-otp', [
-  body('telephone').isMobilePhone(),
+  body('telephone').notEmpty().withMessage('Numéro requis'),
   body('code').isLength({ min: 6, max: 6 }).isNumeric().withMessage('Code OTP invalide'),
 ], verifierOtpCtrl);
 
