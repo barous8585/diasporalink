@@ -12,7 +12,6 @@ const genererToken = (id) => {
 };
 
 // ── POST /api/auth/envoyer-otp ────────────
-// Envoie un OTP par SMS
 const envoyerOtpCtrl = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -25,10 +24,10 @@ const envoyerOtpCtrl = async (req, res) => {
     let user = await User.findOne({ telephone });
 
     if (!user) {
-      // Nouvel utilisateur — prenom et nom requis
+      // Nouvel utilisateur — prénom et nom requis
       if (!prenom || !nom) {
-        return res.status(400).json({
-          succes: false,
+        return res.status(200).json({
+          succes: true,
           message: 'Prénom et nom requis pour l\'inscription.',
           nouvelUtilisateur: true,
         });
@@ -38,7 +37,6 @@ const envoyerOtpCtrl = async (req, res) => {
 
     const code = user.genererOTP();
     await user.save();
-
     await envoyerOTP(telephone, code);
 
     res.json({
@@ -54,7 +52,6 @@ const envoyerOtpCtrl = async (req, res) => {
 };
 
 // ── POST /api/auth/verifier-otp ───────────
-// Vérifie l'OTP et retourne un JWT
 const verifierOtpCtrl = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -92,7 +89,6 @@ const verifierOtpCtrl = async (req, res) => {
 };
 
 // ── GET /api/auth/moi ─────────────────────
-// Profil de l'utilisateur connecté
 const moiCtrl = async (req, res) => {
   res.json({ succes: true, utilisateur: req.user });
 };
