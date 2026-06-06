@@ -14,6 +14,9 @@ const initSocket = require('./socket');
 const app = express();
 const server = http.createServer(app);
 
+// ── Trust proxy (Render est derrière un proxy) ─
+app.set('trust proxy', 1);
+
 // ── Socket.io ─────────────────────────────
 const io = new Server(server, {
   cors: {
