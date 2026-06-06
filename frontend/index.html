@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#116647" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="DiasporaLink" />
+  <meta name="description" content="Envoyez des colis à votre famille en Afrique depuis votre domicile." />
+  <title>DiasporaLink</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── ÉCRAN CONNEXION ─────────────────── -->
+  <div class="screen active" id="screen-auth">
+    <div class="auth-wrap">
+      <div class="auth-top">
+        <div class="auth-logo">Diaspora<span>Link</span></div>
+        <div class="auth-tagline">Envoyez des colis à votre famille en Afrique, depuis chez vous.</div>
+      </div>
+      <div class="auth-sheet" id="auth-phone-sheet">
+        <h2>Bienvenue</h2>
+        <p>Entrez votre numéro pour continuer</p>
+        <div class="field">
+          <label class="label">Numéro de téléphone</label>
+          <div class="phone-row">
+            <div class="country-code">🇫🇷 +33</div>
+            <input class="input" id="auth-phone" type="tel" placeholder="6 12 34 56 78" inputmode="numeric" />
+          </div>
+        </div>
+        <div class="mt12">
+          <button class="btn btn-primary" onclick="authEnvoyerOTP()">Recevoir le code SMS</button>
+        </div>
+        <p class="terms">En continuant, vous acceptez nos <a href="#">Conditions d'utilisation</a> et notre <a href="#">Politique de confidentialité</a>.</p>
+      </div>
+
+      <!-- Fiche inscription (si nouvel utilisateur) -->
+      <div class="auth-sheet" id="auth-register-sheet" style="display:none">
+        <h2>Créer un compte</h2>
+        <p>Quelques informations pour commencer</p>
+        <div class="field">
+          <label class="label">Prénom</label>
+          <input class="input" id="auth-prenom" type="text" placeholder="Aminata" />
+        </div>
+        <div class="field mt8">
+          <label class="label">Nom</label>
+          <input class="input" id="auth-nom" type="text" placeholder="Konaté" />
+        </div>
+        <div class="mt12">
+          <button class="btn btn-primary" onclick="authCreerCompte()">Continuer</button>
+        </div>
+      </div>
+
+      <!-- Fiche OTP -->
+      <div class="auth-sheet" id="auth-otp-sheet" style="display:none">
+        <h2>Code de vérification</h2>
+        <p id="auth-otp-desc">Code envoyé au +33 6 XX XX XX XX</p>
+        <div class="otp-group">
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+          <input class="otp-input" maxlength="1" inputmode="numeric" />
+        </div>
+        <button class="btn btn-primary" onclick="authVerifierOTP()">Confirmer</button>
+        <button class="btn btn-ghost mt8" onclick="authRenvoyerOTP()">Renvoyer le code</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── APP PRINCIPALE ──────────────────── -->
+  <div class="screen" id="screen-app">
+
+    <!-- ACCUEIL -->
+    <div class="screen active" id="screen-home">
+      <div class="header">
+        <div class="header-top">
+          <div class="logo">Diaspora<span>Link</span></div>
+          <div class="header-avatar" id="home-avatar" onclick="navGo('profil')">AK</div>
+        </div>
+        <div class="header-greeting" id="home-greeting">Bonjour !</div>
+        <div class="header-title">Que souhaitez-vous faire ?</div>
+      </div>
+      <div class="body">
+        <div class="body-inner">
+          <div class="hero">
+            <div>
+              <h3>Nouveau pick-up</h3>
+              <p>Collecte à domicile · Livraison en Afrique</p>
+            </div>
+            <button class="hero-btn" onclick="navGo('pickup')">Planifier</button>
+          </div>
+
+          <div>
+            <div class="section-header">
+              <span class="section-title">Mes envois</span>
+              <button class="section-link" onclick="navGo('colis')">Voir tout</button>
+            </div>
+            <div class="card" id="home-colis-list">
+              <div class="empty-state">
+                <div class="empty-icon">📦</div>
+                Chargement...
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-title">Destinations</div>
+            <div class="card" style="padding:16px">
+              <div id="home-pays" style="display:flex;gap:18px;flex-wrap:wrap"></div>
+            </div>
+          </div>
+
+          <div class="stats" id="home-stats">
+            <div class="stat"><div class="stat-val">—</div><div class="stat-lbl">Colis envoyés</div></div>
+            <div class="stat"><div class="stat-val">9</div><div class="stat-lbl">Pays desservis</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLANIFIER PICKUP -->
+    <div class="screen" id="screen-pickup">
+      <div class="header">
+        <div class="header-top">
+          <button class="header-back" onclick="navGo('home')" id="pickup-back"></button>
+          <div class="logo">Diaspora<span>Link</span></div>
+          <div style="width:36px"></div>
+        </div>
+        <div class="header-title">Planifier un pick-up</div>
+        <div class="header-sub">Étape 1 sur 2</div>
+      </div>
+      <div class="body">
+        <div class="body-inner">
+          <div class="card">
+            <div class="form-block">
+              <div class="map-box">
+                <div class="map-grid"></div>
+                <div class="map-pin" id="map-pin-icon"></div>
+              </div>
+              <div class="field">
+                <label class="label">Adresse de collecte</label>
+                <input class="input" id="f-adresse" type="text" placeholder="Numéro, rue, ville…" />
+              </div>
+              <div class="field-row mt8">
+                <div class="field">
+                  <label class="label">Date</label>
+                  <input class="input" id="f-date" type="date" />
+                </div>
+                <div class="field">
+                  <label class="label">Créneau</label>
+                  <div class="select-wrap">
+                    <select class="select" id="f-creneau"></select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="form-block">
+              <div class="field">
+                <label class="label">Pays de destination</label>
+                <div class="country-grid" id="f-pays-grid"></div>
+              </div>
+              <div class="field">
+                <label class="label">Ville</label>
+                <div class="select-wrap">
+                  <select class="select" id="f-ville"></select>
+                </div>
+              </div>
+              <div class="field mt8">
+                <label class="label">Nom du destinataire</label>
+                <input class="input" id="f-destinataire" type="text" placeholder="Prénom Nom" />
+              </div>
+              <div class="field">
+                <label class="label">Téléphone du destinataire</label>
+                <input class="input" id="f-tel-dest" type="tel" placeholder="+221 7X XXX XX XX" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="form-block">
+              <div class="field">
+                <label class="label">Type de colis</label>
+                <div class="pkg-grid" id="f-type-grid"></div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label class="label">Poids (kg)</label>
+                  <input class="input" id="f-poids" type="number" min="0.5" step="0.5" placeholder="5" />
+                </div>
+                <div class="field">
+                  <label class="label">Valeur (€)</label>
+                  <input class="input" id="f-valeur" type="number" min="0" placeholder="150" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="border-left:3px solid var(--green)">
+            <div class="form-block">
+              <div class="section-title" style="margin-bottom:10px">Estimation</div>
+              <div id="tarif-preview">
+                <div class="text-muted text-center" style="font-size:13px;padding:8px 0">Renseignez le poids et la destination</div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" onclick="pickupSuivant()">Continuer vers le paiement</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAIEMENT -->
+    <div class="screen" id="screen-paiement">
+      <div class="header">
+        <div class="header-top">
+          <button class="header-back" onclick="navGo('pickup')" id="paiement-back"></button>
+          <div class="logo">Diaspora<span>Link</span></div>
+          <div style="width:36px"></div>
+        </div>
+        <div class="header-title">Paiement</div>
+        <div class="header-sub">Étape 2 sur 2</div>
+      </div>
+      <div class="body">
+        <div class="body-inner">
+          <div class="card">
+            <div id="recap-commande" class="form-block"></div>
+          </div>
+
+          <div class="card">
+            <div class="pay-row on" onclick="selectPay(this,'carte')">
+              <div class="pay-logo">💳</div>
+              <div class="pay-info"><h4>Carte bancaire</h4><p>Visa · Mastercard</p></div>
+              <input type="radio" class="pay-radio" name="pay" checked />
+            </div>
+            <div class="pay-row" onclick="selectPay(this,'mobile')">
+              <div class="pay-logo">📱</div>
+              <div class="pay-info"><h4>Mobile Money</h4><p>Wave · Orange Money</p></div>
+              <input type="radio" class="pay-radio" name="pay" />
+            </div>
+            <div class="pay-row" onclick="selectPay(this,'virement')">
+              <div class="pay-logo">🏦</div>
+              <div class="pay-info"><h4>Virement SEPA</h4><p>Délai 1 jour ouvré</p></div>
+              <input type="radio" class="pay-radio" name="pay" />
+            </div>
+          </div>
+
+          <div class="gap10">
+            <button class="btn btn-primary" id="btn-payer" onclick="confirmerCommande()">Confirmer la commande</button>
+            <button class="btn btn-ghost" onclick="navGo('pickup')">Modifier</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MES COLIS -->
+    <div class="screen" id="screen-colis">
+      <div class="header">
+        <div class="header-top">
+          <button class="header-back" onclick="navGo('home')" id="colis-back"></button>
+          <div class="logo">Diaspora<span>Link</span></div>
+          <div style="width:36px"></div>
+        </div>
+        <div class="header-title">Mes envois</div>
+      </div>
+      <div class="body">
+        <div class="body-inner">
+          <div id="colis-list-container">
+            <div class="empty-state">
+              <div class="empty-icon">📦</div>
+              Chargement...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DÉTAIL COLIS / SUIVI -->
+    <div class="screen" id="screen-suivi">
+      <div class="header">
+        <div class="header-top">
+          <button class="header-back" onclick="navGo('colis')" id="suivi-back"></button>
+          <div class="logo">Diaspora<span>Link</span></div>
+          <div style="width:36px"></div>
+        </div>
+        <div class="header-title" id="suivi-titre">Suivi</div>
+      </div>
+      <div class="body">
+        <div class="body-inner" id="suivi-content">
+          <div class="empty-state">Chargement...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MESSAGES -->
+    <div class="screen" id="screen-messages">
+      <div class="header">
+        <div class="header-top">
+          <button class="header-back" onclick="navGo('colis')" id="messages-back"></button>
+          <div class="logo">Diaspora<span>Link</span></div>
+          <div style="width:36px"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <div style="width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0"></div>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:white" id="msg-colis-num">Colis</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5)">Messagerie</div>
+          </div>
+        </div>
+      </div>
+      <div class="body" id="chat-body" style="padding-bottom:0">
+        <div class="chat-list" id="chat-list"></div>
+      </div>
+      <div class="chat-bar">
+        <input class="chat-input" id="chat-input" type="text" placeholder="Votre message…" onkeydown="if(event.key==='Enter') envoyerMsg()" />
+        <button class="chat-send" onclick="envoyerMsg()" id="chat-send-btn"></button>
+      </div>
+    </div>
+
+    <!-- PROFIL -->
+    <div class="screen" id="screen-profil">
+      <div class="header">
+        <div class="header-top">
+          <button class="header-back" onclick="navGo('home')" id="profil-back"></button>
+          <div class="logo">Diaspora<span>Link</span></div>
+          <div style="width:36px"></div>
+        </div>
+        <div class="profile-header">
+          <div class="profile-av" id="profil-av">AK</div>
+          <div>
+            <div class="profile-name" id="profil-nom">—</div>
+            <div class="profile-email" id="profil-tel">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="body-inner">
+          <div class="stats" id="profil-stats">
+            <div class="stat"><div class="stat-val" id="profil-nb-envois">—</div><div class="stat-lbl">Envois totaux</div></div>
+            <div class="stat"><div class="stat-val" id="profil-total">—</div><div class="stat-lbl">Total dépensé</div></div>
+          </div>
+
+          <div class="card" id="profil-historique"></div>
+
+          <div class="card">
+            <div class="row" onclick="navGo('home')">
+              <div class="row-icon" style="background:#FDECEA"></div>
+              <div class="row-main"><div class="row-title" style="color:var(--danger)">Se déconnecter</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NAV BAS -->
+    <nav class="nav" id="main-nav">
+      <button class="nav-btn active" data-screen="home" onclick="navGo('home')">
+        <img id="nav-home-icon" width="24" height="24" style="display:block" />
+        <span>Accueil</span>
+      </button>
+      <button class="nav-btn" data-screen="pickup" onclick="navGo('pickup')">
+        <img id="nav-pickup-icon" width="24" height="24" style="display:block" />
+        <span>Envoyer</span>
+      </button>
+      <button class="nav-btn" data-screen="colis" onclick="navGo('colis')" style="position:relative">
+        <img id="nav-colis-icon" width="24" height="24" style="display:block" />
+        <span>Mes colis</span>
+        <div class="nav-dot" id="nav-dot" style="display:none"></div>
+      </button>
+      <button class="nav-btn" data-screen="profil" onclick="navGo('profil')">
+        <img id="nav-profil-icon" width="24" height="24" style="display:block" />
+        <span>Profil</span>
+      </button>
+    </nav>
+  </div>
+
+</div>
+
+<!-- TOAST & LOADER -->
+<div class="toast" id="toast"></div>
+<div class="loader-overlay" id="loader"><div class="loader-spin"></div></div>
+
+<!-- SCRIPTS -->
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
