@@ -49,10 +49,10 @@ const Auth = {
 
 // ── COLIS ──────────────────────────────────────────────────
 const Colis = {
-  creer:       (data)               => request('POST', '/colis', data),
-  mesColis:    ()                   => request('GET', '/colis'),
-  unColis:     (id)                 => request('GET', `/colis/${id}`),
-  suiviPublic: (num)                => request('GET', `/colis/suivi/${num}`, null, false),
+  creer:       (data)                => request('POST', '/colis', data),
+  mesColis:    ()                    => request('GET',  '/colis'),
+  unColis:     (id)                  => request('GET',  `/colis/${id}`),
+  suiviPublic: (num)                 => request('GET',  `/colis/suivi/${num}`, null, false),
   tarif:       (pays, poids, valeur) =>
     request('GET', `/colis/tarif?pays=${pays}&poids=${poids}&valeur=${valeur || 0}`, null, false),
 };
@@ -74,4 +74,14 @@ const Utilisateur = {
   mettreAJour: (data) => request('PATCH', '/utilisateurs/moi', data),
 };
 
-window.API = { Auth, Colis, Messages, Config, Utilisateur, getUser, getToken, setToken, setUser, clear };
+// ── REMBOURSEMENTS ─────────────────────────────────────────
+const Remboursements = {
+  creer:    (colisId, motif, description) =>
+    request('POST', '/remboursements', { colisId, motif, description }),
+  mesDemandes: () => request('GET', '/remboursements/mes'),
+};
+
+window.API = {
+  Auth, Colis, Messages, Config, Utilisateur, Remboursements,
+  getUser, getToken, setToken, setUser, clear, request
+};
