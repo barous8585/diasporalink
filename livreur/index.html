@@ -13,284 +13,103 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
     :root {
-      --green:       #1A8C64;
-      --green-dark:  #116647;
-      --green-light: #EAF5F0;
-      --white: #fff;
-      --off:   #F7F7F5;
-      --line:  #E4E4E0;
-      --text:  #1A1A18;
-      --muted: #6B6B66;
-      --hint:  #A0A09A;
-      --danger:#C0392B;
-      --warn:  #B7680A;
-      --nav-h: 64px;
+      --green: #1A8C64; --green-dark: #116647; --green-light: #EAF5F0;
+      --white: #fff; --off: #F7F7F5; --line: #E4E4E0;
+      --text: #1A1A18; --muted: #6B6B66; --hint: #A0A09A;
+      --danger: #C0392B; --warn: #B7680A; --nav-h: 64px;
       --font: 'Inter', -apple-system, sans-serif;
     }
-
     html { height: 100%; height: -webkit-fill-available; }
-    body {
-      height: 100%; min-height: -webkit-fill-available;
-      font-family: var(--font); background: var(--off);
-      color: var(--text); font-size: 15px; line-height: 1.5;
-      overscroll-behavior: none; -webkit-font-smoothing: antialiased;
-    }
-
-    #app {
-      max-width: 430px; margin: 0 auto;
-      height: 100dvh; min-height: -webkit-fill-available;
-      display: flex; flex-direction: column;
-      background: var(--white); overflow: hidden;
-      padding-top: env(safe-area-inset-top);
-    }
-
-    /* ── SCREENS ── */
+    body { height: 100%; min-height: -webkit-fill-available; font-family: var(--font); background: var(--off); color: var(--text); font-size: 15px; line-height: 1.5; overscroll-behavior: none; -webkit-font-smoothing: antialiased; }
+    #app { max-width: 430px; margin: 0 auto; height: 100dvh; min-height: -webkit-fill-available; display: flex; flex-direction: column; background: var(--white); overflow: hidden; padding-top: env(safe-area-inset-top); }
     .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
     .screen.active { display: flex; }
-
-    /* ── AUTH ── */
     .auth-wrap { flex: 1; display: flex; flex-direction: column; background: var(--green-dark); }
-    .auth-top {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; padding: 40px 30px; gap: 8px;
-    }
+    .auth-top { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 30px; gap: 8px; }
     .auth-logo { font-size: 36px; font-weight: 700; color: white; letter-spacing: -1px; }
     .auth-logo span { color: rgba(255,255,255,0.4); font-weight: 300; }
-    .auth-badge {
-      background: rgba(255,255,255,0.15); border-radius: 20px;
-      padding: 4px 14px; font-size: 12px; color: rgba(255,255,255,0.7);
-    }
-    .auth-sheet {
-      background: var(--white); border-radius: 20px 20px 0 0;
-      padding: 28px 24px; padding-bottom: calc(28px + env(safe-area-inset-bottom));
-    }
+    .auth-badge { background: rgba(255,255,255,0.15); border-radius: 20px; padding: 4px 14px; font-size: 12px; color: rgba(255,255,255,0.7); }
+    .auth-sheet { background: var(--white); border-radius: 20px 20px 0 0; padding: 28px 24px; padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
     .auth-sheet h2 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
-    .auth-sheet p  { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
+    .auth-sheet p { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
     .phone-row { display: flex; gap: 8px; }
-    .country-code {
-      height: 48px; padding: 0 12px;
-      border: 1px solid var(--line); border-radius: 8px;
-      font-family: var(--font); font-size: 15px;
-      background: var(--off); white-space: nowrap;
-      display: flex; align-items: center;
-    }
-
-    /* ── HEADER ── */
-    .header {
-      background: var(--green-dark);
-      padding: 14px 18px 18px; flex-shrink: 0;
-    }
-    .header-top {
-      display: flex; align-items: center;
-      justify-content: space-between; margin-bottom: 12px;
-    }
+    .country-code { height: 48px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; font-family: var(--font); font-size: 15px; background: var(--off); white-space: nowrap; display: flex; align-items: center; }
+    .header { background: var(--green-dark); padding: 14px 18px 18px; flex-shrink: 0; }
+    .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .logo { font-size: 16px; font-weight: 600; color: white; }
     .logo span { color: rgba(255,255,255,0.4); font-weight: 400; }
-    .logo-badge {
-      font-size: 10px; background: rgba(255,255,255,0.15);
-      border-radius: 4px; padding: 2px 7px; color: rgba(255,255,255,0.7);
-      margin-left: 6px; vertical-align: middle;
-    }
-    .header-avatar {
-      width: 36px; height: 36px; background: rgba(255,255,255,0.15);
-      border-radius: 8px; display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 600; color: white; cursor: pointer;
-    }
+    .logo-badge { font-size: 10px; background: rgba(255,255,255,0.15); border-radius: 4px; padding: 2px 7px; color: rgba(255,255,255,0.7); margin-left: 6px; vertical-align: middle; }
+    .header-avatar { width: 36px; height: 36px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: white; cursor: pointer; }
     .header-greeting { font-size: 12px; color: rgba(255,255,255,0.55); margin-bottom: 2px; }
     .header-title { font-size: 21px; font-weight: 600; color: white; letter-spacing: -0.4px; }
-    .header-back {
-      width: 36px; height: 36px; background: rgba(255,255,255,0.12);
-      border: none; border-radius: 8px; color: white; font-size: 20px;
-      display: flex; align-items: center; justify-content: center; cursor: pointer;
-    }
-
-    /* ── BODY ── */
-    .body {
-      flex: 1; overflow-y: auto; background: var(--off);
-      -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
-      padding-bottom: calc(var(--nav-h) + 16px);
-    }
+    .header-back { width: 36px; height: 36px; background: rgba(255,255,255,0.12); border: none; border-radius: 8px; color: white; font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .body { flex: 1; overflow-y: auto; background: var(--off); -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; padding-bottom: calc(var(--nav-h) + 16px); }
     .body::-webkit-scrollbar { display: none; }
     .body-inner { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-
-    /* ── NAV ── */
-    .nav {
-      height: var(--nav-h); background: var(--white);
-      border-top: 1px solid var(--line); display: flex;
-      align-items: center; flex-shrink: 0;
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-    .nav-btn {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; gap: 4px;
-      background: none; border: none; cursor: pointer; padding: 8px 4px;
-    }
+    .nav { height: var(--nav-h); background: var(--white); border-top: 1px solid var(--line); display: flex; align-items: center; flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom); }
+    .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: none; cursor: pointer; padding: 8px 4px; }
     .nav-btn .ni { font-size: 22px; }
     .nav-btn span { font-size: 10px; color: var(--hint); font-weight: 500; }
     .nav-btn.active span { color: var(--green); font-weight: 600; }
-
-    /* ── CARDS ── */
-    .card {
-      background: var(--white); border: 1px solid var(--line);
-      border-radius: 8px; overflow: hidden;
-    }
-
-    /* ── COLIS ROW ── */
-    .colis-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 14px 16px; border-bottom: 1px solid var(--line);
-      cursor: pointer; min-height: 72px;
-    }
+    .card { background: var(--white); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .colis-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); cursor: pointer; min-height: 72px; }
     .colis-row:last-child { border-bottom: none; }
     .colis-row:active { background: var(--off); }
-    .colis-icon {
-      width: 44px; height: 44px; background: var(--green-light);
-      border-radius: 8px; display: flex; align-items: center;
-      justify-content: center; font-size: 20px; flex-shrink: 0;
-    }
+    .colis-icon { width: 44px; height: 44px; background: var(--green-light); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
     .colis-main { flex: 1; min-width: 0; }
     .colis-id { font-size: 14px; font-weight: 600; }
     .colis-dest { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .colis-addr { font-size: 11px; color: var(--hint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .colis-right { text-align: right; flex-shrink: 0; }
-
-    /* ── BADGE ── */
-    .badge {
-      display: inline-flex; align-items: center;
-      padding: 4px 9px; border-radius: 4px;
-      font-size: 11px; font-weight: 600; white-space: nowrap;
-    }
+    .badge { display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
     .badge-ok   { background: #EAF5F0; color: #116647; }
     .badge-go   { background: #FEF3E2; color: #B7680A; }
     .badge-grey { background: #EFEFED; color: #6B6B66; }
     .badge-info { background: #E8EEF8; color: #1B4FA8; }
-    .badge-urgent { background: #FDECEA; color: #C0392B; }
-
-    /* ── BUTTONS ── */
-    .btn {
-      height: 50px; width: 100%; border-radius: 8px; border: none;
-      font-family: var(--font); font-size: 15px; font-weight: 600;
-      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
-    }
+    .btn { height: 50px; width: 100%; border-radius: 8px; border: none; font-family: var(--font); font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .btn:active { opacity: 0.8; }
     .btn-primary { background: var(--green); color: white; }
     .btn-outline { background: white; color: var(--green); border: 1.5px solid var(--green); }
     .btn-ghost   { background: var(--off); color: var(--text); border: 1px solid var(--line); }
-    .btn-danger  { background: #FDECEA; color: var(--danger); border: 1px solid #F5C6C2; }
-
-    /* ── FORM ── */
-    .label {
-      display: block; font-size: 11px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.5px;
-      color: var(--muted); margin-bottom: 6px;
-    }
-    .input, .select {
-      width: 100%; height: 48px; padding: 0 14px;
-      border: 1px solid var(--line); border-radius: 8px;
-      font-family: var(--font); font-size: 16px;
-      color: var(--text); background: var(--white);
-      appearance: none; -webkit-appearance: none;
-    }
-    .input:focus, .select:focus {
-      outline: none; border-color: var(--green);
-      box-shadow: 0 0 0 3px rgba(26,140,100,0.1);
-    }
+    .label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 6px; }
+    .input, .select { width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; font-family: var(--font); font-size: 16px; color: var(--text); background: var(--white); appearance: none; -webkit-appearance: none; }
+    .input:focus, .select:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(26,140,100,0.1); }
     .select-wrap { position: relative; }
-    .select-wrap::after {
-      content: ''; position: absolute; right: 14px; top: 50%;
-      transform: translateY(-50%);
-      border-left: 4px solid transparent; border-right: 4px solid transparent;
-      border-top: 5px solid var(--muted); pointer-events: none;
-    }
-
-    /* ── SECTION ── */
-    .section-title {
-      font-size: 11px; font-weight: 600; text-transform: uppercase;
-      letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px;
-    }
-
-    /* ── STATS ── */
+    .select-wrap::after { content: ''; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--muted); pointer-events: none; }
+    .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; }
     .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .stat {
-      background: var(--white); border: 1px solid var(--line);
-      border-radius: 8px; padding: 14px;
-    }
+    .stat { background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
     .stat-val { font-size: 24px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
     .stat-val.g { color: var(--green); }
     .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
-
-    /* ── DETAIL ── */
-    .detail-row {
-      display: flex; justify-content: space-between; align-items: flex-start;
-      padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px;
-    }
+    .detail-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
     .detail-row:last-child { border-bottom: none; }
     .detail-row .lbl { color: var(--muted); flex-shrink: 0; margin-right: 12px; }
     .detail-row .val { font-weight: 500; text-align: right; }
-
-    /* ── OTP ── */
     .otp-group { display: flex; gap: 10px; justify-content: center; margin: 20px 0; }
-    .otp-input {
-      width: 46px; height: 54px; border: 1.5px solid var(--line);
-      border-radius: 8px; text-align: center; font-family: var(--font);
-      font-size: 22px; font-weight: 600; color: var(--text);
-      background: var(--white); -webkit-appearance: none;
-    }
+    .otp-input { width: 46px; height: 54px; border: 1.5px solid var(--line); border-radius: 8px; text-align: center; font-family: var(--font); font-size: 22px; font-weight: 600; color: var(--text); background: var(--white); -webkit-appearance: none; }
     .otp-input:focus { outline: none; border-color: var(--green); }
-
-    /* ── TOAST ── */
-    .toast {
-      position: fixed; bottom: 80px; left: 50%;
-      transform: translateX(-50%) translateY(10px);
-      background: #1A1A18; color: white;
-      padding: 11px 18px; border-radius: 8px;
-      font-size: 14px; font-weight: 500;
-      opacity: 0; pointer-events: none;
-      transition: all 0.25s; z-index: 9999; white-space: nowrap;
-    }
+    .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(10px); background: #1A1A18; color: white; padding: 11px 18px; border-radius: 8px; font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: all 0.25s; z-index: 9999; white-space: nowrap; }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     .toast.ok  { background: var(--green); }
     .toast.err { background: var(--danger); }
-
-    /* ── LOADER ── */
-    .loader-overlay {
-      position: fixed; inset: 0; background: rgba(255,255,255,0.85);
-      display: none; align-items: center; justify-content: center; z-index: 9998;
-    }
+    .loader-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.85); display: none; align-items: center; justify-content: center; z-index: 9998; }
     .loader-overlay.show { display: flex; }
-    .spin {
-      width: 36px; height: 36px;
-      border: 3px solid var(--green-light); border-top-color: var(--green);
-      border-radius: 50%; animation: spin 0.8s linear infinite;
-    }
+    .spin { width: 36px; height: 36px; border: 3px solid var(--green-light); border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── EMPTY ── */
     .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
     .empty .ei { font-size: 36px; margin-bottom: 10px; }
-
-    /* ── MODAL ── */
-    .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-      display: none; align-items: flex-end; justify-content: center; z-index: 200;
-    }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-end; justify-content: center; z-index: 200; }
     .modal-overlay.show { display: flex; }
-    .modal {
-      background: white; border-radius: 16px 16px 0 0;
-      width: 100%; max-width: 430px;
-      padding: 24px; padding-bottom: calc(24px + env(safe-area-inset-bottom));
-      max-height: 85vh; overflow-y: auto;
-    }
+    .modal { background: white; border-radius: 16px 16px 0 0; width: 100%; max-width: 430px; padding: 24px; padding-bottom: calc(24px + env(safe-area-inset-bottom)); max-height: 85vh; overflow-y: auto; }
     .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
   </style>
 </head>
 <body>
-
 <div id="app">
 
-  <!-- ── AUTH ──────────────────────────────── -->
+  <!-- AUTH -->
   <div class="screen active" id="screen-auth">
     <div class="auth-wrap">
       <div class="auth-top">
@@ -326,16 +145,14 @@
     </div>
   </div>
 
-  <!-- ── APP ───────────────────────────────── -->
+  <!-- APP -->
   <div class="screen" id="screen-app">
 
-    <!-- ACCUEIL LIVREUR -->
+    <!-- ACCUEIL -->
     <div class="screen active" id="screen-home">
       <div class="header">
         <div class="header-top">
-          <div>
-            <div class="logo">Diaspora<span>Link</span><span class="logo-badge">PRO</span></div>
-          </div>
+          <div class="logo">Diaspora<span>Link</span><span class="logo-badge">PRO</span></div>
           <div class="header-avatar" id="home-avatar" onclick="navGo('profil')">ML</div>
         </div>
         <div class="header-greeting" id="home-greeting">Bonjour !</div>
@@ -343,29 +160,23 @@
       </div>
       <div class="body">
         <div class="body-inner">
-          <div class="stats" id="home-stats">
+          <div class="stats">
             <div class="stat"><div class="stat-val" id="stat-today">0</div><div class="stat-lbl">Aujourd'hui</div></div>
             <div class="stat"><div class="stat-val g" id="stat-done">0</div><div class="stat-lbl">Collectés</div></div>
           </div>
-
           <div>
             <div class="section-title">À collecter aujourd'hui</div>
-            <div class="card" id="pickups-list">
-              <div class="empty"><div class="ei">📦</div><p>Aucun pick-up assigné</p></div>
-            </div>
+            <div class="card" id="pickups-list"><div class="empty"><div class="ei">📦</div><p>Aucun pick-up assigné</p></div></div>
           </div>
-
           <div>
             <div class="section-title">En transit</div>
-            <div class="card" id="transit-list">
-              <div class="empty"><div class="ei">🚚</div><p>Aucun colis en transit</p></div>
-            </div>
+            <div class="card" id="transit-list"><div class="empty"><div class="ei">🚚</div><p>Aucun colis en transit</p></div></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- SCANNER / CONFIRMER COLLECTE -->
+    <!-- COLLECTE -->
     <div class="screen" id="screen-scan">
       <div class="header">
         <div class="header-top">
@@ -383,7 +194,6 @@
               <input class="input" id="scan-numero" type="text" placeholder="DL-1000" oninput="this.value=this.value.toUpperCase()" />
             </div>
           </div>
-
           <div class="card" id="scan-detail" style="display:none">
             <div class="detail-row"><span class="lbl">Client</span><span class="val" id="scan-client">—</span></div>
             <div class="detail-row"><span class="lbl">Adresse</span><span class="val" id="scan-adresse">—</span></div>
@@ -391,16 +201,13 @@
             <div class="detail-row"><span class="lbl">Poids</span><span class="val" id="scan-poids">—</span></div>
             <div class="detail-row"><span class="lbl">Type</span><span class="val" id="scan-type">—</span></div>
           </div>
-
           <button class="btn btn-primary" onclick="rechercherColis()">Rechercher</button>
-          <button class="btn btn-outline" id="btn-confirmer" style="display:none" onclick="confirmerCollecte()">
-            ✓ Confirmer la collecte
-          </button>
+          <button class="btn btn-outline" id="btn-confirmer" style="display:none" onclick="confirmerCollecte()">✓ Confirmer la collecte</button>
         </div>
       </div>
     </div>
 
-    <!-- MES LIVRAISONS -->
+    <!-- HISTORIQUE -->
     <div class="screen" id="screen-livraisons">
       <div class="header">
         <div class="header-top">
@@ -412,14 +219,12 @@
       </div>
       <div class="body">
         <div class="body-inner">
-          <div class="card" id="livraisons-list">
-            <div class="empty"><div class="ei">📋</div><p>Chargement...</p></div>
-          </div>
+          <div class="card" id="livraisons-list"><div class="empty"><div class="ei">📋</div><p>Chargement...</p></div></div>
         </div>
       </div>
     </div>
 
-    <!-- PROFIL LIVREUR -->
+    <!-- PROFIL -->
     <div class="screen" id="screen-profil">
       <div class="header">
         <div class="header-top">
@@ -450,26 +255,16 @@
       </div>
     </div>
 
-    <!-- NAV BAS -->
     <nav class="nav">
-      <button class="nav-btn active" data-s="home" onclick="navGo('home')">
-        <div class="ni">🏠</div><span>Accueil</span>
-      </button>
-      <button class="nav-btn" data-s="scan" onclick="navGo('scan')">
-        <div class="ni">📷</div><span>Collecte</span>
-      </button>
-      <button class="nav-btn" data-s="livraisons" onclick="navGo('livraisons')">
-        <div class="ni">📋</div><span>Historique</span>
-      </button>
-      <button class="nav-btn" data-s="profil" onclick="navGo('profil')">
-        <div class="ni">👤</div><span>Profil</span>
-      </button>
+      <button class="nav-btn active" data-s="home" onclick="navGo('home')"><div class="ni">🏠</div><span>Accueil</span></button>
+      <button class="nav-btn" data-s="scan" onclick="navGo('scan')"><div class="ni">📷</div><span>Collecte</span></button>
+      <button class="nav-btn" data-s="livraisons" onclick="navGo('livraisons')"><div class="ni">📋</div><span>Historique</span></button>
+      <button class="nav-btn" data-s="profil" onclick="navGo('profil')"><div class="ni">👤</div><span>Profil</span></button>
     </nav>
   </div>
-
 </div>
 
-<!-- MODAL MAJ STATUT -->
+<!-- MODAL STATUT -->
 <div class="modal-overlay" id="modal-statut">
   <div class="modal">
     <h3>Mettre à jour le statut</h3>
@@ -506,13 +301,10 @@ let MON_TEL = '';
 let COLIS_ACTIF = null;
 let MES_COLIS = [];
 
-// ── UTILS ──────────────────────────────────
 function toast(msg, type='') {
   const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = `toast ${type} show`;
-  clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+  el.textContent = msg; el.className = `toast ${type} show`;
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 3000);
 }
 function showLoader() { document.getElementById('loader').classList.add('show'); }
 function hideLoader() { document.getElementById('loader').classList.remove('show'); }
@@ -532,23 +324,16 @@ async function apiCall(method, path, body=null) {
 
 function badge(statut) {
   const map = {
-    en_attente: ['badge-grey','En attente'],
-    confirme:   ['badge-info','Confirmé'],
-    collecte:   ['badge-info','Collecté'],
-    en_transit: ['badge-go','En transit'],
-    arrive:     ['badge-go','Arrivé'],
-    livre:      ['badge-ok','Livré'],
-    annule:     ['badge-grey','Annulé'],
+    en_attente:['badge-grey','En attente'], confirme:['badge-info','Confirmé'],
+    collecte:['badge-info','Collecté'], en_transit:['badge-go','En transit'],
+    arrive:['badge-go','Arrivé'], livre:['badge-ok','Livré'], annule:['badge-grey','Annulé'],
   };
   const [cls, label] = map[statut] || ['badge-grey', statut];
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
-function formatDate(d) {
-  return new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' });
-}
+function formatDate(d) { return new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' }); }
 
-// ── OTP INPUTS ─────────────────────────────
 function setupOTP() {
   const inputs = document.querySelectorAll('.otp-input');
   inputs.forEach((inp, i) => {
@@ -562,9 +347,7 @@ function setupOTP() {
   });
 }
 
-function getOTP() {
-  return Array.from(document.querySelectorAll('.otp-input')).map(i => i.value).join('');
-}
+function getOTP() { return Array.from(document.querySelectorAll('.otp-input')).map(i => i.value).join(''); }
 
 function formatTel() {
   const raw = document.getElementById('auth-phone').value.replace(/\D/g,'');
@@ -578,14 +361,27 @@ async function envoyerOTP() {
   MON_TEL = tel;
   showLoader();
   try {
-    await fetch(`${API_URL}/auth/envoyer-otp`, {
+    const res = await fetch(`${API_URL}/auth/envoyer-otp`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ telephone: tel })
     });
+    const data = await res.json();
+
     document.getElementById('auth-phone-sheet').style.display = 'none';
     document.getElementById('auth-otp-sheet').style.display = 'block';
-    document.getElementById('otp-desc').textContent = `Code envoyé au ${tel}`;
-    document.querySelector('.otp-input').focus();
+
+    const desc = document.getElementById('otp-desc');
+    if (data.debugCode) {
+      desc.innerHTML = `Code envoyé au ${tel}<br>
+        <span style="background:#EAF5F0;color:#116647;padding:6px 14px;border-radius:6px;font-size:20px;font-weight:700;letter-spacing:4px;display:inline-block;margin-top:8px">${data.debugCode}</span>`;
+      const inputs = document.querySelectorAll('.otp-input');
+      data.debugCode.toString().split('').forEach((d, i) => {
+        if (inputs[i]) inputs[i].value = d;
+      });
+    } else {
+      desc.textContent = `Code envoyé au ${tel}`;
+      document.querySelector('.otp-input').focus();
+    }
   } catch(e) {
     toast('Erreur envoi SMS', 'err');
   } finally { hideLoader(); }
@@ -626,7 +422,7 @@ function afficherApp() {
   document.getElementById('screen-auth').classList.remove('active');
   document.getElementById('screen-app').classList.add('active');
   if (USER) {
-    const initiales = (USER.prenom[0] + USER.nom[0]).toUpperCase();
+    const initiales = ((USER.prenom?.[0]||'') + (USER.nom?.[0]||'')).toUpperCase();
     document.getElementById('home-avatar').textContent  = initiales;
     document.getElementById('profil-av').textContent    = initiales;
     document.getElementById('home-greeting').textContent = `Bonjour, ${USER.prenom} 👋`;
@@ -636,7 +432,6 @@ function afficherApp() {
   navGo('home');
 }
 
-// ── NAVIGATION ─────────────────────────────
 const SCREENS_APP = ['home','scan','livraisons','profil'];
 
 function navGo(s) {
@@ -651,30 +446,23 @@ function navGo(s) {
   if (s === 'profil')     chargerProfil();
 }
 
-// ── ACCUEIL ────────────────────────────────
 async function chargerAccueil() {
   showLoader();
   try {
     const data = await apiCall('GET', '/colis');
     MES_COLIS = data.colis || [];
-
     const today = new Date().toDateString();
-    const pickupsAujourdhui = MES_COLIS.filter(c => {
-      const d = new Date(c.dateCollecte).toDateString();
-      return d === today && (c.statut === 'confirme' || c.statut === 'en_attente');
-    });
+    const pickups = MES_COLIS.filter(c => new Date(c.dateCollecte).toDateString() === today && (c.statut === 'confirme' || c.statut === 'en_attente'));
     const collectes = MES_COLIS.filter(c => c.statut === 'collecte');
     const enTransit = MES_COLIS.filter(c => c.statut === 'en_transit');
 
-    document.getElementById('stat-today').textContent = pickupsAujourdhui.length;
+    document.getElementById('stat-today').textContent = pickups.length;
     document.getElementById('stat-done').textContent  = collectes.length;
 
-    // Pick-ups du jour
     const pickupEl = document.getElementById('pickups-list');
-    if (!pickupsAujourdhui.length) {
-      pickupEl.innerHTML = `<div class="empty"><div class="ei">✅</div><p>Pas de pick-up prévu aujourd'hui</p></div>`;
-    } else {
-      pickupEl.innerHTML = pickupsAujourdhui.map(c => `
+    pickupEl.innerHTML = !pickups.length
+      ? `<div class="empty"><div class="ei">✅</div><p>Pas de pick-up prévu aujourd'hui</p></div>`
+      : pickups.map(c => `
         <div class="colis-row" onclick="voirCollisDetail('${c._id}')">
           <div class="colis-icon">📦</div>
           <div class="colis-main">
@@ -682,19 +470,13 @@ async function chargerAccueil() {
             <div class="colis-dest">${c.villeDestination}, ${c.paysDestination}</div>
             <div class="colis-addr">📍 ${c.adresseCollecte}</div>
           </div>
-          <div class="colis-right">
-            ${badge(c.statut)}
-            <div style="font-size:11px;color:var(--hint);margin-top:4px">${c.poidsKg}kg</div>
-          </div>
+          <div class="colis-right">${badge(c.statut)}<div style="font-size:11px;color:var(--hint);margin-top:4px">${c.poidsKg}kg</div></div>
         </div>`).join('');
-    }
 
-    // En transit
     const transitEl = document.getElementById('transit-list');
-    if (!enTransit.length) {
-      transitEl.innerHTML = `<div class="empty"><div class="ei">🚚</div><p>Aucun colis en transit</p></div>`;
-    } else {
-      transitEl.innerHTML = enTransit.map(c => `
+    transitEl.innerHTML = !enTransit.length
+      ? `<div class="empty"><div class="ei">🚚</div><p>Aucun colis en transit</p></div>`
+      : enTransit.map(c => `
         <div class="colis-row" onclick="voirCollisDetail('${c._id}')">
           <div class="colis-icon">🚚</div>
           <div class="colis-main">
@@ -703,22 +485,17 @@ async function chargerAccueil() {
           </div>
           <div class="colis-right">${badge(c.statut)}</div>
         </div>`).join('');
-    }
-
   } catch(e) {
     toast('Erreur chargement', 'err');
   } finally { hideLoader(); }
 }
 
-// ── DETAIL COLIS ───────────────────────────
 async function voirCollisDetail(id) {
   showLoader();
   try {
     const data = await apiCall('GET', `/colis/${id}`);
     COLIS_ACTIF = data.colis;
     const c = data.colis;
-
-    // Remplir l'écran scan avec les détails
     document.getElementById('scan-numero').value = c.numeroSuivi;
     document.getElementById('scan-client').textContent  = c.nomDestinataire;
     document.getElementById('scan-adresse').textContent = c.adresseCollecte;
@@ -733,7 +510,6 @@ async function voirCollisDetail(id) {
   } finally { hideLoader(); }
 }
 
-// ── RECHERCHER COLIS ───────────────────────
 async function rechercherColis() {
   const num = document.getElementById('scan-numero').value.trim().toUpperCase();
   if (!num) return toast('Entrez un numéro de suivi', 'err');
@@ -754,7 +530,6 @@ async function rechercherColis() {
   } finally { hideLoader(); }
 }
 
-// ── CONFIRMER COLLECTE ─────────────────────
 function confirmerCollecte() {
   document.getElementById('new-statut').value = 'collecte';
   document.getElementById('modal-statut').classList.add('show');
@@ -765,7 +540,6 @@ async function confirmerStatut() {
   const statut = document.getElementById('new-statut').value;
   const note   = document.getElementById('note-statut').value;
   const statusMap = { collecte:1, en_transit:2, arrive:3, livre:4 };
-
   showLoader();
   try {
     await apiCall('PATCH', `/colis/${COLIS_ACTIF._id}/statut`, {
@@ -784,33 +558,29 @@ async function confirmerStatut() {
   } finally { hideLoader(); }
 }
 
-// ── HISTORIQUE ─────────────────────────────
 async function chargerLivraisons() {
   showLoader();
   try {
     const data = await apiCall('GET', '/colis');
     const colis = data.colis || [];
     const el = document.getElementById('livraisons-list');
-    if (!colis.length) {
-      el.innerHTML = `<div class="empty"><div class="ei">📋</div><p>Aucune livraison</p></div>`;
-      return;
-    }
-    el.innerHTML = colis.map(c => `
-      <div class="colis-row">
-        <div class="colis-icon">📦</div>
-        <div class="colis-main">
-          <div class="colis-id">#${c.numeroSuivi}</div>
-          <div class="colis-dest">${c.villeDestination}, ${c.paysDestination}</div>
-          <div class="colis-addr">${formatDate(c.createdAt)}</div>
-        </div>
-        <div class="colis-right">${badge(c.statut)}</div>
-      </div>`).join('');
+    el.innerHTML = !colis.length
+      ? `<div class="empty"><div class="ei">📋</div><p>Aucune livraison</p></div>`
+      : colis.map(c => `
+        <div class="colis-row">
+          <div class="colis-icon">📦</div>
+          <div class="colis-main">
+            <div class="colis-id">#${c.numeroSuivi}</div>
+            <div class="colis-dest">${c.villeDestination}, ${c.paysDestination}</div>
+            <div class="colis-addr">${formatDate(c.createdAt)}</div>
+          </div>
+          <div class="colis-right">${badge(c.statut)}</div>
+        </div>`).join('');
   } catch(e) {
     toast('Erreur', 'err');
   } finally { hideLoader(); }
 }
 
-// ── PROFIL ─────────────────────────────────
 async function chargerProfil() {
   try {
     const data = await apiCall('GET', '/colis');
@@ -820,12 +590,9 @@ async function chargerProfil() {
   } catch(e) {}
 }
 
-// ── INIT ───────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   setupOTP();
-  if (TOKEN && USER) {
-    afficherApp();
-  }
+  if (TOKEN && USER) afficherApp();
 });
 </script>
 </body>
