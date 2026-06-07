@@ -34,12 +34,16 @@ const userSchema = new mongoose.Schema({
 
 // Nom complet
 userSchema.virtual('nomComplet').get(function () {
-  return `${this.prenom} ${this.nom}`;
+  const p = this.prenom || '';
+  const n = this.nom || '';
+  return `${p} ${n}`.trim();
 });
 
 // Initiales
 userSchema.virtual('initiales').get(function () {
-  return `${this.prenom[0]}${this.nom[0]}`.toUpperCase();
+  const p = this.prenom?.[0] || '?';
+  const n = this.nom?.[0] || '?';
+  return `${p}${n}`.toUpperCase();
 });
 
 // Générer OTP 6 chiffres valable 10 minutes
