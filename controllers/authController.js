@@ -24,11 +24,10 @@ const envoyerOtpCtrl = async (req, res) => {
     let user = await User.findOne({ telephone });
 
     if (!user) {
-      // Nouvel utilisateur — prénom et nom requis
       if (!prenom || !nom) {
         return res.status(200).json({
           succes: true,
-          message: 'Prénom et nom requis pour l\'inscription.',
+          message: "Prénom et nom requis pour l'inscription.",
           nouvelUtilisateur: true,
         });
       }
@@ -43,6 +42,8 @@ const envoyerOtpCtrl = async (req, res) => {
       succes: true,
       message: 'Code envoyé par SMS.',
       nouvelUtilisateur: !user.verifie,
+      // Code visible en développement uniquement
+      ...(process.env.NODE_ENV !== 'production' && { debugCode: code }),
     });
 
   } catch (err) {
