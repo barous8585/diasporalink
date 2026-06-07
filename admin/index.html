@@ -734,7 +734,7 @@ function ouvrirModalLivreur() { ouvrirModal('modal-livreur'); }
 function ajouterLivreur() {
   const prenom = document.getElementById('l-prenom').value.trim();
   const nom    = document.getElementById('l-nom').value.trim();
-  const tel    = document.getElementById('l-tel').value.trim();
+  const tel = document.getElementById('l-tel').value.trim().replace(/\s/g, '');
   const zone   = document.getElementById('l-zone').value.trim();
   if (!prenom || !nom || !tel) return toast('Champs requis manquants', 'err');
   const tbody = document.getElementById('livreurs-tbody');
