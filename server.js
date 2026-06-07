@@ -14,19 +14,31 @@ const initSocket = require('./socket');
 const app = express();
 const server = http.createServer(app);
 
-// ── Trust proxy (Render est derrière un proxy) ─
+// ── Trust proxy ────────────────────────────
 app.set('trust proxy', 1);
 
-// ── Socket.io ─────────────────────────────
-const io = new Server(server, {
-  cors: {
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      process.env.ADMIN_URL || 'http://localhost:3001',
-    ],
-    credentials: true,
+// ── CORS ───────────────────────────────────
+const corsOptions = {
+  origin: function(origin, callback) {
+    const allowed = [
+      process.env.FRONTEND_URL,
+      process.env.ADMIN_URL,
+      process.env.LIVREUR_URL,
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+    ].filter(Boolean);
+    if (!origin || allowed.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS non autorisé : ' + origin));
+    }
   },
-});
+  credentials: true,
+};
+
+// ── Socket.io ─────────────────────────────
+const io = new Server(server, { cors: corsOptions });
 initSocket(io);
 app.set('io', io);
 
@@ -44,13 +56,7 @@ app.post(
 app.use(helmet());
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    process.env.ADMIN_URL || 'http://localhost:3001',
-  ],
-  credentials: true,
-}));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -62,19 +68,19 @@ const limiter = rateLimit({
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 50,
   message: { succes: false, message: 'Trop de tentatives. Réessayez dans 15 minutes.' },
 });
 app.use('/api/', limiter);
 app.use('/api/auth/', authLimiter);
 
 // ── Routes ────────────────────────────────
-app.use('/api/auth',          require('./routes/auth'));
-app.use('/api/colis',         require('./routes/colis'));
-app.use('/api/paiements',     require('./routes/paiements'));
-app.use('/api/messages',      require('./routes/messages'));
-app.use('/api/utilisateurs',  require('./routes/utilisateurs'));
-app.use('/api/config',        require('./routes/config'));
+app.use('/api/auth',         require('./routes/auth'));
+app.use('/api/colis',        require('./routes/colis'));
+app.use('/api/paiements',    require('./routes/paiements'));
+app.use('/api/messages',     require('./routes/messages'));
+app.use('/api/utilisateurs', require('./routes/utilisateurs'));
+app.use('/api/config',       require('./routes/config'));
 
 // ── Health check ──────────────────────────
 app.get('/api/health', (req, res) => {
