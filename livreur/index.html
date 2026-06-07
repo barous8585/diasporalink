@@ -170,7 +170,7 @@
           </div>
           <div>
             <div class="section-title">En transit</div>
-            <div class="card" id="transit-list"><div class="empty"><div class="ei">🚚</div><p>Aucun colis en transit</p></div></div>
+            <div class="card" id="transit-list"><div class="empty"><div class="ei">📦</div><p>Aucun colis en transit</p></div></div>
           </div>
         </div>
       </div>
@@ -202,7 +202,7 @@
             <div class="detail-row"><span class="lbl">Type</span><span class="val" id="scan-type">—</span></div>
           </div>
           <button class="btn btn-primary" onclick="rechercherColis()">Rechercher</button>
-          <button class="btn btn-outline" id="btn-confirmer" style="display:none" onclick="confirmerCollecte()">✓ Confirmer la collecte</button>
+          <button class="btn btn-outline" id="btn-confirmer" style="display:none" onclick="confirmerCollecte()">Confirmer la collecte</button>
         </div>
       </div>
     </div>
@@ -272,10 +272,10 @@
       <label class="label">Statut</label>
       <div class="select-wrap">
         <select class="select" id="new-statut">
-          <option value="collecte">Collecté ✓</option>
-          <option value="en_transit">En transit 🚚</option>
-          <option value="arrive">Arrivé à destination 🛬</option>
-          <option value="livre">Livré au destinataire ✅</option>
+          <option value="collecte">Collecté</option>
+          <option value="en_transit">En transit</option>
+          <option value="arrive">Arrivé à destination</option>
+          <option value="livre">Livré au destinataire</option>
         </select>
       </div>
     </div>
@@ -366,10 +366,8 @@ async function envoyerOTP() {
       body: JSON.stringify({ telephone: tel })
     });
     const data = await res.json();
-
     document.getElementById('auth-phone-sheet').style.display = 'none';
     document.getElementById('auth-otp-sheet').style.display = 'block';
-
     const desc = document.getElementById('otp-desc');
     if (data.debugCode) {
       desc.innerHTML = `Code envoyé au ${tel}<br>
@@ -423,11 +421,11 @@ function afficherApp() {
   document.getElementById('screen-app').classList.add('active');
   if (USER) {
     const initiales = ((USER.prenom?.[0]||'') + (USER.nom?.[0]||'')).toUpperCase();
-    document.getElementById('home-avatar').textContent  = initiales;
-    document.getElementById('profil-av').textContent    = initiales;
-    document.getElementById('home-greeting').textContent = `Bonjour, ${USER.prenom} 👋`;
-    document.getElementById('profil-nom').textContent   = `${USER.prenom} ${USER.nom}`;
-    document.getElementById('profil-tel').textContent   = USER.telephone;
+    document.getElementById('home-avatar').textContent   = initiales;
+    document.getElementById('profil-av').textContent     = initiales;
+    document.getElementById('home-greeting').textContent = `Bonjour, ${USER.prenom}`;
+    document.getElementById('profil-nom').textContent    = `${USER.prenom} ${USER.nom}`;
+    document.getElementById('profil-tel').textContent    = USER.telephone;
   }
   navGo('home');
 }
@@ -452,7 +450,7 @@ async function chargerAccueil() {
     const data = await apiCall('GET', '/colis');
     MES_COLIS = data.colis || [];
     const today = new Date().toDateString();
-    const pickups = MES_COLIS.filter(c => new Date(c.dateCollecte).toDateString() === today && (c.statut === 'confirme' || c.statut === 'en_attente'));
+    const pickups   = MES_COLIS.filter(c => new Date(c.dateCollecte).toDateString() === today && (c.statut === 'confirme' || c.statut === 'en_attente'));
     const collectes = MES_COLIS.filter(c => c.statut === 'collecte');
     const enTransit = MES_COLIS.filter(c => c.statut === 'en_transit');
 
@@ -461,24 +459,24 @@ async function chargerAccueil() {
 
     const pickupEl = document.getElementById('pickups-list');
     pickupEl.innerHTML = !pickups.length
-      ? `<div class="empty"><div class="ei">✅</div><p>Pas de pick-up prévu aujourd'hui</p></div>`
+      ? `<div class="empty"><div class="ei">📋</div><p>Pas de pick-up prévu aujourd'hui</p></div>`
       : pickups.map(c => `
         <div class="colis-row" onclick="voirCollisDetail('${c._id}')">
           <div class="colis-icon">📦</div>
           <div class="colis-main">
             <div class="colis-id">#${c.numeroSuivi}</div>
             <div class="colis-dest">${c.villeDestination}, ${c.paysDestination}</div>
-            <div class="colis-addr">📍 ${c.adresseCollecte}</div>
+            <div class="colis-addr">${c.adresseCollecte}</div>
           </div>
           <div class="colis-right">${badge(c.statut)}<div style="font-size:11px;color:var(--hint);margin-top:4px">${c.poidsKg}kg</div></div>
         </div>`).join('');
 
     const transitEl = document.getElementById('transit-list');
     transitEl.innerHTML = !enTransit.length
-      ? `<div class="empty"><div class="ei">🚚</div><p>Aucun colis en transit</p></div>`
+      ? `<div class="empty"><div class="ei">📦</div><p>Aucun colis en transit</p></div>`
       : enTransit.map(c => `
         <div class="colis-row" onclick="voirCollisDetail('${c._id}')">
-          <div class="colis-icon">🚚</div>
+          <div class="colis-icon">📦</div>
           <div class="colis-main">
             <div class="colis-id">#${c.numeroSuivi}</div>
             <div class="colis-dest">${c.villeDestination}, ${c.paysDestination}</div>
@@ -496,13 +494,13 @@ async function voirCollisDetail(id) {
     const data = await apiCall('GET', `/colis/${id}`);
     COLIS_ACTIF = data.colis;
     const c = data.colis;
-    document.getElementById('scan-numero').value = c.numeroSuivi;
+    document.getElementById('scan-numero').value        = c.numeroSuivi;
     document.getElementById('scan-client').textContent  = c.nomDestinataire;
     document.getElementById('scan-adresse').textContent = c.adresseCollecte;
     document.getElementById('scan-dest').textContent    = `${c.villeDestination}, ${c.paysDestination}`;
     document.getElementById('scan-poids').textContent   = `${c.poidsKg} kg`;
     document.getElementById('scan-type').textContent    = c.typeColis;
-    document.getElementById('scan-detail').style.display = 'block';
+    document.getElementById('scan-detail').style.display  = 'block';
     document.getElementById('btn-confirmer').style.display = 'flex';
     navGo('scan');
   } catch(e) {
@@ -523,7 +521,7 @@ async function rechercherColis() {
     document.getElementById('scan-dest').textContent    = `${c.villeDestination}, ${c.paysDestination}`;
     document.getElementById('scan-poids').textContent   = `${c.poidsKg} kg`;
     document.getElementById('scan-type').textContent    = c.typeColis || '—';
-    document.getElementById('scan-detail').style.display = 'block';
+    document.getElementById('scan-detail').style.display  = 'block';
     document.getElementById('btn-confirmer').style.display = 'flex';
   } catch(e) {
     toast('Colis introuvable', 'err');
@@ -545,9 +543,9 @@ async function confirmerStatut() {
     await apiCall('PATCH', `/colis/${COLIS_ACTIF._id}/statut`, {
       statut, indexEtape: statusMap[statut] || 1, detailEtape: note
     });
-    toast('Statut mis à jour ✓', 'ok');
+    toast('Statut mis à jour', 'ok');
     fermerModal();
-    document.getElementById('scan-detail').style.display = 'none';
+    document.getElementById('scan-detail').style.display  = 'none';
     document.getElementById('btn-confirmer').style.display = 'none';
     document.getElementById('scan-numero').value = '';
     document.getElementById('note-statut').value = '';
