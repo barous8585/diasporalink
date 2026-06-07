@@ -3,7 +3,7 @@ const { body } = require('express-validator');
 const { auth, role } = require('../middleware/auth');
 const {
   creerColis, mesColis, unColis,
-  suiviPublic, mettreAJourStatut, calculerTarifCtrl,
+  suiviPublic, mettreAJourStatut, calculerTarifCtrl, assignerLivreur,
 } = require('../controllers/colisController');
 const { ROLES } = require('../config/constants');
 
@@ -37,5 +37,10 @@ router.post('/', auth, [
 router.patch('/:id/statut', auth, role(ROLES.LIVREUR, ROLES.ADMIN), [
   body('statut').notEmpty(),
 ], mettreAJourStatut);
+
+// Assigner un livreur (admin uniquement)
+router.patch('/:id/assigner', auth, role(ROLES.ADMIN), [
+  body('livreurId').notEmpty().withMessage('Livreur requis'),
+], assignerLivreur);
 
 module.exports = router;
