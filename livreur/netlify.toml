@@ -1,5 +1,5 @@
 [build]
-  publish = "livreur"
+  publish = "."
   command = "echo ok"
 
 [[redirects]]
