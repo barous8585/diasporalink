@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#116647" />
+  <meta name="description" content="Suivez votre colis DiasporaLink en temps réel" />
+  <title>DiasporaLink — Suivi de colis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:       #1A8C64;
+      --green-dark:  #116647;
+      --green-light: #EAF5F0;
+      --green-mid:   #D0EDE3;
+      --white:  #FFFFFF;
+      --off:    #F7F7F5;
+      --line:   #E4E4E0;
+      --text:   #1A1A18;
+      --muted:  #6B6B66;
+      --hint:   #A0A09A;
+      --danger: #C0392B;
+      --warn:   #B7680A;
+      --font: 'Inter', -apple-system, sans-serif;
+    }
+
+    html, body {
+      min-height: 100%;
+      font-family: var(--font);
+      background: var(--off);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--green-dark);
+      padding: 20px 24px 32px;
+      text-align: center;
+    }
+    .header-logo {
+      font-size: 22px; font-weight: 700; color: white;
+      letter-spacing: -0.5px; margin-bottom: 4px;
+    }
+    .header-logo span { color: rgba(255,255,255,0.4); font-weight: 300; }
+    .header-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 24px; }
+
+    /* ── SEARCH BOX ── */
+    .search-box {
+      max-width: 480px; margin: 0 auto;
+      background: white; border-radius: 12px;
+      padding: 20px; box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    }
+    .search-box label {
+      display: block; font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .search-row { display: flex; gap: 10px; }
+    .search-input {
+      flex: 1; height: 48px; padding: 0 16px;
+      border: 1.5px solid var(--line); border-radius: 8px;
+      font-family: var(--font); font-size: 16px; color: var(--text);
+      background: var(--off); text-transform: uppercase;
+      -webkit-appearance: none;
+    }
+    .search-input:focus {
+      outline: none; border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(26,140,100,0.1);
+    }
+    .search-input::placeholder { text-transform: none; color: var(--hint); }
+    .search-btn {
+      height: 48px; padding: 0 20px;
+      background: var(--green); color: white; border: none;
+      border-radius: 8px; font-family: var(--font);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      white-space: nowrap; transition: opacity 0.15s;
+    }
+    .search-btn:hover { opacity: 0.9; }
+    .search-btn:active { opacity: 0.8; }
+
+    /* ── MAIN ── */
+    .main {
+      max-width: 600px; margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    /* ── ÉTAT INITIAL ── */
+    .hero-message {
+      text-align: center; padding: 48px 20px;
+      color: var(--muted);
+    }
+    .hero-icon { font-size: 48px; margin-bottom: 16px; }
+    .hero-message h2 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .hero-message p { font-size: 14px; line-height: 1.6; }
+
+    /* ── RÉSULTAT ── */
+    .result { display: none; }
+    .result.show { display: block; }
+
+    /* ── CARD COLIS ── */
+    .colis-card {
+      background: var(--white); border: 1px solid var(--line);
+      border-radius: 12px; overflow: hidden; margin-bottom: 16px;
+    }
+    .colis-header {
+      background: var(--green-dark); padding: 20px 20px 16px;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    }
+    .colis-numero { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 4px; }
+    .colis-dest { font-size: 18px; font-weight: 600; color: white; letter-spacing: -0.3px; }
+    .colis-destinataire { font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 3px; }
+    .colis-badge { flex-shrink: 0; }
+
+    /* ── BADGE ── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 6px 12px; border-radius: 6px;
+      font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-ok     { background: #EAF5F0; color: #116647; }
+    .badge-go     { background: #FEF3E2; color: #B7680A; }
+    .badge-grey   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); }
+    .badge-info   { background: #E8EEF8; color: #1B4FA8; }
+    .badge-danger { background: #FDECEA; color: #C0392B; }
+
+    /* ── PROGRESS BAR ── */
+    .progress-wrap { padding: 16px 20px; border-bottom: 1px solid var(--line); }
+    .progress-label {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--muted); margin-bottom: 8px;
+    }
+    .progress-bar {
+      height: 6px; background: var(--line); border-radius: 3px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; background: var(--green);
+      border-radius: 3px; transition: width 0.8s ease;
+    }
+
+    /* ── TIMELINE ── */
+    .timeline-wrap { padding: 20px; }
+    .tl { display: flex; flex-direction: column; }
+    .tl-row { display: flex; gap: 14px; }
+    .tl-left { display: flex; flex-direction: column; align-items: center; }
+    .tl-dot {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 2px solid var(--line); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: white; font-size: 14px;
+    }
+    .tl-dot.done { border-color: var(--green); background: var(--green); color: white; }
+    .tl-dot.now  { border-color: var(--green); background: var(--green-light); animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(26,140,100,0.3); }
+      50%      { box-shadow: 0 0 0 8px rgba(26,140,100,0); }
+    }
+    .tl-line { width: 2px; flex: 1; min-height: 16px; background: var(--line); margin: 4px 0; }
+    .tl-line.done { background: var(--green); }
+    .tl-content { padding-bottom: 24px; flex: 1; padding-top: 6px; }
+    .tl-content h4 { font-size: 15px; font-weight: 600; color: var(--text); }
+    .tl-content p  { font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+    .tl-content .tl-date { font-size: 11px; color: var(--hint); margin-top: 4px; }
+    .tl-content.now h4 { color: var(--green-dark); }
+    .tl-content.pending h4 { color: var(--hint); }
+    .tl-content.pending p  { color: var(--hint); }
+
+    /* ── INFOS COLIS ── */
+    .infos-card {
+      background: var(--white); border: 1px solid var(--line);
+      border-radius: 12px; overflow: hidden; margin-bottom: 16px;
+    }
+    .infos-title {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.6px; color: var(--muted);
+      padding: 14px 20px 10px; border-bottom: 1px solid var(--line);
+    }
+    .info-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 20px; border-bottom: 1px solid var(--line); font-size: 14px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .lbl { color: var(--muted); }
+    .info-row .val { font-weight: 500; text-align: right; }
+
+    /* ── SHARE ── */
+    .share-card {
+      background: var(--green-light); border: 1px solid var(--green-mid);
+      border-radius: 12px; padding: 18px 20px;
+      display: flex; align-items: center; gap: 14px; margin-bottom: 16px;
+    }
+    .share-icon { font-size: 28px; flex-shrink: 0; }
+    .share-text { flex: 1; }
+    .share-text h4 { font-size: 14px; font-weight: 600; color: var(--green-dark); margin-bottom: 3px; }
+    .share-text p  { font-size: 12px; color: var(--green); }
+    .share-btns { display: flex; gap: 8px; flex-shrink: 0; }
+    .share-btn {
+      height: 38px; padding: 0 14px;
+      border-radius: 6px; border: none; cursor: pointer;
+      font-family: var(--font); font-size: 13px; font-weight: 500;
+      transition: opacity 0.15s;
+    }
+    .share-btn:active { opacity: 0.8; }
+    .btn-whatsapp { background: #25D366; color: white; }
+    .btn-copy     { background: var(--green-dark); color: white; }
+
+    /* ── ERREUR ── */
+    .error-card {
+      background: #FDECEA; border: 1px solid #F5C6C2;
+      border-radius: 12px; padding: 20px;
+      text-align: center; display: none;
+    }
+    .error-card.show { display: block; }
+    .error-card .error-icon { font-size: 32px; margin-bottom: 10px; }
+    .error-card h3 { font-size: 16px; font-weight: 600; color: var(--danger); margin-bottom: 6px; }
+    .error-card p  { font-size: 14px; color: #8B2020; }
+
+    /* ── LOADER ── */
+    .loader-wrap { text-align: center; padding: 40px; display: none; }
+    .loader-wrap.show { display: block; }
+    .spinner {
+      width: 40px; height: 40px; margin: 0 auto 16px;
+      border: 3px solid var(--green-light); border-top-color: var(--green);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-wrap p { font-size: 14px; color: var(--muted); }
+
+    /* ── FOOTER ── */
+    .footer {
+      text-align: center; padding: 24px;
+      font-size: 12px; color: var(--hint);
+      border-top: 1px solid var(--line);
+    }
+    .footer a { color: var(--green); text-decoration: none; }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: #1A1A18; color: white;
+      padding: 12px 20px; border-radius: 8px;
+      font-size: 14px; font-weight: 500;
+      opacity: 0; pointer-events: none;
+      transition: all 0.25s; z-index: 9999;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.ok { background: var(--green); }
+
+    @media (max-width: 480px) {
+      .search-row { flex-direction: column; }
+      .search-btn { width: 100%; }
+      .share-btns { flex-direction: column; }
+      .colis-header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">Diaspora<span>Link</span></div>
+  <div class="header-sub">Suivi de colis en temps réel</div>
+
+  <div class="search-box">
+    <label>Numéro de suivi</label>
+    <div class="search-row">
+      <input
+        class="search-input"
+        type="text"
+        id="search-input"
+        placeholder="Ex: DL-1001"
+        maxlength="10"
+        oninput="this.value=this.value.toUpperCase()"
+        onkeydown="if(event.key==='Enter') chercher()"
+      />
+      <button class="search-btn" onclick="chercher()">🔍 Suivre</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- État initial -->
+  <div class="hero-message" id="hero">
+    <div class="hero-icon">📦</div>
+    <h2>Suivez votre colis</h2>
+    <p>Entrez votre numéro de suivi ci-dessus pour voir<br>l'état de votre envoi en temps réel.</p>
+    <p style="margin-top:12px;font-size:13px">Votre numéro de suivi commence par <strong>DL-</strong></p>
+  </div>
+
+  <!-- Loader -->
+  <div class="loader-wrap" id="loader">
+    <div class="spinner"></div>
+    <p>Recherche en cours...</p>
+  </div>
+
+  <!-- Erreur -->
+  <div class="error-card" id="error">
+    <div class="error-icon">❌</div>
+    <h3>Colis introuvable</h3>
+    <p>Vérifiez votre numéro de suivi et réessayez.<br>Format attendu : <strong>DL-1001</strong></p>
+  </div>
+
+  <!-- Résultat -->
+  <div class="result" id="result">
+
+    <!-- Partage -->
+    <div class="share-card">
+      <div class="share-icon">📲</div>
+      <div class="share-text">
+        <h4>Partagez le suivi</h4>
+        <p>Envoyez ce lien à votre famille</p>
+      </div>
+      <div class="share-btns">
+        <button class="share-btn btn-whatsapp" onclick="partagerWhatsApp()">WhatsApp</button>
+        <button class="share-btn btn-copy" onclick="copierLien()">Copier</button>
+      </div>
+    </div>
+
+    <!-- Card principale -->
+    <div class="colis-card">
+      <div class="colis-header">
+        <div>
+          <div class="colis-numero" id="r-numero">#DL-0000</div>
+          <div class="colis-dest" id="r-dest">Conakry, Guinée</div>
+          <div class="colis-destinataire" id="r-destinataire">Pour : Mamadou Barry</div>
+        </div>
+        <div class="colis-badge" id="r-badge"></div>
+      </div>
+
+      <!-- Barre de progression -->
+      <div class="progress-wrap">
+        <div class="progress-label">
+          <span id="r-etape-label">Étape 1 sur 5</span>
+          <span id="r-pct">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="r-progress" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Timeline -->
+      <div class="timeline-wrap">
+        <div class="tl" id="r-timeline"></div>
+      </div>
+    </div>
+
+    <!-- Infos du colis -->
+    <div class="infos-card">
+      <div class="infos-title">Détails de l'envoi</div>
+      <div class="info-row"><span class="lbl">Date d'envoi</span><span class="val" id="r-date">—</span></div>
+      <div class="info-row"><span class="lbl">Adresse de collecte</span><span class="val" id="r-adresse">—</span></div>
+      <div class="info-row"><span class="lbl">Destination</span><span class="val" id="r-ville">—</span></div>
+      <div class="info-row"><span class="lbl">Type de colis</span><span class="val" id="r-type">—</span></div>
+    </div>
+
+    <!-- Bouton retour app -->
+    <div style="text-align:center;margin-top:8px">
+      <a href="https://diasporalink-frontend.netlify.app" style="font-size:13px;color:var(--green);text-decoration:none;font-weight:500">
+        ← Retour à l'application
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <p>© 2026 DiasporaLink · <a href="https://diasporalink-frontend.netlify.app">diasporalink.fr</a></p>
+  <p style="margin-top:4px">Envoi de colis pour la diaspora africaine en Europe 🌍</p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API_URL = 'https://diasporalink-api.onrender.com/api';
+let COLIS_ACTIF = null;
+
+// ── TOAST ──────────────────────────────────
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── BADGE ──────────────────────────────────
+function badge(statut) {
+  const map = {
+    en_attente: ['badge-grey',   'En attente'],
+    confirme:   ['badge-info',   'Confirmé'],
+    collecte:   ['badge-info',   'Collecté'],
+    en_transit: ['badge-go',     'En transit 🚚'],
+    arrive:     ['badge-go',     'Arrivé 🛬'],
+    livre:      ['badge-ok',     'Livré ✅'],
+    annule:     ['badge-danger', 'Annulé'],
+  };
+  const [cls, label] = map[statut] || ['badge-grey', statut];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function formatDateTime(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// ── ICONES ÉTAPES ──────────────────────────
+const STEP_ICONS = ['✅', '📦', '✈️', '🛬', '🎉'];
+
+// ── CHERCHER ───────────────────────────────
+async function chercher() {
+  const num = document.getElementById('search-input').value.trim().toUpperCase();
+  if (!num) return;
+  if (!num.startsWith('DL-')) {
+    toast('Format invalide — ex: DL-1001');
+    return;
+  }
+
+  // Masquer tout
+  document.getElementById('hero').style.display   = 'none';
+  document.getElementById('error').classList.remove('show');
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('loader').classList.add('show');
+
+  // Mettre à jour l'URL
+  const url = new URL(window.location.href);
+  url.searchParams.set('numero', num);
+  window.history.replaceState({}, '', url);
+
+  try {
+    const res  = await fetch(`${API_URL}/colis/suivi/${num}`);
+    const data = await res.json();
+
+    document.getElementById('loader').classList.remove('show');
+
+    if (!data.succes || !data.colis) {
+      document.getElementById('error').classList.add('show');
+      return;
+    }
+
+    COLIS_ACTIF = data.colis;
+    afficherResultat(data.colis);
+
+  } catch(e) {
+    document.getElementById('loader').classList.remove('show');
+    document.getElementById('error').classList.add('show');
+  }
+}
+
+// ── AFFICHER RÉSULTAT ──────────────────────
+function afficherResultat(c) {
+  // Infos principales
+  document.getElementById('r-numero').textContent      = `#${c.numeroSuivi}`;
+  document.getElementById('r-dest').textContent        = `${c.villeDestination}, ${c.paysDestination}`;
+  document.getElementById('r-destinataire').textContent = `Pour : ${c.nomDestinataire}`;
+  document.getElementById('r-badge').innerHTML          = badge(c.statut);
+  document.getElementById('r-date').textContent         = formatDate(c.createdAt);
+  document.getElementById('r-adresse').textContent      = c.adresseCollecte || '—';
+  document.getElementById('r-ville').textContent        = `${c.villeDestination}, ${c.paysDestination}`;
+  document.getElementById('r-type').textContent         = c.typeColis || '—';
+
+  // Progression
+  const etapes = c.etapes || [];
+  const nbFait = etapes.filter(e => e.statut === 'fait').length;
+  const pct    = Math.round((nbFait / etapes.length) * 100);
+  const enCours = etapes.findIndex(e => e.statut === 'en_cours');
+  const etapeLabel = enCours >= 0 ? `Étape ${enCours + 1} sur ${etapes.length}` : `${nbFait} sur ${etapes.length} étapes`;
+
+  document.getElementById('r-etape-label').textContent = etapeLabel;
+  document.getElementById('r-pct').textContent          = `${pct}%`;
+  document.getElementById('r-progress').style.width     = `${pct}%`;
+
+  // Timeline
+  const tl = document.getElementById('r-timeline');
+  tl.innerHTML = etapes.map((e, i) => {
+    const isLast  = i === etapes.length - 1;
+    const dotCls  = e.statut === 'fait' ? 'done' : e.statut === 'en_cours' ? 'now' : '';
+    const txtCls  = e.statut === 'fait' ? '' : e.statut === 'en_cours' ? 'now' : 'pending';
+    const ico     = e.statut === 'fait' ? '✓' : STEP_ICONS[i] || '○';
+
+    return `
+      <div class="tl-row">
+        <div class="tl-left">
+          <div class="tl-dot ${dotCls}">${ico}</div>
+          ${!isLast ? `<div class="tl-line ${e.statut === 'fait' ? 'done' : ''}"></div>` : ''}
+        </div>
+        <div class="tl-content ${txtCls}">
+          <h4>${e.label}</h4>
+          <p>${e.detail || ''}</p>
+          ${e.completeLe ? `<div class="tl-date">${formatDateTime(e.completeLe)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  // Afficher
+  document.getElementById('result').classList.add('show');
+
+  // Scroll vers le résultat
+  document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── PARTAGER ───────────────────────────────
+function getLien() {
+  if (!COLIS_ACTIF) return window.location.href;
+  const base = window.location.origin + window.location.pathname;
+  return `${base}?numero=${COLIS_ACTIF.numeroSuivi}`;
+}
+
+function partagerWhatsApp() {
+  const lien = getLien();
+  const msg  = `Suivez mon colis DiasporaLink en temps réel 📦\nNuméro : ${COLIS_ACTIF?.numeroSuivi}\n${lien}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+function copierLien() {
+  const lien = getLien();
+  navigator.clipboard.writeText(lien).then(() => {
+    toast('Lien copié ! 📋', 'ok');
+  }).catch(() => {
+    // Fallback
+    const el = document.createElement('textarea');
+    el.value = lien; document.body.appendChild(el);
+    el.select(); document.execCommand('copy');
+    document.body.removeChild(el);
+    toast('Lien copié ! 📋', 'ok');
+  });
+}
+
+// ── INIT : lire l'URL ─────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const numero = params.get('numero');
+  if (numero) {
+    document.getElementById('search-input').value = numero.toUpperCase();
+    chercher();
+  }
+});
+</script>
+</body>
+</html>
