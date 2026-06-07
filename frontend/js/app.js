@@ -10,6 +10,7 @@ let APP = {
   authTel:    '',
   authNouvel: false,
   debugCode:  null,
+  colisIdRemb: null,
 };
 
 // ── ICONES NAV ──────────────────────────────────────────────
@@ -128,10 +129,8 @@ function formatTelephone() {
 async function authEnvoyerOTP() {
   const tel = formatTelephone();
   if (tel.length < 10) return UI.toastErr('Numéro invalide');
-
   APP.authTel = tel;
   UI.showLoader();
-
   try {
     const res = await API.Auth.envoyerOTP(tel);
     APP.debugCode = res.debugCode || null;
@@ -160,7 +159,6 @@ async function authCreerCompte() {
   const prenom = document.getElementById('auth-prenom').value.trim();
   const nom    = document.getElementById('auth-nom').value.trim();
   if (!prenom || !nom) return UI.toastErr('Prénom et nom requis');
-
   UI.showLoader();
   try {
     const res = await API.Auth.envoyerOTP(APP.authTel, prenom, nom);
@@ -177,15 +175,10 @@ function afficherOTP(tel, debugCode) {
   document.getElementById('auth-phone-sheet').style.display = 'none';
   document.getElementById('auth-register-sheet').style.display = 'none';
   document.getElementById('auth-otp-sheet').style.display = 'block';
-
   const desc = document.getElementById('auth-otp-desc');
   desc.textContent = `Code envoyé au ${tel}`;
-
-  // Afficher le code en mode dev
   if (debugCode) {
     desc.innerHTML = `Code envoyé au ${tel}<br><span style="background:#EAF5F0;color:#116647;padding:6px 14px;border-radius:6px;font-size:20px;font-weight:700;letter-spacing:4px;display:inline-block;margin-top:8px">${debugCode}</span>`;
-
-    // Remplir automatiquement les cases OTP
     const inputs = document.querySelectorAll('.otp-input');
     debugCode.toString().split('').forEach((d, i) => {
       if (inputs[i]) inputs[i].value = d;
@@ -198,7 +191,6 @@ function afficherOTP(tel, debugCode) {
 async function authVerifierOTP() {
   const code = getOTPValue();
   if (code.length !== 6) return UI.toastErr('Entrez les 6 chiffres');
-
   UI.showLoader();
   try {
     await API.Auth.verifierOTP(APP.authTel, code);
@@ -430,7 +422,6 @@ async function confirmerCommande() {
       poidsKg:          parseFloat(f.poids),
       valeurDeclare:    parseFloat(f.valeur) || 0,
     };
-
     const data = await API.Colis.creer(payload);
     APP.colisActif = data.colis;
     UI.toastOk('Commande confirmée ! 🎉');
@@ -555,8 +546,81 @@ function afficherSuivi(c) {
     </div>
     <button class="btn btn-outline" onclick="ouvrirMessages('${c._id}')">
       ${UI.SVG.chat('%231A8C64', 18)} Contacter le support
-    </button>`;
+    </button>
+    ${c.statut !== 'livre' && c.statut !== 'annule' ? `
+    <button class="btn btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="ouvrirRemboursement('${c._id}')">
+      💰 Demander un remboursement
+    </button>` : ''}`;
 }
+
+// ── REMBOURSEMENT ────────────────────────────────────────────
+function ouvrirRemboursement(colisId) {
+  APP.colisIdRemb = colisId;
+
+  // Supprimer l'ancienne modal si elle existe
+  document.getElementById('modal-remb')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-remb';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;justify-content:center;z-index:200';
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px 16px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom))">
+      <h3 style="font-size:16px;font-weight:600;margin-bottom:16px">💰 Demander un remboursement</h3>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:6px">Motif</label>
+        <select id="remb-motif" style="width:100%;height:48px;padding:0 14px;border:1px solid var(--line);border-radius:8px;font-family:var(--font);font-size:15px;color:var(--text);background:white;appearance:none;-webkit-appearance:none">
+          <option value="colis_perdu">📦 Colis perdu</option>
+          <option value="colis_endommage">💔 Colis endommagé</option>
+          <option value="retard_excessif">⏱ Retard excessif</option>
+          <option value="annulation">❌ Annulation</option>
+          <option value="autre">💬 Autre</option>
+        </select>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:6px">Description (optionnel)</label>
+        <textarea id="remb-desc" placeholder="Expliquez votre situation en détail..." style="width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:8px;font-family:var(--font);font-size:15px;resize:none;height:90px;color:var(--text)"></textarea>
+      </div>
+      <div style="background:#FEF3E2;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--warn)">
+        ⏱ Nous traitons les demandes sous <strong>48h ouvrées</strong>. Vous serez notifié par SMS.
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('modal-remb').remove()" style="flex:1;height:48px;border-radius:8px;border:1px solid var(--line);background:var(--off);font-family:var(--font);font-size:15px;cursor:pointer">Annuler</button>
+        <button onclick="envoyerRemboursement()" style="flex:1;height:48px;border-radius:8px;border:none;background:var(--danger);color:white;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer">Envoyer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function envoyerRemboursement() {
+  const motif = document.getElementById('remb-motif').value;
+  const desc  = document.getElementById('remb-desc').value.trim();
+
+  UI.showLoader();
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = API.getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch('https://diasporalink-api.onrender.com/api/remboursements', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ colisId: APP.colisIdRemb, motif, description: desc }),
+    });
+    const data = await res.json();
+
+    if (!data.succes) throw new Error(data.message || 'Erreur');
+
+    document.getElementById('modal-remb')?.remove();
+    UI.toastOk('Demande envoyée ! Nous vous répondrons sous 48h. ✅');
+  } catch(e) {
+    UI.toastErr(e.message || 'Erreur envoi');
+  } finally {
+    UI.hideLoader();
+  }
+}
+
+window.ouvrirRemboursement = ouvrirRemboursement;
+window.envoyerRemboursement = envoyerRemboursement;
 
 // ── MESSAGES ────────────────────────────────────────────────
 async function ouvrirMessages(colisId) {
