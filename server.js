@@ -75,12 +75,13 @@ app.use('/api/', limiter);
 app.use('/api/auth/', authLimiter);
 
 // ── Routes ────────────────────────────────
-app.use('/api/auth',         require('./routes/auth'));
-app.use('/api/colis',        require('./routes/colis'));
-app.use('/api/paiements',    require('./routes/paiements'));
-app.use('/api/messages',     require('./routes/messages'));
-app.use('/api/utilisateurs', require('./routes/utilisateurs'));
-app.use('/api/config',       require('./routes/config'));
+app.use('/api/auth',           require('./routes/auth'));
+app.use('/api/colis',          require('./routes/colis'));
+app.use('/api/paiements',      require('./routes/paiements'));
+app.use('/api/messages',       require('./routes/messages'));
+app.use('/api/utilisateurs',   require('./routes/utilisateurs'));
+app.use('/api/config',         require('./routes/config'));
+app.use('/api/remboursements', require('./routes/remboursements'));
 
 // ── Health check ──────────────────────────
 app.get('/api/health', (req, res) => {
