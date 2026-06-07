@@ -206,8 +206,8 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>N° Suivi</th><th>Client</th><th>Destination</th><th>Poids</th><th>Montant</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead>
-              <tbody id="colis-tbody"><tr><td colspan="8" class="loader">Chargement...</td></tr></tbody>
+              <thead><tr><th>N° Suivi</th><th>Client</th><th>Destination</th><th>Poids</th><th>Montant</th><th>Livreur</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead>
+              <tbody id="colis-tbody"><tr><td colspan="9" class="loader">Chargement...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -264,26 +264,14 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Colis</th>
-                  <th>Motif</th>
-                  <th>Montant</th>
-                  <th>Statut</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="remb-tbody">
-                <tr><td colspan="7" class="loader">Chargement...</td></tr>
-              </tbody>
+              <thead><tr><th>Client</th><th>Colis</th><th>Motif</th><th>Montant</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead>
+              <tbody id="remb-tbody"><tr><td colspan="7" class="loader">Chargement...</td></tr></tbody>
             </table>
           </div>
         </div>
       </div>
 
-    </div><!-- /content -->
+    </div>
   </main>
 </div>
 
@@ -294,6 +282,7 @@
     <div class="modal-body" id="modal-colis-body"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fermerModal('modal-colis')">Fermer</button>
+      <button class="btn btn-outline" onclick="ouvrirAssignerDepuisModal()">👤 Assigner</button>
       <button class="btn btn-primary" onclick="ouvrirMajStatut()">Mettre à jour le statut</button>
     </div>
   </div>
@@ -343,6 +332,26 @@
   </div>
 </div>
 
+<!-- MODAL ASSIGNER LIVREUR -->
+<div class="modal-overlay" id="modal-assigner">
+  <div class="modal" style="width:420px">
+    <div class="modal-header"><h3>👤 Assigner un livreur</h3><button class="modal-close" onclick="fermerModal('modal-assigner')">×</button></div>
+    <div class="modal-body">
+      <div id="assigner-detail" style="background:var(--off);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.6"></div>
+      <div class="field">
+        <label>Choisir un livreur</label>
+        <select id="assigner-livreur-select">
+          <option value="">Chargement...</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fermerModal('modal-assigner')">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmerAssignation()">Assigner</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL REMBOURSEMENT -->
 <div class="modal-overlay" id="modal-remb">
   <div class="modal" style="width:440px">
@@ -383,21 +392,17 @@ let COLIS_ALL = [];
 let COLIS_ACTIF = null;
 let REMB_ALL = [];
 let REMB_ACTIF = null;
+let LIVREURS_ALL = [];
+let ASSIGNER_COLIS_ID = null;
 
 const MOTIFS = {
-  colis_perdu:     '📦 Colis perdu',
-  colis_endommage: '💔 Colis endommagé',
-  retard_excessif: '⏱ Retard excessif',
-  annulation:      '❌ Annulation',
-  autre:           '💬 Autre',
+  colis_perdu:'📦 Colis perdu', colis_endommage:'💔 Colis endommagé',
+  retard_excessif:'⏱ Retard excessif', annulation:'❌ Annulation', autre:'💬 Autre',
 };
 
 const REMB_STATUTS = {
-  en_attente: ['badge-go',   '⏳ En attente'],
-  en_cours:   ['badge-info', '🔍 En cours'],
-  approuve:   ['badge-ok',   '✅ Approuvé'],
-  refuse:     ['badge-err',  '❌ Refusé'],
-  rembourse:  ['badge-ok',   '💸 Remboursé'],
+  en_attente:['badge-go','⏳ En attente'], en_cours:['badge-info','🔍 En cours'],
+  approuve:['badge-ok','✅ Approuvé'], refuse:['badge-err','❌ Refusé'], rembourse:['badge-ok','💸 Remboursé'],
 };
 
 function toast(msg, type='') {
@@ -514,7 +519,6 @@ async function chargerDashboard() {
     document.getElementById('s-livre').textContent   = colis.filter(c => c.statut === 'livre').length;
     const ca = colis.filter(c => c.paiementStatut === 'paye').reduce((s,c) => s+(c.tarif?.total||0), 0);
     document.getElementById('s-ca').textContent = formatEur(ca);
-
     const rc = document.getElementById('recent-colis');
     rc.innerHTML = !colis.length
       ? `<div class="empty"><div class="empty-icon">📦</div><p>Aucune commande</p></div>`
@@ -525,7 +529,6 @@ async function chargerDashboard() {
             <td>${badge(c.statut)}</td>
             <td>${formatEur(c.tarif?.total)}</td>
           </tr>`).join('')}</tbody></table>`;
-
     document.getElementById('recent-clients').innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div><div style="font-size:24px;font-weight:700;color:var(--green)">${colis.length}</div><div style="font-size:12px;color:var(--muted)">Commandes</div></div>
@@ -547,7 +550,7 @@ async function chargerColis() {
 function renderColisTable(liste) {
   const tbody = document.getElementById('colis-tbody');
   if (!liste.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📦</div><p>Aucune commande</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-icon">📦</div><p>Aucune commande</p></div></td></tr>`;
     return;
   }
   tbody.innerHTML = liste.map(c => `
@@ -557,11 +560,17 @@ function renderColisTable(liste) {
       <td>${c.villeDestination}, ${c.paysDestination}</td>
       <td>${c.poidsKg} kg</td>
       <td>${formatEur(c.tarif?.total)}</td>
+      <td>
+        ${c.livreur
+          ? `<span style="font-size:12px;font-weight:500">${c.livreur.prenom} ${c.livreur.nom}</span>`
+          : `<span style="font-size:11px;color:var(--hint)">Non assigné</span>`}
+      </td>
       <td>${badge(c.statut)}</td>
       <td>${formatDate(c.createdAt)}</td>
-      <td>
+      <td style="white-space:nowrap">
         <button class="btn btn-sm btn-outline" onclick="voirColis('${c._id}')">Voir</button>
-        <button class="btn btn-sm btn-ghost" onclick="majStatutRapide('${c._id}','livre')" style="margin-left:4px">✓ Livré</button>
+        <button class="btn btn-sm btn-ghost" onclick="ouvrirAssigner('${c._id}','${c.numeroSuivi}','${c.livreur?._id||''}')" style="margin-left:4px">👤</button>
+        <button class="btn btn-sm btn-ghost" onclick="majStatutRapide('${c._id}','livre')" style="margin-left:4px">✓</button>
       </td>
     </tr>`).join('');
 }
@@ -592,7 +601,7 @@ async function voirColis(id) {
         <div class="detail-item"><label>Type</label><span>${c.typeColis}</span></div>
         <div class="detail-item"><label>Poids</label><span>${c.poidsKg} kg</span></div>
         <div class="detail-item"><label>Montant</label><span style="font-weight:600;color:var(--green)">${formatEur(c.tarif?.total)}</span></div>
-        <div class="detail-item"><label>Paiement</label><span>${badge(c.paiementStatut||'en_attente')}</span></div>
+        <div class="detail-item"><label>Livreur</label><span>${c.livreur ? c.livreur.prenom+' '+c.livreur.nom : '—'}</span></div>
       </div>
       <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
       <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:12px">Étapes</div>
@@ -620,6 +629,12 @@ function ouvrirMajStatut() {
   ouvrirModal('modal-statut');
 }
 
+function ouvrirAssignerDepuisModal() {
+  if (!COLIS_ACTIF) return;
+  fermerModal('modal-colis');
+  ouvrirAssigner(COLIS_ACTIF._id, COLIS_ACTIF.numeroSuivi, COLIS_ACTIF.livreur?._id || '');
+}
+
 async function confirmerMajStatut() {
   if (!COLIS_ACTIF) return;
   const statut = document.getElementById('nouveau-statut').value;
@@ -641,9 +656,75 @@ async function majStatutRapide(id, statut) {
   } catch(e) { toast(e.message || 'Erreur', 'err'); }
 }
 
+// ── ASSIGNATION LIVREUR ────────────────────
+async function chargerLivreurs() {
+  if (LIVREURS_ALL.length) return;
+  try {
+    const data = await api('GET', '/utilisateurs/livreurs');
+    LIVREURS_ALL = data.livreurs || [];
+  } catch(e) {
+    LIVREURS_ALL = [];
+  }
+}
+
+async function ouvrirAssigner(colisId, numeroSuivi, livreurActuelId) {
+  ASSIGNER_COLIS_ID = colisId;
+  await chargerLivreurs();
+
+  document.getElementById('assigner-detail').innerHTML = `
+    <div style="font-weight:600;margin-bottom:4px">Commande #${numeroSuivi}</div>
+    <div style="color:var(--muted);font-size:12px">Assignez un livreur pour cette collecte</div>`;
+
+  const select = document.getElementById('assigner-livreur-select');
+  if (!LIVREURS_ALL.length) {
+    select.innerHTML = `<option value="">Aucun livreur — ajoutez-en d'abord dans l'onglet Livreurs</option>`;
+  } else {
+    select.innerHTML = `
+      <option value="">— Choisir un livreur —</option>
+      ${LIVREURS_ALL.map(l => `
+        <option value="${l._id}" ${l._id === livreurActuelId ? 'selected' : ''}>
+          ${l.prenom} ${l.nom} · ${l.telephone}
+        </option>`).join('')}`;
+  }
+  ouvrirModal('modal-assigner');
+}
+
+async function confirmerAssignation() {
+  const livreurId = document.getElementById('assigner-livreur-select').value;
+  if (!livreurId) return toast('Choisissez un livreur', 'err');
+  if (!ASSIGNER_COLIS_ID) return;
+  try {
+    await api('PATCH', `/colis/${ASSIGNER_COLIS_ID}/assigner`, { livreurId });
+    toast('Livreur assigné ✓', 'ok');
+    fermerModal('modal-assigner');
+    chargerColis();
+  } catch(e) { toast(e.message || 'Erreur', 'err'); }
+}
+
 // ── CLIENTS ────────────────────────────────
 async function chargerClients() {
-  document.getElementById('clients-tbody').innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">👥</div><p>Endpoint admin en cours de développement</p></div></td></tr>`;
+  try {
+    const data = await api('GET', '/utilisateurs/clients');
+    const clients = data.clients || [];
+    document.getElementById('clients-count').textContent = `${clients.length} client(s)`;
+    const tbody = document.getElementById('clients-tbody');
+    if (!clients.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">👥</div><p>Aucun client</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = clients.map(u => `
+      <tr>
+        <td><div style="font-weight:500">${u.prenom} ${u.nom}</div></td>
+        <td>${u.telephone}</td>
+        <td>${u.email||'—'}</td>
+        <td>${badge(u.role)}</td>
+        <td>${formatDate(u.createdAt)}</td>
+        <td><span class="badge ${u.actif?'badge-ok':'badge-err'}">${u.actif?'Actif':'Inactif'}</span></td>
+        <td>—</td>
+      </tr>`).join('');
+  } catch(e) {
+    document.getElementById('clients-tbody').innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">👥</div><p>Erreur chargement</p></div></td></tr>`;
+  }
 }
 function filtrerClients(q) {}
 
@@ -664,6 +745,7 @@ function ajouterLivreur() {
   toast('Livreur ajouté !', 'ok');
   fermerModal('modal-livreur');
   ['l-prenom','l-nom','l-tel','l-zone'].forEach(id => document.getElementById(id).value = '');
+  LIVREURS_ALL = []; // Vider le cache
 }
 
 // ── TARIFS ─────────────────────────────────
