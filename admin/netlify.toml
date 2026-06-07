@@ -1,0 +1,8 @@
+[build]
+  publish = "admin"
+  command = "echo ok"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
