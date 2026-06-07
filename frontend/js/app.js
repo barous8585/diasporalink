@@ -9,6 +9,7 @@ let APP = {
   },
   authTel:    '',
   authNouvel: false,
+  debugCode:  null,
 };
 
 // ── ICONES NAV ──────────────────────────────────────────────
@@ -133,13 +134,13 @@ async function authEnvoyerOTP() {
 
   try {
     const res = await API.Auth.envoyerOTP(tel);
+    APP.debugCode = res.debugCode || null;
     if (res.nouvelUtilisateur) {
       montrerFicheInscription();
     } else {
-      afficherOTP(tel);
+      afficherOTP(tel, res.debugCode);
     }
   } catch(e) {
-    // Le backend retourne 400 si c'est un nouvel utilisateur sans prénom/nom
     if (e.message && (
       e.message.includes('Prénom') ||
       e.message.includes('prenom') ||
@@ -162,8 +163,9 @@ async function authCreerCompte() {
 
   UI.showLoader();
   try {
-    await API.Auth.envoyerOTP(APP.authTel, prenom, nom);
-    afficherOTP(APP.authTel);
+    const res = await API.Auth.envoyerOTP(APP.authTel, prenom, nom);
+    APP.debugCode = res.debugCode || null;
+    afficherOTP(APP.authTel, res.debugCode);
   } catch(e) {
     UI.toastErr(e.message || 'Erreur');
   } finally {
@@ -171,12 +173,26 @@ async function authCreerCompte() {
   }
 }
 
-function afficherOTP(tel) {
+function afficherOTP(tel, debugCode) {
   document.getElementById('auth-phone-sheet').style.display = 'none';
   document.getElementById('auth-register-sheet').style.display = 'none';
   document.getElementById('auth-otp-sheet').style.display = 'block';
-  document.getElementById('auth-otp-desc').textContent = `Code envoyé au ${tel}`;
-  document.querySelector('.otp-input').focus();
+
+  const desc = document.getElementById('auth-otp-desc');
+  desc.textContent = `Code envoyé au ${tel}`;
+
+  // Afficher le code en mode dev
+  if (debugCode) {
+    desc.innerHTML = `Code envoyé au ${tel}<br><span style="background:#EAF5F0;color:#116647;padding:6px 14px;border-radius:6px;font-size:20px;font-weight:700;letter-spacing:4px;display:inline-block;margin-top:8px">${debugCode}</span>`;
+
+    // Remplir automatiquement les cases OTP
+    const inputs = document.querySelectorAll('.otp-input');
+    debugCode.toString().split('').forEach((d, i) => {
+      if (inputs[i]) inputs[i].value = d;
+    });
+  } else {
+    document.querySelector('.otp-input').focus();
+  }
 }
 
 async function authVerifierOTP() {
@@ -198,10 +214,10 @@ async function authVerifierOTP() {
 async function authRenvoyerOTP() {
   UI.showLoader();
   try {
-    await API.Auth.envoyerOTP(APP.authTel);
+    const res = await API.Auth.envoyerOTP(APP.authTel);
     UI.toastOk('Code renvoyé !');
     document.querySelectorAll('.otp-input').forEach(i => i.value = '');
-    document.querySelector('.otp-input').focus();
+    afficherOTP(APP.authTel, res.debugCode);
   } catch(e) {
     UI.toastErr('Erreur renvoi');
   } finally {
