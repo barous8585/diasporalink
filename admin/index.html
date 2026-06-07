@@ -9,125 +9,114 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --green:      #1A8C64;
-      --green-dark: #116647;
-      --green-light:#EAF5F0;
-      --white:  #fff;
-      --off:    #F7F7F5;
-      --line:   #E4E4E0;
-      --text:   #1A1A18;
-      --muted:  #6B6B66;
-      --hint:   #A0A09A;
-      --danger: #C0392B;
-      --warn:   #B7680A;
-      --info:   #1B4FA8;
-      --sidebar-w: 240px;
-      --font: 'Inter', sans-serif;
+      --green:#1A8C64; --green-dark:#116647; --green-light:#EAF5F0;
+      --white:#fff; --off:#F7F7F5; --line:#E4E4E0;
+      --text:#1A1A18; --muted:#6B6B66; --hint:#A0A09A;
+      --danger:#C0392B; --warn:#B7680A; --info:#1B4FA8;
+      --sidebar-w:240px; --font:'Inter',sans-serif;
     }
-
-    body { font-family: var(--font); background: var(--off); color: var(--text); font-size: 14px; line-height: 1.5; }
-    #app { display: flex; height: 100vh; overflow: hidden; }
-    .sidebar { width: var(--sidebar-w); background: var(--green-dark); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
-    .sidebar-logo { padding: 24px 20px 20px; font-size: 18px; font-weight: 700; color: white; letter-spacing: -0.4px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .sidebar-logo span { color: rgba(255,255,255,0.45); font-weight: 400; }
-    .sidebar-logo small { display: block; font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 400; margin-top: 2px; }
-    .sidebar-nav { padding: 12px 0; flex: 1; }
-    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; cursor: pointer; color: rgba(255,255,255,0.65); font-size: 13px; font-weight: 500; transition: background 0.15s, color 0.15s; border-left: 3px solid transparent; }
-    .nav-item:hover { background: rgba(255,255,255,0.08); color: white; }
-    .nav-item.active { background: rgba(255,255,255,0.12); color: white; border-left-color: rgba(255,255,255,0.6); }
-    .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
-    .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: rgba(255,255,255,0.4); }
-    .sidebar-footer .admin-name { color: rgba(255,255,255,0.8); font-weight: 500; margin-bottom: 2px; }
-    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .topbar { background: var(--white); border-bottom: 1px solid var(--line); padding: 0 28px; height: 60px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-    .topbar-title { font-size: 16px; font-weight: 600; color: var(--text); }
-    .topbar-actions { display: flex; align-items: center; gap: 10px; }
-    .content { flex: 1; overflow-y: auto; padding: 28px; }
-    .content::-webkit-scrollbar { width: 6px; }
-    .content::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
-    .screen { display: none; }
-    .screen.active { display: block; }
-    #screen-login { display: flex; align-items: center; justify-content: center; height: 100vh; background: var(--green-dark); }
-    .login-box { background: white; border-radius: 12px; padding: 40px; width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-    .login-logo { font-size: 24px; font-weight: 700; color: var(--green-dark); margin-bottom: 4px; }
-    .login-logo span { color: rgba(0,0,0,0.3); font-weight: 400; }
-    .login-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
-    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
-    .stat-card { background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
-    .stat-card .label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-    .stat-card .value { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
-    .stat-card .value.green { color: var(--green); }
-    .stat-card .value.warn  { color: var(--warn); }
-    .stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-    .card { background: var(--white); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-    .card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
-    .card-title { font-size: 14px; font-weight: 600; }
-    .card + .card { margin-top: 20px; }
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); padding: 10px 20px; background: var(--off); border-bottom: 1px solid var(--line); }
-    td { padding: 13px 20px; border-bottom: 1px solid var(--line); font-size: 13px; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: var(--off); }
-    .td-mono { font-family: monospace; font-size: 12px; }
-    .badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-    .badge-ok   { background: #EAF5F0; color: #116647; }
-    .badge-go   { background: #FEF3E2; color: #B7680A; }
-    .badge-err  { background: #FDECEA; color: #C0392B; }
-    .badge-grey { background: #EFEFED; color: #6B6B66; }
-    .badge-info { background: #E8EEF8; color: #1B4FA8; }
-    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; font-family: var(--font); font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
-    .btn:hover { opacity: 0.85; }
-    .btn-primary { background: var(--green); color: white; }
-    .btn-outline { background: white; color: var(--green); border: 1.5px solid var(--green); }
-    .btn-ghost   { background: var(--off); color: var(--text); border: 1px solid var(--line); }
-    .btn-danger  { background: white; color: var(--danger); border: 1px solid var(--danger); }
-    .btn-sm { padding: 5px 10px; font-size: 12px; }
-    .form-row { display: grid; gap: 16px; margin-bottom: 16px; }
-    .form-row.cols-2 { grid-template-columns: 1fr 1fr; }
-    .field label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 6px; }
-    .field input, .field select, .field textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; font-family: var(--font); font-size: 13px; color: var(--text); background: white; }
-    .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(26,140,100,0.1); }
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100; }
-    .modal-overlay.show { display: flex; }
-    .modal { background: white; border-radius: 12px; width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--line); }
-    .modal-header h3 { font-size: 15px; font-weight: 600; }
-    .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
-    .modal-body { padding: 24px; }
-    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; }
-    .toast { position: fixed; bottom: 24px; right: 24px; background: #1A1A18; color: white; padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; opacity: 0; pointer-events: none; transition: all 0.25s; z-index: 999; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
-    .toast.show { opacity: 1; }
-    .toast.ok  { background: var(--green); }
-    .toast.err { background: var(--danger); }
-    .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
-    .empty .empty-icon { font-size: 36px; margin-bottom: 12px; }
-    .loader { text-align: center; padding: 48px; color: var(--muted); }
-    .filters { display: flex; gap: 10px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-    .filter-select { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; font-family: var(--font); font-size: 12px; color: var(--text); background: white; cursor: pointer; }
-    .search-input { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; font-family: var(--font); font-size: 12px; color: var(--text); background: white; width: 220px; }
-    .search-input:focus { outline: none; border-color: var(--green); }
-    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-    .detail-item label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 3px; }
-    .detail-item span { font-size: 13px; color: var(--text); }
-    .tl { display: flex; flex-direction: column; }
-    .tl-row { display: flex; gap: 12px; }
-    .tl-left { display: flex; flex-direction: column; align-items: center; }
-    .tl-dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: white; font-size: 10px; }
-    .tl-dot.done { border-color: var(--green); background: var(--green); color: white; }
-    .tl-dot.now  { border-color: var(--warn); background: #FEF3E2; color: var(--warn); }
-    .tl-line { width: 2px; flex: 1; min-height: 12px; background: var(--line); margin: 2px 0; }
-    .tl-line.done { background: var(--green); }
-    .tl-content { padding-bottom: 14px; flex: 1; padding-top: 2px; }
-    .tl-content h4 { font-size: 13px; font-weight: 600; }
-    .tl-content p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
-    @media (max-width: 900px) {
-      .stats-grid { grid-template-columns: 1fr 1fr; }
-      .sidebar { width: 60px; }
-      .sidebar-logo, .nav-item span, .sidebar-footer .admin-name, .sidebar-footer p { display: none; }
-      .nav-item { justify-content: center; padding: 12px; }
+    body { font-family:var(--font); background:var(--off); color:var(--text); font-size:14px; line-height:1.5; }
+    #app { display:flex; height:100vh; overflow:hidden; }
+    .sidebar { width:var(--sidebar-w); background:var(--green-dark); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; }
+    .sidebar-logo { padding:24px 20px 20px; font-size:18px; font-weight:700; color:white; letter-spacing:-0.4px; border-bottom:1px solid rgba(255,255,255,0.1); }
+    .sidebar-logo span { color:rgba(255,255,255,0.45); font-weight:400; }
+    .sidebar-logo small { display:block; font-size:11px; color:rgba(255,255,255,0.4); font-weight:400; margin-top:2px; }
+    .sidebar-nav { padding:12px 0; flex:1; }
+    .nav-item { display:flex; align-items:center; gap:10px; padding:10px 20px; cursor:pointer; color:rgba(255,255,255,0.65); font-size:13px; font-weight:500; transition:background 0.15s,color 0.15s; border-left:3px solid transparent; }
+    .nav-item:hover { background:rgba(255,255,255,0.08); color:white; }
+    .nav-item.active { background:rgba(255,255,255,0.12); color:white; border-left-color:rgba(255,255,255,0.6); }
+    .nav-item .icon { font-size:16px; width:20px; text-align:center; }
+    .sidebar-footer { padding:16px 20px; border-top:1px solid rgba(255,255,255,0.1); font-size:12px; color:rgba(255,255,255,0.4); }
+    .sidebar-footer .admin-name { color:rgba(255,255,255,0.8); font-weight:500; margin-bottom:2px; }
+    .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+    .topbar { background:var(--white); border-bottom:1px solid var(--line); padding:0 28px; height:60px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+    .topbar-title { font-size:16px; font-weight:600; }
+    .topbar-actions { display:flex; align-items:center; gap:10px; }
+    .content { flex:1; overflow-y:auto; padding:28px; }
+    .content::-webkit-scrollbar { width:6px; }
+    .content::-webkit-scrollbar-thumb { background:var(--line); border-radius:3px; }
+    .screen { display:none; }
+    .screen.active { display:block; }
+    #screen-login { display:flex; align-items:center; justify-content:center; height:100vh; background:var(--green-dark); }
+    .login-box { background:white; border-radius:12px; padding:40px; width:380px; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+    .login-logo { font-size:24px; font-weight:700; color:var(--green-dark); margin-bottom:4px; }
+    .login-logo span { color:rgba(0,0,0,0.3); font-weight:400; }
+    .login-sub { font-size:13px; color:var(--muted); margin-bottom:28px; }
+    .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+    .stat-card { background:var(--white); border:1px solid var(--line); border-radius:10px; padding:20px; }
+    .stat-card .label { font-size:12px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; }
+    .stat-card .value { font-size:28px; font-weight:700; color:var(--text); letter-spacing:-0.5px; }
+    .stat-card .value.green { color:var(--green); }
+    .stat-card .value.warn { color:var(--warn); }
+    .stat-card .sub { font-size:12px; color:var(--muted); margin-top:4px; }
+    .card { background:var(--white); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+    .card-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line); }
+    .card-title { font-size:14px; font-weight:600; }
+    .card+.card { margin-top:20px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; }
+    th { text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); padding:10px 20px; background:var(--off); border-bottom:1px solid var(--line); }
+    td { padding:13px 20px; border-bottom:1px solid var(--line); font-size:13px; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:var(--off); }
+    .td-mono { font-family:monospace; font-size:12px; }
+    .badge { display:inline-flex; align-items:center; padding:3px 9px; border-radius:4px; font-size:11px; font-weight:600; white-space:nowrap; }
+    .badge-ok   { background:#EAF5F0; color:#116647; }
+    .badge-go   { background:#FEF3E2; color:#B7680A; }
+    .badge-err  { background:#FDECEA; color:#C0392B; }
+    .badge-grey { background:#EFEFED; color:#6B6B66; }
+    .badge-info { background:#E8EEF8; color:#1B4FA8; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:6px; border:none; font-family:var(--font); font-size:13px; font-weight:500; cursor:pointer; transition:opacity 0.15s; }
+    .btn:hover { opacity:0.85; }
+    .btn-primary { background:var(--green); color:white; }
+    .btn-outline { background:white; color:var(--green); border:1.5px solid var(--green); }
+    .btn-ghost   { background:var(--off); color:var(--text); border:1px solid var(--line); }
+    .btn-danger  { background:white; color:var(--danger); border:1px solid var(--danger); }
+    .btn-sm { padding:5px 10px; font-size:12px; }
+    .form-row { display:grid; gap:16px; margin-bottom:16px; }
+    .form-row.cols-2 { grid-template-columns:1fr 1fr; }
+    .field label { display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin-bottom:6px; }
+    .field input,.field select,.field textarea { width:100%; padding:8px 12px; border:1px solid var(--line); border-radius:6px; font-family:var(--font); font-size:13px; color:var(--text); background:white; }
+    .field input:focus,.field select:focus,.field textarea:focus { outline:none; border-color:var(--green); box-shadow:0 0 0 3px rgba(26,140,100,0.1); }
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:none; align-items:center; justify-content:center; z-index:100; }
+    .modal-overlay.show { display:flex; }
+    .modal { background:white; border-radius:12px; width:520px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+    .modal-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--line); }
+    .modal-header h3 { font-size:15px; font-weight:600; }
+    .modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--muted); }
+    .modal-body { padding:24px; }
+    .modal-footer { padding:16px 24px; border-top:1px solid var(--line); display:flex; gap:10px; justify-content:flex-end; }
+    .toast { position:fixed; bottom:24px; right:24px; background:#1A1A18; color:white; padding:12px 18px; border-radius:8px; font-size:13px; font-weight:500; opacity:0; pointer-events:none; transition:all 0.25s; z-index:999; }
+    .toast.show { opacity:1; }
+    .toast.ok  { background:var(--green); }
+    .toast.err { background:var(--danger); }
+    .empty { text-align:center; padding:48px 20px; color:var(--muted); }
+    .empty .empty-icon { font-size:36px; margin-bottom:12px; }
+    .loader { text-align:center; padding:48px; color:var(--muted); }
+    .filters { display:flex; gap:10px; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+    .filter-select { padding:6px 10px; border:1px solid var(--line); border-radius:6px; font-family:var(--font); font-size:12px; background:white; cursor:pointer; }
+    .search-input { padding:6px 12px; border:1px solid var(--line); border-radius:6px; font-family:var(--font); font-size:12px; background:white; width:220px; }
+    .search-input:focus { outline:none; border-color:var(--green); }
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+    .detail-item label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); display:block; margin-bottom:3px; }
+    .detail-item span { font-size:13px; color:var(--text); }
+    .tl { display:flex; flex-direction:column; }
+    .tl-row { display:flex; gap:12px; }
+    .tl-left { display:flex; flex-direction:column; align-items:center; }
+    .tl-dot { width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; flex-shrink:0; background:white; font-size:10px; }
+    .tl-dot.done { border-color:var(--green); background:var(--green); color:white; }
+    .tl-dot.now  { border-color:var(--warn); background:#FEF3E2; color:var(--warn); }
+    .tl-line { width:2px; flex:1; min-height:12px; background:var(--line); margin:2px 0; }
+    .tl-line.done { background:var(--green); }
+    .tl-content { padding-bottom:14px; flex:1; padding-top:2px; }
+    .tl-content h4 { font-size:13px; font-weight:600; }
+    .tl-content p  { font-size:11px; color:var(--muted); margin-top:1px; }
+    @media (max-width:900px) {
+      .stats-grid { grid-template-columns:1fr 1fr; }
+      .sidebar { width:60px; }
+      .sidebar-logo,.nav-item span,.sidebar-footer .admin-name,.sidebar-footer p { display:none; }
+      .nav-item { justify-content:center; padding:12px; }
     }
   </style>
 </head>
@@ -159,6 +148,7 @@
       <div class="nav-item" onclick="goTo('clients')" data-screen="clients"><span class="icon">👥</span><span>Clients</span></div>
       <div class="nav-item" onclick="goTo('livreurs')" data-screen="livreurs"><span class="icon">🚚</span><span>Livreurs</span></div>
       <div class="nav-item" onclick="goTo('tarifs')" data-screen="tarifs"><span class="icon">💰</span><span>Tarifs</span></div>
+      <div class="nav-item" onclick="goTo('remboursements')" data-screen="remboursements"><span class="icon">↩️</span><span>Remboursements</span></div>
     </nav>
     <div class="sidebar-footer">
       <div class="admin-name" id="admin-name">Admin</div>
@@ -176,6 +166,8 @@
     </div>
 
     <div class="content">
+
+      <!-- DASHBOARD -->
       <div class="screen active" id="screen-dashboard">
         <div class="stats-grid">
           <div class="stat-card"><div class="label">Commandes totales</div><div class="value" id="s-total">—</div><div class="sub">Depuis le début</div></div>
@@ -195,6 +187,7 @@
         </div>
       </div>
 
+      <!-- COMMANDES -->
       <div class="screen" id="screen-colis">
         <div class="card">
           <div class="card-header"><span class="card-title">Toutes les commandes</span><span id="colis-count" style="font-size:12px;color:var(--muted)"></span></div>
@@ -220,6 +213,7 @@
         </div>
       </div>
 
+      <!-- CLIENTS -->
       <div class="screen" id="screen-clients">
         <div class="card">
           <div class="card-header"><span class="card-title">Clients inscrits</span><span id="clients-count" style="font-size:12px;color:var(--muted)"></span></div>
@@ -233,6 +227,7 @@
         </div>
       </div>
 
+      <!-- LIVREURS -->
       <div class="screen" id="screen-livreurs">
         <div class="card">
           <div class="card-header"><span class="card-title">Livreurs</span><button class="btn btn-primary btn-sm" onclick="ouvrirModalLivreur()">+ Ajouter un livreur</button></div>
@@ -245,6 +240,7 @@
         </div>
       </div>
 
+      <!-- TARIFS -->
       <div class="screen" id="screen-tarifs">
         <div class="card">
           <div class="card-header"><span class="card-title">Tarifs par pays (€/kg)</span><button class="btn btn-primary btn-sm" onclick="sauvegarderTarifs()">Sauvegarder</button></div>
@@ -258,10 +254,40 @@
           </div>
         </div>
       </div>
-    </div>
+
+      <!-- REMBOURSEMENTS -->
+      <div class="screen" id="screen-remboursements">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Demandes de remboursement</span>
+            <span id="remb-count" style="font-size:12px;color:var(--muted)"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Colis</th>
+                  <th>Motif</th>
+                  <th>Montant</th>
+                  <th>Statut</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="remb-tbody">
+                <tr><td colspan="7" class="loader">Chargement...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
   </main>
 </div>
 
+<!-- MODAL DÉTAIL COLIS -->
 <div class="modal-overlay" id="modal-colis">
   <div class="modal">
     <div class="modal-header"><h3 id="modal-colis-titre">Détail commande</h3><button class="modal-close" onclick="fermerModal('modal-colis')">×</button></div>
@@ -273,6 +299,7 @@
   </div>
 </div>
 
+<!-- MODAL MAJ STATUT -->
 <div class="modal-overlay" id="modal-statut">
   <div class="modal" style="width:400px">
     <div class="modal-header"><h3>Mettre à jour le statut</h3><button class="modal-close" onclick="fermerModal('modal-statut')">×</button></div>
@@ -297,6 +324,7 @@
   </div>
 </div>
 
+<!-- MODAL LIVREUR -->
 <div class="modal-overlay" id="modal-livreur">
   <div class="modal" style="width:420px">
     <div class="modal-header"><h3>Ajouter un livreur</h3><button class="modal-close" onclick="fermerModal('modal-livreur')">×</button></div>
@@ -315,6 +343,37 @@
   </div>
 </div>
 
+<!-- MODAL REMBOURSEMENT -->
+<div class="modal-overlay" id="modal-remb">
+  <div class="modal" style="width:440px">
+    <div class="modal-header"><h3>Traiter la demande</h3><button class="modal-close" onclick="fermerModal('modal-remb')">×</button></div>
+    <div class="modal-body">
+      <div id="remb-detail" style="background:var(--off);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.6"></div>
+      <div class="field" style="margin-bottom:14px">
+        <label>Décision</label>
+        <select id="remb-statut">
+          <option value="en_cours">🔍 En cours d'examen</option>
+          <option value="approuve">✅ Approuvé</option>
+          <option value="refuse">❌ Refusé</option>
+          <option value="rembourse">💸 Remboursé</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:14px">
+        <label>Montant approuvé (€)</label>
+        <input type="number" id="remb-montant" placeholder="Ex: 45.50" step="0.01" />
+      </div>
+      <div class="field">
+        <label>Note pour le client</label>
+        <input type="text" id="remb-note" placeholder="Ex: Remboursement validé, virement sous 3 jours" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fermerModal('modal-remb')">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmerTraitement()">Confirmer</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -322,6 +381,24 @@ const API = 'https://diasporalink-api.onrender.com/api';
 let TOKEN = localStorage.getItem('dl_admin_token');
 let COLIS_ALL = [];
 let COLIS_ACTIF = null;
+let REMB_ALL = [];
+let REMB_ACTIF = null;
+
+const MOTIFS = {
+  colis_perdu:     '📦 Colis perdu',
+  colis_endommage: '💔 Colis endommagé',
+  retard_excessif: '⏱ Retard excessif',
+  annulation:      '❌ Annulation',
+  autre:           '💬 Autre',
+};
+
+const REMB_STATUTS = {
+  en_attente: ['badge-go',   '⏳ En attente'],
+  en_cours:   ['badge-info', '🔍 En cours'],
+  approuve:   ['badge-ok',   '✅ Approuvé'],
+  refuse:     ['badge-err',  '❌ Refusé'],
+  rembourse:  ['badge-ok',   '💸 Remboursé'],
+};
 
 function toast(msg, type='') {
   const el = document.getElementById('toast');
@@ -337,6 +414,11 @@ function badge(statut) {
     client:['badge-grey','Client'], livreur:['badge-info','Livreur'], admin:['badge-ok','Admin'],
   };
   const [cls, label] = map[statut] || ['badge-grey', statut];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function badgeRemb(statut) {
+  const [cls, label] = REMB_STATUTS[statut] || ['badge-grey', statut];
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
@@ -361,44 +443,32 @@ function ouvrirModal(id) { document.getElementById(id).classList.add('show'); }
 async function loginAdmin() {
   const tel = document.getElementById('login-tel').value.trim();
   if (!tel) return toast('Téléphone requis', 'err');
-
   try {
     const res = await fetch(`${API}/auth/envoyer-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ telephone: tel })
     });
     const data = await res.json();
-
     let code = data.debugCode || null;
-
-    if (code) {
-      alert(`🔑 Code DEV : ${code}\n\nCopiez ce code et collez-le dans la prochaine fenêtre.`);
-    }
-
+    if (code) alert(`🔑 Code DEV : ${code}\n\nCopiez ce code et collez-le dans la prochaine fenêtre.`);
     const saisi = prompt('Entrez le code OTP :' + (code ? ` (${code})` : ''));
     if (!saisi) return;
-
     const res2 = await fetch(`${API}/auth/verifier-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ telephone: tel, code: saisi })
     });
     const data2 = await res2.json();
-
     if (data2.token) {
       TOKEN = data2.token;
       localStorage.setItem('dl_admin_token', TOKEN);
       const u = data2.utilisateur;
       document.getElementById('admin-name').textContent = `${u.prenom} ${u.nom}`;
-      document.getElementById('topbar-avatar').textContent = ((u.prenom?.[0]||'') + (u.nom?.[0]||'')).toUpperCase();
+      document.getElementById('topbar-avatar').textContent = ((u.prenom?.[0]||'')+(u.nom?.[0]||'')).toUpperCase();
       afficherApp();
     } else {
       toast(data2.message || 'Code invalide', 'err');
     }
-  } catch(e) {
-    toast(e.message || 'Erreur connexion', 'err');
-  }
+  } catch(e) { toast(e.message || 'Erreur connexion', 'err'); }
 }
 
 function deconnexion() {
@@ -415,7 +485,11 @@ function afficherApp() {
   goTo('dashboard');
 }
 
-const TITRES = { dashboard:'Tableau de bord', colis:'Commandes', clients:'Clients', livreurs:'Livreurs', tarifs:'Tarifs' };
+// ── NAVIGATION ─────────────────────────────
+const TITRES = {
+  dashboard:'Tableau de bord', colis:'Commandes', clients:'Clients',
+  livreurs:'Livreurs', tarifs:'Tarifs', remboursements:'Remboursements'
+};
 
 function goTo(screen) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -423,12 +497,14 @@ function goTo(screen) {
   document.getElementById(`screen-${screen}`).classList.add('active');
   document.querySelector(`[data-screen="${screen}"]`).classList.add('active');
   document.getElementById('topbar-title').textContent = TITRES[screen] || screen;
-  if (screen === 'dashboard') chargerDashboard();
-  if (screen === 'colis')     chargerColis();
-  if (screen === 'clients')   chargerClients();
-  if (screen === 'tarifs')    chargerTarifs();
+  if (screen === 'dashboard')      chargerDashboard();
+  if (screen === 'colis')          chargerColis();
+  if (screen === 'clients')        chargerClients();
+  if (screen === 'tarifs')         chargerTarifs();
+  if (screen === 'remboursements') chargerRemboursements();
 }
 
+// ── DASHBOARD ──────────────────────────────
 async function chargerDashboard() {
   try {
     const data = await api('GET', '/colis');
@@ -436,33 +512,29 @@ async function chargerDashboard() {
     document.getElementById('s-total').textContent   = colis.length;
     document.getElementById('s-transit').textContent = colis.filter(c => c.statut === 'en_transit').length;
     document.getElementById('s-livre').textContent   = colis.filter(c => c.statut === 'livre').length;
-    const ca = colis.filter(c => c.paiementStatut === 'paye').reduce((s, c) => s + (c.tarif?.total || 0), 0);
+    const ca = colis.filter(c => c.paiementStatut === 'paye').reduce((s,c) => s+(c.tarif?.total||0), 0);
     document.getElementById('s-ca').textContent = formatEur(ca);
 
     const rc = document.getElementById('recent-colis');
-    if (!colis.length) {
-      rc.innerHTML = `<div class="empty"><div class="empty-icon">📦</div><p>Aucune commande</p></div>`;
-    } else {
-      rc.innerHTML = `<table><tbody>${colis.slice(0,5).map(c => `
-        <tr onclick="voirColis('${c._id}')" style="cursor:pointer">
-          <td class="td-mono">#${c.numeroSuivi}</td>
-          <td>${c.villeDestination}</td>
-          <td>${badge(c.statut)}</td>
-          <td>${formatEur(c.tarif?.total)}</td>
-        </tr>`).join('')}</tbody></table>`;
-    }
+    rc.innerHTML = !colis.length
+      ? `<div class="empty"><div class="empty-icon">📦</div><p>Aucune commande</p></div>`
+      : `<table><tbody>${colis.slice(0,5).map(c => `
+          <tr onclick="voirColis('${c._id}')" style="cursor:pointer">
+            <td class="td-mono">#${c.numeroSuivi}</td>
+            <td>${c.villeDestination}</td>
+            <td>${badge(c.statut)}</td>
+            <td>${formatEur(c.tarif?.total)}</td>
+          </tr>`).join('')}</tbody></table>`;
 
-    const rc2 = document.getElementById('recent-clients');
-    rc2.innerHTML = `
+    document.getElementById('recent-clients').innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div><div style="font-size:24px;font-weight:700;color:var(--green)">${colis.length}</div><div style="font-size:12px;color:var(--muted)">Commandes</div></div>
         <div><div style="font-size:24px;font-weight:700">${colis.filter(c=>c.statut==='en_attente').length}</div><div style="font-size:12px;color:var(--muted)">En attente</div></div>
       </div>`;
-  } catch(e) {
-    toast('Erreur chargement dashboard', 'err');
-  }
+  } catch(e) { toast('Erreur chargement dashboard', 'err'); }
 }
 
+// ── COLIS ──────────────────────────────────
 async function chargerColis() {
   try {
     const data = await api('GET', '/colis');
@@ -481,7 +553,7 @@ function renderColisTable(liste) {
   tbody.innerHTML = liste.map(c => `
     <tr>
       <td class="td-mono">#${c.numeroSuivi}</td>
-      <td>${c.client?.prenom || ''} ${c.client?.nom || c.nomDestinataire || '—'}</td>
+      <td>${c.client?.prenom||''} ${c.client?.nom||c.nomDestinataire||'—'}</td>
       <td>${c.villeDestination}, ${c.paysDestination}</td>
       <td>${c.poidsKg} kg</td>
       <td>${formatEur(c.tarif?.total)}</td>
@@ -495,17 +567,13 @@ function renderColisTable(liste) {
 }
 
 function filtrerColis(q) {
-  const f = COLIS_ALL.filter(c =>
+  renderColisTable(COLIS_ALL.filter(c =>
     c.numeroSuivi?.toLowerCase().includes(q.toLowerCase()) ||
     c.nomDestinataire?.toLowerCase().includes(q.toLowerCase()) ||
     c.villeDestination?.toLowerCase().includes(q.toLowerCase())
-  );
-  renderColisTable(f);
+  ));
 }
-
-function filtrerColisStatut(statut) {
-  renderColisTable(statut ? COLIS_ALL.filter(c => c.statut === statut) : COLIS_ALL);
-}
+function filtrerColisStatut(s) { renderColisTable(s ? COLIS_ALL.filter(c=>c.statut===s) : COLIS_ALL); }
 
 async function voirColis(id) {
   try {
@@ -524,19 +592,19 @@ async function voirColis(id) {
         <div class="detail-item"><label>Type</label><span>${c.typeColis}</span></div>
         <div class="detail-item"><label>Poids</label><span>${c.poidsKg} kg</span></div>
         <div class="detail-item"><label>Montant</label><span style="font-weight:600;color:var(--green)">${formatEur(c.tarif?.total)}</span></div>
-        <div class="detail-item"><label>Paiement</label><span>${badge(c.paiementStatut || 'en_attente')}</span></div>
+        <div class="detail-item"><label>Paiement</label><span>${badge(c.paiementStatut||'en_attente')}</span></div>
       </div>
       <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
       <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:12px">Étapes</div>
       <div class="tl">
-        ${(c.etapes || []).map((e, i) => {
-          const isLast = i === c.etapes.length - 1;
-          const dotCls = e.statut === 'fait' ? 'done' : e.statut === 'en_cours' ? 'now' : '';
-          const ico = e.statut === 'fait' ? '✓' : e.statut === 'en_cours' ? '→' : '○';
+        ${(c.etapes||[]).map((e,i) => {
+          const isLast = i===c.etapes.length-1;
+          const dotCls = e.statut==='fait'?'done':e.statut==='en_cours'?'now':'';
+          const ico = e.statut==='fait'?'✓':e.statut==='en_cours'?'→':'○';
           return `<div class="tl-row">
             <div class="tl-left">
               <div class="tl-dot ${dotCls}">${ico}</div>
-              ${!isLast ? `<div class="tl-line ${e.statut==='fait'?'done':''}"></div>` : ''}
+              ${!isLast?`<div class="tl-line ${e.statut==='fait'?'done':''}"></div>`:''}
             </div>
             <div class="tl-content"><h4>${e.label}</h4><p>${e.detail||''} ${e.completeLe?'· '+formatDate(e.completeLe):''}</p></div>
           </div>`;
@@ -573,11 +641,13 @@ async function majStatutRapide(id, statut) {
   } catch(e) { toast(e.message || 'Erreur', 'err'); }
 }
 
+// ── CLIENTS ────────────────────────────────
 async function chargerClients() {
   document.getElementById('clients-tbody').innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">👥</div><p>Endpoint admin en cours de développement</p></div></td></tr>`;
 }
 function filtrerClients(q) {}
 
+// ── LIVREURS ───────────────────────────────
 function ouvrirModalLivreur() { ouvrirModal('modal-livreur'); }
 
 function ajouterLivreur() {
@@ -596,6 +666,7 @@ function ajouterLivreur() {
   ['l-prenom','l-nom','l-tel','l-zone'].forEach(id => document.getElementById(id).value = '');
 }
 
+// ── TARIFS ─────────────────────────────────
 const PAYS_TARIFS = [
   { code:'SN', nom:'Sénégal',       drapeau:'🇸🇳', prix:7.5 },
   { code:'CI', nom:"Côte d'Ivoire", drapeau:'🇨🇮', prix:8.0 },
@@ -625,10 +696,68 @@ function chargerTarifs() {
   </div>`;
 }
 
-function sauvegarderTarifs() {
-  toast('Tarifs sauvegardés ✓', 'ok');
+function sauvegarderTarifs() { toast('Tarifs sauvegardés ✓', 'ok'); }
+
+// ── REMBOURSEMENTS ──────────────────────────
+async function chargerRemboursements() {
+  try {
+    const data = await api('GET', '/remboursements');
+    REMB_ALL = data.remboursements || [];
+    document.getElementById('remb-count').textContent = `${REMB_ALL.length} demande(s)`;
+    renderRembTable(REMB_ALL);
+  } catch(e) { toast('Erreur chargement remboursements', 'err'); }
 }
 
+function renderRembTable(liste) {
+  const tbody = document.getElementById('remb-tbody');
+  if (!liste.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">↩️</div><p>Aucune demande de remboursement</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = liste.map(r => `
+    <tr>
+      <td>
+        <div style="font-weight:500">${r.client?.prenom||''} ${r.client?.nom||'—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${r.client?.telephone||''}</div>
+      </td>
+      <td class="td-mono">#${r.colis?.numeroSuivi||'—'}</td>
+      <td>${MOTIFS[r.motif]||r.motif}</td>
+      <td>${formatEur(r.montant)}</td>
+      <td>${badgeRemb(r.statut)}</td>
+      <td>${formatDate(r.createdAt)}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="ouvrirTraitement('${r._id}')">Traiter</button></td>
+    </tr>`).join('');
+}
+
+function ouvrirTraitement(id) {
+  REMB_ACTIF = REMB_ALL.find(r => r._id === id);
+  if (!REMB_ACTIF) return;
+  const r = REMB_ACTIF;
+  document.getElementById('remb-detail').innerHTML = `
+    <div style="margin-bottom:8px"><strong>#${r.colis?.numeroSuivi}</strong> — ${r.client?.prenom} ${r.client?.nom}</div>
+    <div style="margin-bottom:4px">Motif : ${MOTIFS[r.motif]||r.motif}</div>
+    ${r.description ? `<div style="color:var(--muted);font-style:italic">"${r.description}"</div>` : ''}
+    <div style="margin-top:8px;font-weight:600">Montant demandé : ${formatEur(r.montant)}</div>`;
+  document.getElementById('remb-statut').value  = r.statut==='en_attente'?'en_cours':r.statut;
+  document.getElementById('remb-montant').value = r.montantApprouve||r.montant||'';
+  document.getElementById('remb-note').value    = r.noteAdmin||'';
+  ouvrirModal('modal-remb');
+}
+
+async function confirmerTraitement() {
+  if (!REMB_ACTIF) return;
+  const statut          = document.getElementById('remb-statut').value;
+  const noteAdmin       = document.getElementById('remb-note').value;
+  const montantApprouve = parseFloat(document.getElementById('remb-montant').value)||null;
+  try {
+    await api('PATCH', `/remboursements/${REMB_ACTIF._id}`, { statut, noteAdmin, montantApprouve });
+    toast('Demande traitée ✓', 'ok');
+    fermerModal('modal-remb');
+    chargerRemboursements();
+  } catch(e) { toast(e.message||'Erreur', 'err'); }
+}
+
+// ── INIT ───────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (TOKEN) afficherApp();
 });
