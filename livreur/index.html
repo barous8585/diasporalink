@@ -301,6 +301,18 @@ let MON_TEL = '';
 let COLIS_ACTIF = null;
 let MES_COLIS = [];
 
+// Fonction pour comparer les IDs (string ou objet)
+function memeId(a, b) {
+  if (!a || !b) return false;
+  const idA = typeof a === 'object' ? a._id : a;
+  const idB = typeof b === 'object' ? b._id : b;
+  return String(idA) === String(idB);
+}
+
+function estMonColis(c) {
+  return c.livreur && memeId(c.livreur, USER?._id);
+}
+
 function toast(msg, type='') {
   const el = document.getElementById('toast');
   el.textContent = msg; el.className = `toast ${type} show`;
@@ -444,11 +456,14 @@ function navGo(s) {
   if (s === 'profil')     chargerProfil();
 }
 
+// ── ACCUEIL ────────────────────────────────
 async function chargerAccueil() {
   showLoader();
   try {
     const data = await apiCall('GET', '/colis');
-    MES_COLIS = data.colis || [];
+    // Filtrer uniquement les colis assignés à ce livreur
+    MES_COLIS = (data.colis || []).filter(c => estMonColis(c));
+
     const today = new Date().toDateString();
     const pickups   = MES_COLIS.filter(c => new Date(c.dateCollecte).toDateString() === today && (c.statut === 'confirme' || c.statut === 'en_attente'));
     const collectes = MES_COLIS.filter(c => c.statut === 'collecte');
@@ -488,6 +503,7 @@ async function chargerAccueil() {
   } finally { hideLoader(); }
 }
 
+// ── DÉTAIL COLIS ───────────────────────────
 async function voirCollisDetail(id) {
   showLoader();
   try {
@@ -508,6 +524,7 @@ async function voirCollisDetail(id) {
   } finally { hideLoader(); }
 }
 
+// ── RECHERCHE ──────────────────────────────
 async function rechercherColis() {
   const num = document.getElementById('scan-numero').value.trim().toUpperCase();
   if (!num) return toast('Entrez un numéro de suivi', 'err');
@@ -528,6 +545,7 @@ async function rechercherColis() {
   } finally { hideLoader(); }
 }
 
+// ── COLLECTE ───────────────────────────────
 function confirmerCollecte() {
   document.getElementById('new-statut').value = 'collecte';
   document.getElementById('modal-statut').classList.add('show');
@@ -556,14 +574,16 @@ async function confirmerStatut() {
   } finally { hideLoader(); }
 }
 
+// ── HISTORIQUE ─────────────────────────────
 async function chargerLivraisons() {
   showLoader();
   try {
     const data = await apiCall('GET', '/colis');
-    const colis = data.colis || [];
+    // Uniquement mes colis
+    const colis = (data.colis || []).filter(c => estMonColis(c));
     const el = document.getElementById('livraisons-list');
     el.innerHTML = !colis.length
-      ? `<div class="empty"><div class="ei">📋</div><p>Aucune livraison</p></div>`
+      ? `<div class="empty"><div class="ei">📋</div><p>Aucune livraison assignée</p></div>`
       : colis.map(c => `
         <div class="colis-row">
           <div class="colis-icon">📦</div>
@@ -579,15 +599,18 @@ async function chargerLivraisons() {
   } finally { hideLoader(); }
 }
 
+// ── PROFIL ─────────────────────────────────
 async function chargerProfil() {
   try {
     const data = await apiCall('GET', '/colis');
-    const colis = data.colis || [];
+    // Uniquement mes colis
+    const colis = (data.colis || []).filter(c => estMonColis(c));
     document.getElementById('profil-collectes').textContent = colis.filter(c => c.statut === 'collecte' || c.statut === 'livre').length;
     document.getElementById('profil-total').textContent = colis.length;
   } catch(e) {}
 }
 
+// ── INIT ───────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   setupOTP();
   if (TOKEN && USER) afficherApp();
