@@ -89,7 +89,7 @@
     .modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--muted); }
     .modal-body { padding:24px; }
     .modal-footer { padding:16px 24px; border-top:1px solid var(--line); display:flex; gap:10px; justify-content:flex-end; }
-    .toast { position:fixed; bottom:24px; right:24px; background:#1A1A18; color:white; padding:12px 18px; border-radius:8px; font-size:13px; font-weight:500; opacity:0; pointer-events:none; transition:all 0.25s; z-index:999; }
+    .toast { position:fixed; bottom:24px; right:24px; background:#1A1A18; color:white; padding:12px 18px; border-radius:8px; font-size:13px; font-weight:500; opacity:0; pointer-events:none; transition:all 0.25s; z-index:999; max-width:400px; }
     .toast.show { opacity:1; }
     .toast.ok  { background:var(--green); }
     .toast.err { background:var(--danger); }
@@ -114,6 +114,7 @@
     .tl-content { padding-bottom:14px; flex:1; padding-top:2px; }
     .tl-content h4 { font-size:13px; font-weight:600; }
     .tl-content p  { font-size:11px; color:var(--muted); margin-top:1px; }
+    .info-box { background:var(--green-light); border:1px solid #b2ddd0; border-radius:8px; padding:14px 16px; font-size:13px; color:var(--green-dark); line-height:1.6; margin-bottom:16px; }
 
     /* ── NAV MOBILE ── */
     .mobile-nav { display:none; }
@@ -128,73 +129,41 @@
 
     /* ── MOBILE ── */
     @media (max-width:600px) {
-      /* Layout */
       #app { flex-direction:column; height:auto; min-height:100vh; overflow:auto; }
       .sidebar { display:none; }
       .main { width:100%; height:auto; overflow:visible; }
       .content { flex:none; overflow:visible; padding:16px; padding-bottom:80px; }
-
-      /* Topbar */
       .topbar { padding:0 16px; position:sticky; top:0; z-index:50; }
       .topbar-title { font-size:14px; }
-
-      /* Login */
       .login-box { width:92%; padding:28px 20px; margin:0 auto; }
       .otp-box { width:38px; height:46px; font-size:18px; }
-
-      /* Stats */
       .stats-grid { grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
       .stat-card { padding:14px; }
       .stat-card .value { font-size:22px; }
       .stat-card .label { font-size:10px; }
-
-      /* Dashboard grid */
       .dashboard-grid { grid-template-columns:1fr !important; }
-
-      /* Tables */
       table { min-width:480px; }
       th,td { padding:8px 12px; font-size:12px; }
-
-      /* Filters */
       .filters { flex-direction:column; align-items:stretch; gap:8px; }
       .search-input { width:100%; }
       .filter-select { width:100%; }
-
-      /* Cards */
       .card-header { flex-wrap:wrap; gap:8px; padding:12px 16px; }
       .card-title { font-size:13px; }
-
-      /* Detail grid */
       .detail-grid { grid-template-columns:1fr; }
-
-      /* Modals */
       .modal-overlay { align-items:flex-end; }
       .modal { width:100% !important; border-radius:16px 16px 0 0; max-height:85vh; }
-
-      /* Buttons */
       .btn-sm { padding:6px 10px; font-size:11px; }
-
-      /* Toast */
       .toast { bottom:80px; right:16px; left:16px; text-align:center; }
-
-      /* Nav mobile */
       .mobile-nav {
-        display:flex;
-        position:fixed;
-        bottom:0; left:0; right:0;
-        background:var(--green-dark);
-        height:60px;
-        align-items:center;
-        z-index:100;
-        padding-bottom:env(safe-area-inset-bottom);
+        display:flex; position:fixed; bottom:0; left:0; right:0;
+        background:var(--green-dark); height:60px; align-items:center;
+        z-index:100; padding-bottom:env(safe-area-inset-bottom);
         box-shadow:0 -2px 10px rgba(0,0,0,0.2);
       }
       .mobile-nav-btn {
-        flex:1; display:flex; flex-direction:column;
-        align-items:center; justify-content:center;
-        gap:2px; cursor:pointer; padding:6px 2px;
-        background:none; border:none;
-        color:rgba(255,255,255,0.55);
+        flex:1; display:flex; flex-direction:column; align-items:center;
+        justify-content:center; gap:2px; cursor:pointer; padding:6px 2px;
+        background:none; border:none; color:rgba(255,255,255,0.55);
         font-family:var(--font); font-size:9px; font-weight:500;
       }
       .mobile-nav-btn.active { color:white; }
@@ -209,7 +178,6 @@
   <div class="login-box">
     <div class="login-logo">Diaspora<span>Link</span></div>
     <div class="login-sub">Panel d'administration</div>
-
     <div id="login-step-tel">
       <div class="field" style="margin-bottom:20px">
         <label>Téléphone admin</label>
@@ -220,7 +188,6 @@
         Recevoir le code
       </button>
     </div>
-
     <div id="login-step-otp" style="display:none">
       <p id="login-otp-desc" style="font-size:13px;color:var(--muted);margin-bottom:20px;text-align:center;line-height:1.8"></p>
       <div style="display:flex;gap:6px;justify-content:center;margin-bottom:20px">
@@ -238,7 +205,6 @@
         Renvoyer le code
       </button>
     </div>
-
     <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px">
       Accès réservé aux administrateurs DiasporaLink
     </p>
@@ -337,11 +303,19 @@
       <!-- LIVREURS -->
       <div class="screen" id="screen-livreurs">
         <div class="card">
-          <div class="card-header"><span class="card-title">Livreurs</span><button class="btn btn-primary btn-sm" onclick="ouvrirModalLivreur()">+ Ajouter</button></div>
+          <div class="card-header">
+            <span class="card-title">Livreurs</span>
+            <span id="livreurs-count" style="font-size:12px;color:var(--muted)"></span>
+          </div>
+          <div style="padding:16px 20px;border-bottom:1px solid var(--line)">
+            <div class="info-box">
+              Pour ajouter un livreur : demandez-lui de se connecter sur <strong>diasporalink-livreur.netlify.app</strong> avec son numéro de téléphone, puis changez son rôle en <strong>"livreur"</strong> dans MongoDB Atlas.
+            </div>
+          </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Nom</th><th>Téléphone</th><th>Zone</th><th>Statut</th><th>Actions</th></tr></thead>
-              <tbody id="livreurs-tbody"><tr><td colspan="5"><div class="empty"><div class="empty-icon">🚚</div><p>Aucun livreur</p></div></td></tr></tbody>
+              <thead><tr><th>Nom</th><th>Téléphone</th><th>Inscrit le</th><th>Statut</th><th>Actions</th></tr></thead>
+              <tbody id="livreurs-tbody"><tr><td colspan="5"><div class="loader">Chargement...</div></td></tr></tbody>
             </table>
           </div>
         </div>
@@ -384,21 +358,11 @@
 
 <!-- NAV MOBILE -->
 <nav class="mobile-nav" id="mobile-nav">
-  <button class="mobile-nav-btn active" onclick="goTo('dashboard')" data-mnav="dashboard">
-    <div class="mni">📊</div><span>Dashboard</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="goTo('colis')" data-mnav="colis">
-    <div class="mni">📦</div><span>Commandes</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="goTo('clients')" data-mnav="clients">
-    <div class="mni">👥</div><span>Clients</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="goTo('remboursements')" data-mnav="remboursements">
-    <div class="mni">↩️</div><span>Remb.</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="deconnexion()" data-mnav="logout">
-    <div class="mni">🔓</div><span>Quitter</span>
-  </button>
+  <button class="mobile-nav-btn active" onclick="goTo('dashboard')" data-mnav="dashboard"><div class="mni">📊</div><span>Dashboard</span></button>
+  <button class="mobile-nav-btn" onclick="goTo('colis')" data-mnav="colis"><div class="mni">📦</div><span>Commandes</span></button>
+  <button class="mobile-nav-btn" onclick="goTo('livreurs')" data-mnav="livreurs"><div class="mni">🚚</div><span>Livreurs</span></button>
+  <button class="mobile-nav-btn" onclick="goTo('remboursements')" data-mnav="remboursements"><div class="mni">↩️</div><span>Remb.</span></button>
+  <button class="mobile-nav-btn" onclick="deconnexion()" data-mnav="logout"><div class="mni">🔓</div><span>Quitter</span></button>
 </nav>
 
 <!-- MODAL DÉTAIL COLIS -->
@@ -435,25 +399,6 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fermerModal('modal-statut')">Annuler</button>
       <button class="btn btn-primary" onclick="confirmerMajStatut()">Confirmer</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL LIVREUR -->
-<div class="modal-overlay" id="modal-livreur">
-  <div class="modal" style="width:420px">
-    <div class="modal-header"><h3>Ajouter un livreur</h3><button class="modal-close" onclick="fermerModal('modal-livreur')">×</button></div>
-    <div class="modal-body">
-      <div class="form-row cols-2">
-        <div class="field"><label>Prénom</label><input type="text" id="l-prenom" placeholder="Moussa" /></div>
-        <div class="field"><label>Nom</label><input type="text" id="l-nom" placeholder="Diallo" /></div>
-      </div>
-      <div class="field" style="margin-bottom:14px"><label>Téléphone</label><input type="tel" id="l-tel" placeholder="+33 6 XX XX XX XX" /></div>
-      <div class="field"><label>Zone d'intervention</label><input type="text" id="l-zone" placeholder="Ex: Paris, Île-de-France" /></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="fermerModal('modal-livreur')">Annuler</button>
-      <button class="btn btn-primary" onclick="ajouterLivreur()">Ajouter</button>
     </div>
   </div>
 </div>
@@ -533,7 +478,7 @@ const REMB_STATUTS = {
 function toast(msg, type='') {
   const el = document.getElementById('toast');
   el.textContent = msg; el.className = `toast ${type} show`;
-  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 3000);
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 4000);
 }
 
 function badge(statut) {
@@ -590,8 +535,7 @@ async function loginEnvoyerOTP() {
   LOGIN_TEL = tel;
   try {
     const res = await fetch(`${API}/auth/envoyer-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ telephone: tel })
     });
     const data = await res.json();
@@ -602,17 +546,13 @@ async function loginEnvoyerOTP() {
       desc.innerHTML = `Code envoyé au ${tel}<br>
         <span style="background:#EAF5F0;color:#116647;padding:6px 16px;border-radius:8px;font-size:26px;font-weight:700;letter-spacing:6px;display:inline-block;margin-top:10px">${data.debugCode}</span>`;
       const boxes = document.querySelectorAll('.otp-box');
-      data.debugCode.toString().split('').forEach((d, i) => {
-        if (boxes[i]) boxes[i].value = d;
-      });
+      data.debugCode.toString().split('').forEach((d, i) => { if (boxes[i]) boxes[i].value = d; });
     } else {
       desc.textContent = `Code envoyé au ${tel}`;
       document.querySelector('.otp-box').focus();
     }
     setupOTPBoxes();
-  } catch(e) {
-    toast(e.message || 'Erreur connexion', 'err');
-  }
+  } catch(e) { toast(e.message || 'Erreur connexion', 'err'); }
 }
 
 async function loginVerifierOTP() {
@@ -621,8 +561,7 @@ async function loginVerifierOTP() {
   if (code.length !== 6) return toast('Entrez les 6 chiffres', 'err');
   try {
     const res = await fetch(`${API}/auth/verifier-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ telephone: LOGIN_TEL, code })
     });
     const data = await res.json();
@@ -633,12 +572,8 @@ async function loginVerifierOTP() {
       document.getElementById('admin-name').textContent = `${u.prenom} ${u.nom}`;
       document.getElementById('topbar-avatar').textContent = ((u.prenom?.[0]||'')+(u.nom?.[0]||'')).toUpperCase();
       afficherApp();
-    } else {
-      toast(data.message || 'Code invalide', 'err');
-    }
-  } catch(e) {
-    toast(e.message || 'Erreur', 'err');
-  }
+    } else { toast(data.message || 'Code invalide', 'err'); }
+  } catch(e) { toast(e.message || 'Erreur', 'err'); }
 }
 
 function deconnexion() {
@@ -677,6 +612,7 @@ function goTo(screen) {
   if (screen === 'dashboard')      chargerDashboard();
   if (screen === 'colis')          chargerColis();
   if (screen === 'clients')        chargerClients();
+  if (screen === 'livreurs')       chargerLivreursPage();
   if (screen === 'tarifs')         chargerTarifs();
   if (screen === 'remboursements') chargerRemboursements();
 }
@@ -855,6 +791,7 @@ async function confirmerAssignation() {
     await api('PATCH', `/colis/${ASSIGNER_COLIS_ID}/assigner`, { livreurId });
     toast('Livreur assigné ✓', 'ok');
     fermerModal('modal-assigner');
+    LIVREURS_ALL = []; // Rafraîchir le cache
     chargerColis();
   } catch(e) { toast(e.message || 'Erreur', 'err'); }
 }
@@ -885,23 +822,29 @@ async function chargerClients() {
 function filtrerClients(q) {}
 
 // ── LIVREURS ───────────────────────────────
-function ouvrirModalLivreur() { ouvrirModal('modal-livreur'); }
-
-function ajouterLivreur() {
-  const prenom = document.getElementById('l-prenom').value.trim();
-  const nom    = document.getElementById('l-nom').value.trim();
-  const tel    = document.getElementById('l-tel').value.trim().replace(/\s/g, '');
-  const zone   = document.getElementById('l-zone').value.trim();
-  if (!prenom || !nom || !tel) return toast('Champs requis manquants', 'err');
+async function chargerLivreursPage() {
   const tbody = document.getElementById('livreurs-tbody');
-  if (tbody.querySelector('.empty')) tbody.innerHTML = '';
-  const tr = document.createElement('tr');
-  tr.innerHTML = `<td>${prenom} ${nom}</td><td>${tel}</td><td>${zone||'—'}</td><td><span class="badge badge-ok">Actif</span></td><td><button class="btn btn-sm btn-danger" onclick="this.closest('tr').remove()">Retirer</button></td>`;
-  tbody.appendChild(tr);
-  toast('Livreur ajouté !', 'ok');
-  fermerModal('modal-livreur');
-  ['l-prenom','l-nom','l-tel','l-zone'].forEach(id => document.getElementById(id).value = '');
-  LIVREURS_ALL = [];
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">Chargement...</td></tr>`;
+  try {
+    const data = await api('GET', '/utilisateurs/livreurs');
+    const livreurs = data.livreurs || [];
+    LIVREURS_ALL = livreurs; // Mettre à jour le cache
+    document.getElementById('livreurs-count').textContent = `${livreurs.length} livreur(s)`;
+    if (!livreurs.length) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">🚚</div><p>Aucun livreur enregistré</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = livreurs.map(l => `
+      <tr>
+        <td><div style="font-weight:500">${l.prenom} ${l.nom}</div></td>
+        <td>${l.telephone}</td>
+        <td>${formatDate(l.createdAt)}</td>
+        <td><span class="badge badge-ok">Actif</span></td>
+        <td><span style="font-size:11px;color:var(--muted)">—</span></td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">⚠️</div><p>Erreur chargement</p></div></td></tr>`;
+  }
 }
 
 // ── TARIFS ─────────────────────────────────
