@@ -14,15 +14,76 @@ function toastErr(msg) { toast(msg, 'err'); }
 function showLoader()  { document.getElementById('loader')?.classList.add('show'); }
 function hideLoader()  { document.getElementById('loader')?.classList.remove('show'); }
 
-// ── NAVIGATION ─────────────────────────────────────────────
+// ── NAVIGATION avec animation ───────────────────────────────
 function goTo(screen) {
   document.querySelectorAll('.screen').forEach(s => {
-    s.classList.toggle('active', s.id === `screen-${screen}`);
+    const willBeActive = s.id === `screen-${screen}`;
+    if (willBeActive && !s.classList.contains('active')) {
+      s.style.animation = 'none';
+      s.classList.add('active');
+      void s.offsetWidth; // force reflow pour relancer l'animation
+      s.style.animation = '';
+    } else if (!willBeActive) {
+      s.classList.remove('active');
+    }
   });
   document.querySelectorAll('.nav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.screen === screen);
   });
   window._currentScreen = screen;
+}
+
+// ── SKELETON LOADER ─────────────────────────────────────────
+function skeletonColis(n = 3) {
+  return Array.from({ length: n }, () => `
+    <div class="skeleton-row">
+      <div class="skeleton skeleton-icon"></div>
+      <div class="skeleton-lines">
+        <div class="skeleton skeleton-line-a"></div>
+        <div class="skeleton skeleton-line-b"></div>
+      </div>
+      <div class="skeleton skeleton-badge"></div>
+    </div>
+  `).join('');
+}
+
+// ── COMPTEUR ANIMÉ ──────────────────────────────────────────
+function animerCompteur(el, cible, duree = 800, suffixe = '') {
+  if (!el) return;
+  const start = performance.now();
+  el.classList.add('counting');
+  function step(now) {
+    const progress = Math.min((now - start) / duree, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const val = Math.round(cible * eased);
+    el.textContent = val + suffixe;
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    } else {
+      el.textContent = cible + suffixe;
+      el.classList.remove('counting');
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ── FADE-IN STAGGER ─────────────────────────────────────────
+function animerListe(container) {
+  if (!container) return;
+  Array.from(container.children).forEach(child => {
+    child.classList.remove('fade-in');
+    void child.offsetWidth;
+    child.classList.add('fade-in');
+  });
+}
+
+// ── OTP CASES ANIMATION ─────────────────────────────────────
+function setupOTPAnim() {
+  document.querySelectorAll('.otp-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      inp.classList.toggle('filled', !!inp.value);
+    });
+  });
 }
 
 // ── FORMAT ─────────────────────────────────────────────────
@@ -47,7 +108,7 @@ function badgeStatut(statut) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
-// ── ICONE SVG (data URL) ────────────────────────────────────
+// ── ICONES SVG ──────────────────────────────────────────────
 const SVG = {
   box:     (c='%231A8C64', s=20) => `<img src="data:image/svg+xml,%3Csvg width='${s}' height='${s}' viewBox='0 0 24 24' fill='none' stroke='${c}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/%3E%3Cpolyline points='3.27 6.96 12 12.01 20.73 6.96'/%3E%3Cline x1='12' y1='22.08' x2='12' y2='12'/%3E%3C/svg%3E" width="${s}" height="${s}" style="display:block">`,
   user:    (c='%231A8C64', s=20) => `<img src="data:image/svg+xml,%3Csvg width='${s}' height='${s}' viewBox='0 0 24 24' fill='none' stroke='${c}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E" width="${s}" height="${s}" style="display:block">`,
@@ -61,4 +122,18 @@ const SVG = {
   back:    (c='white',     s=20) => `<img src="data:image/svg+xml,%3Csvg width='${s}' height='${s}' viewBox='0 0 24 24' fill='none' stroke='${c}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='15 18 9 12 15 6'/%3E%3C/svg%3E" width="${s}" height="${s}" style="display:block">`,
 };
 
-window.UI = { toast, toastOk, toastErr, showLoader, hideLoader, goTo, formatEur, formatDate, badgeStatut, SVG };
+// ── INIT ────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  setupOTPAnim();
+});
+
+window.UI = {
+  toast, toastOk, toastErr,
+  showLoader, hideLoader,
+  goTo,
+  skeletonColis,
+  animerCompteur,
+  animerListe,
+  formatEur, formatDate, formatTel,
+  badgeStatut, SVG
+};
