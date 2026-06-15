@@ -56,7 +56,7 @@
     .card-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line); }
     .card-title { font-size:14px; font-weight:600; }
     .card+.card { margin-top:20px; }
-    .table-wrap { overflow-x:auto; }
+    .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
     table { width:100%; border-collapse:collapse; }
     th { text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); padding:10px 20px; background:var(--off); border-bottom:1px solid var(--line); }
     td { padding:13px 20px; border-bottom:1px solid var(--line); font-size:13px; }
@@ -114,11 +114,91 @@
     .tl-content { padding-bottom:14px; flex:1; padding-top:2px; }
     .tl-content h4 { font-size:13px; font-weight:600; }
     .tl-content p  { font-size:11px; color:var(--muted); margin-top:1px; }
+
+    /* ── NAV MOBILE ── */
+    .mobile-nav { display:none; }
+
+    /* ── TABLET ── */
     @media (max-width:900px) {
       .stats-grid { grid-template-columns:1fr 1fr; }
       .sidebar { width:60px; }
       .sidebar-logo,.nav-item span,.sidebar-footer .admin-name,.sidebar-footer p { display:none; }
       .nav-item { justify-content:center; padding:12px; }
+    }
+
+    /* ── MOBILE ── */
+    @media (max-width:600px) {
+      /* Layout */
+      #app { flex-direction:column; height:auto; min-height:100vh; overflow:auto; }
+      .sidebar { display:none; }
+      .main { width:100%; height:auto; overflow:visible; }
+      .content { flex:none; overflow:visible; padding:16px; padding-bottom:80px; }
+
+      /* Topbar */
+      .topbar { padding:0 16px; position:sticky; top:0; z-index:50; }
+      .topbar-title { font-size:14px; }
+
+      /* Login */
+      .login-box { width:92%; padding:28px 20px; margin:0 auto; }
+      .otp-box { width:38px; height:46px; font-size:18px; }
+
+      /* Stats */
+      .stats-grid { grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+      .stat-card { padding:14px; }
+      .stat-card .value { font-size:22px; }
+      .stat-card .label { font-size:10px; }
+
+      /* Dashboard grid */
+      .dashboard-grid { grid-template-columns:1fr !important; }
+
+      /* Tables */
+      table { min-width:480px; }
+      th,td { padding:8px 12px; font-size:12px; }
+
+      /* Filters */
+      .filters { flex-direction:column; align-items:stretch; gap:8px; }
+      .search-input { width:100%; }
+      .filter-select { width:100%; }
+
+      /* Cards */
+      .card-header { flex-wrap:wrap; gap:8px; padding:12px 16px; }
+      .card-title { font-size:13px; }
+
+      /* Detail grid */
+      .detail-grid { grid-template-columns:1fr; }
+
+      /* Modals */
+      .modal-overlay { align-items:flex-end; }
+      .modal { width:100% !important; border-radius:16px 16px 0 0; max-height:85vh; }
+
+      /* Buttons */
+      .btn-sm { padding:6px 10px; font-size:11px; }
+
+      /* Toast */
+      .toast { bottom:80px; right:16px; left:16px; text-align:center; }
+
+      /* Nav mobile */
+      .mobile-nav {
+        display:flex;
+        position:fixed;
+        bottom:0; left:0; right:0;
+        background:var(--green-dark);
+        height:60px;
+        align-items:center;
+        z-index:100;
+        padding-bottom:env(safe-area-inset-bottom);
+        box-shadow:0 -2px 10px rgba(0,0,0,0.2);
+      }
+      .mobile-nav-btn {
+        flex:1; display:flex; flex-direction:column;
+        align-items:center; justify-content:center;
+        gap:2px; cursor:pointer; padding:6px 2px;
+        background:none; border:none;
+        color:rgba(255,255,255,0.55);
+        font-family:var(--font); font-size:9px; font-weight:500;
+      }
+      .mobile-nav-btn.active { color:white; }
+      .mobile-nav-btn .mni { font-size:17px; }
     }
   </style>
 </head>
@@ -130,7 +210,6 @@
     <div class="login-logo">Diaspora<span>Link</span></div>
     <div class="login-sub">Panel d'administration</div>
 
-    <!-- Étape 1 : Téléphone -->
     <div id="login-step-tel">
       <div class="field" style="margin-bottom:20px">
         <label>Téléphone admin</label>
@@ -142,10 +221,9 @@
       </button>
     </div>
 
-    <!-- Étape 2 : Code OTP -->
     <div id="login-step-otp" style="display:none">
       <p id="login-otp-desc" style="font-size:13px;color:var(--muted);margin-bottom:20px;text-align:center;line-height:1.8"></p>
-      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
+      <div style="display:flex;gap:6px;justify-content:center;margin-bottom:20px">
         <input class="otp-box" maxlength="1" inputmode="numeric" />
         <input class="otp-box" maxlength="1" inputmode="numeric" />
         <input class="otp-box" maxlength="1" inputmode="numeric" />
@@ -190,7 +268,7 @@
       <div class="topbar-title" id="topbar-title">Tableau de bord</div>
       <div class="topbar-actions">
         <span style="font-size:12px;color:var(--muted)" id="topbar-date"></span>
-        <div style="width:32px;height:32px;border-radius:6px;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark)" id="topbar-avatar">AD</div>
+        <div style="width:32px;height:32px;border-radius:6px;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark);cursor:pointer" id="topbar-avatar" onclick="deconnexion()">AD</div>
       </div>
     </div>
 
@@ -199,12 +277,12 @@
       <!-- DASHBOARD -->
       <div class="screen active" id="screen-dashboard">
         <div class="stats-grid">
-          <div class="stat-card"><div class="label">Commandes totales</div><div class="value" id="s-total">—</div><div class="sub">Depuis le début</div></div>
-          <div class="stat-card"><div class="label">En transit</div><div class="value warn" id="s-transit">—</div><div class="sub">En cours de livraison</div></div>
-          <div class="stat-card"><div class="label">Livrés</div><div class="value green" id="s-livre">—</div><div class="sub">Colis livrés</div></div>
-          <div class="stat-card"><div class="label">Chiffre d'affaires</div><div class="value green" id="s-ca">—</div><div class="sub">Total encaissé</div></div>
+          <div class="stat-card"><div class="label">Commandes</div><div class="value" id="s-total">—</div><div class="sub">Total</div></div>
+          <div class="stat-card"><div class="label">En transit</div><div class="value warn" id="s-transit">—</div><div class="sub">En cours</div></div>
+          <div class="stat-card"><div class="label">Livrés</div><div class="value green" id="s-livre">—</div><div class="sub">Livrés</div></div>
+          <div class="stat-card"><div class="label">Chiffre d'affaires</div><div class="value green" id="s-ca">—</div><div class="sub">Total</div></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="dashboard-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
           <div class="card">
             <div class="card-header"><span class="card-title">Dernières commandes</span><button class="btn btn-sm btn-ghost" onclick="goTo('colis')">Voir tout</button></div>
             <div id="recent-colis"><div class="loader">Chargement...</div></div>
@@ -259,11 +337,11 @@
       <!-- LIVREURS -->
       <div class="screen" id="screen-livreurs">
         <div class="card">
-          <div class="card-header"><span class="card-title">Livreurs</span><button class="btn btn-primary btn-sm" onclick="ouvrirModalLivreur()">+ Ajouter un livreur</button></div>
+          <div class="card-header"><span class="card-title">Livreurs</span><button class="btn btn-primary btn-sm" onclick="ouvrirModalLivreur()">+ Ajouter</button></div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Nom</th><th>Téléphone</th><th>Zone</th><th>Statut</th><th>Actions</th></tr></thead>
-              <tbody id="livreurs-tbody"><tr><td colspan="5"><div class="empty"><div class="empty-icon">🚚</div><p>Aucun livreur enregistré</p></div></td></tr></tbody>
+              <tbody id="livreurs-tbody"><tr><td colspan="5"><div class="empty"><div class="empty-icon">🚚</div><p>Aucun livreur</p></div></td></tr></tbody>
             </table>
           </div>
         </div>
@@ -288,7 +366,7 @@
       <div class="screen" id="screen-remboursements">
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Demandes de remboursement</span>
+            <span class="card-title">Remboursements</span>
             <span id="remb-count" style="font-size:12px;color:var(--muted)"></span>
           </div>
           <div class="table-wrap">
@@ -304,6 +382,25 @@
   </main>
 </div>
 
+<!-- NAV MOBILE -->
+<nav class="mobile-nav" id="mobile-nav">
+  <button class="mobile-nav-btn active" onclick="goTo('dashboard')" data-mnav="dashboard">
+    <div class="mni">📊</div><span>Dashboard</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="goTo('colis')" data-mnav="colis">
+    <div class="mni">📦</div><span>Commandes</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="goTo('clients')" data-mnav="clients">
+    <div class="mni">👥</div><span>Clients</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="goTo('remboursements')" data-mnav="remboursements">
+    <div class="mni">↩️</div><span>Remb.</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="deconnexion()" data-mnav="logout">
+    <div class="mni">🔓</div><span>Quitter</span>
+  </button>
+</nav>
+
 <!-- MODAL DÉTAIL COLIS -->
 <div class="modal-overlay" id="modal-colis">
   <div class="modal">
@@ -312,7 +409,7 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fermerModal('modal-colis')">Fermer</button>
       <button class="btn btn-outline" onclick="ouvrirAssignerDepuisModal()">👤 Assigner</button>
-      <button class="btn btn-primary" onclick="ouvrirMajStatut()">Mettre à jour le statut</button>
+      <button class="btn btn-primary" onclick="ouvrirMajStatut()">Mettre à jour</button>
     </div>
   </div>
 </div>
@@ -333,7 +430,7 @@
           <option value="annule">Annulé</option>
         </select>
       </div>
-      <div class="field"><label>Note (optionnel)</label><input type="text" id="note-statut" placeholder="Ex: Récupéré à l'adresse le 06/06/2026" /></div>
+      <div class="field"><label>Note (optionnel)</label><input type="text" id="note-statut" placeholder="Ex: Récupéré à l'adresse" /></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fermerModal('modal-statut')">Annuler</button>
@@ -361,7 +458,7 @@
   </div>
 </div>
 
-<!-- MODAL ASSIGNER LIVREUR -->
+<!-- MODAL ASSIGNER -->
 <div class="modal-overlay" id="modal-assigner">
   <div class="modal" style="width:420px">
     <div class="modal-header"><h3>Assigner un livreur</h3><button class="modal-close" onclick="fermerModal('modal-assigner')">×</button></div>
@@ -491,7 +588,6 @@ async function loginEnvoyerOTP() {
   const tel = document.getElementById('login-tel').value.trim().replace(/\s/g, '');
   if (!tel) return toast('Téléphone requis', 'err');
   LOGIN_TEL = tel;
-
   try {
     const res = await fetch(`${API}/auth/envoyer-otp`, {
       method: 'POST',
@@ -499,12 +595,9 @@ async function loginEnvoyerOTP() {
       body: JSON.stringify({ telephone: tel })
     });
     const data = await res.json();
-
     document.getElementById('login-step-tel').style.display = 'none';
     document.getElementById('login-step-otp').style.display = 'block';
-
     const desc = document.getElementById('login-otp-desc');
-
     if (data.debugCode) {
       desc.innerHTML = `Code envoyé au ${tel}<br>
         <span style="background:#EAF5F0;color:#116647;padding:6px 16px;border-radius:8px;font-size:26px;font-weight:700;letter-spacing:6px;display:inline-block;margin-top:10px">${data.debugCode}</span>`;
@@ -516,9 +609,7 @@ async function loginEnvoyerOTP() {
       desc.textContent = `Code envoyé au ${tel}`;
       document.querySelector('.otp-box').focus();
     }
-
     setupOTPBoxes();
-
   } catch(e) {
     toast(e.message || 'Erreur connexion', 'err');
   }
@@ -528,7 +619,6 @@ async function loginVerifierOTP() {
   const boxes = document.querySelectorAll('.otp-box');
   const code  = Array.from(boxes).map(b => b.value).join('');
   if (code.length !== 6) return toast('Entrez les 6 chiffres', 'err');
-
   try {
     const res = await fetch(`${API}/auth/verifier-otp`, {
       method: 'POST',
@@ -536,7 +626,6 @@ async function loginVerifierOTP() {
       body: JSON.stringify({ telephone: LOGIN_TEL, code })
     });
     const data = await res.json();
-
     if (data.token) {
       TOKEN = data.token;
       localStorage.setItem('dl_admin_token', TOKEN);
@@ -556,6 +645,7 @@ function deconnexion() {
   localStorage.removeItem('dl_admin_token');
   TOKEN = null;
   document.getElementById('app').style.display = 'none';
+  document.getElementById('mobile-nav').style.display = 'none';
   document.getElementById('screen-login').style.display = 'flex';
   document.getElementById('login-step-tel').style.display = 'block';
   document.getElementById('login-step-otp').style.display = 'none';
@@ -579,8 +669,10 @@ const TITRES = {
 function goTo(screen) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.mobile-nav-btn').forEach(n => n.classList.remove('active'));
   document.getElementById(`screen-${screen}`).classList.add('active');
-  document.querySelector(`[data-screen="${screen}"]`).classList.add('active');
+  document.querySelector(`[data-screen="${screen}"]`)?.classList.add('active');
+  document.querySelector(`[data-mnav="${screen}"]`)?.classList.add('active');
   document.getElementById('topbar-title').textContent = TITRES[screen] || screen;
   if (screen === 'dashboard')      chargerDashboard();
   if (screen === 'colis')          chargerColis();
@@ -640,7 +732,7 @@ function renderColisTable(liste) {
       <td>${c.villeDestination}, ${c.paysDestination}</td>
       <td>${c.poidsKg} kg</td>
       <td>${formatEur(c.tarif?.total)}</td>
-      <td>${c.livreur ? `<span style="font-size:12px;font-weight:500">${c.livreur.prenom} ${c.livreur.nom}</span>` : `<span style="font-size:11px;color:var(--hint)">Non assigné</span>`}</td>
+      <td>${c.livreur ? `<span style="font-size:12px;font-weight:500">${c.livreur.prenom} ${c.livreur.nom}</span>` : `<span style="font-size:11px;color:var(--hint)">—</span>`}</td>
       <td>${badge(c.statut)}</td>
       <td>${formatDate(c.createdAt)}</td>
       <td style="white-space:nowrap">
