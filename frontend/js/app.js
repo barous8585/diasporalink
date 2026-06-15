@@ -43,7 +43,15 @@ const MAIN_SCREENS = ['home','pickup','paiement','colis','suivi','messages','pro
 function navGo(screen) {
   MAIN_SCREENS.forEach(s => {
     const el = document.getElementById(`screen-${s}`);
-    if (el) el.classList.toggle('active', s === screen);
+    if (!el) return;
+    if (s === screen && !el.classList.contains('active')) {
+      el.style.animation = 'none';
+      el.classList.add('active');
+      void el.offsetWidth;
+      el.style.animation = '';
+    } else if (s !== screen) {
+      el.classList.remove('active');
+    }
   });
   refreshNavIcons(screen);
   APP.currentScreen = screen;
@@ -109,10 +117,15 @@ function setupOTPInputs() {
   inputs.forEach((inp, i) => {
     inp.addEventListener('input', () => {
       inp.value = inp.value.replace(/\D/,'');
+      // Animation case remplie
+      inp.classList.toggle('filled', !!inp.value);
       if (inp.value && i < inputs.length - 1) inputs[i+1].focus();
     });
     inp.addEventListener('keydown', e => {
-      if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i-1].focus();
+      if (e.key === 'Backspace') {
+        inp.classList.remove('filled');
+        if (!inp.value && i > 0) inputs[i-1].focus();
+      }
     });
   });
 }
@@ -181,7 +194,10 @@ function afficherOTP(tel, debugCode) {
     desc.innerHTML = `Code envoyé au ${tel}<br><span style="background:#EAF5F0;color:#116647;padding:6px 14px;border-radius:6px;font-size:20px;font-weight:700;letter-spacing:4px;display:inline-block;margin-top:8px">${debugCode}</span>`;
     const inputs = document.querySelectorAll('.otp-input');
     debugCode.toString().split('').forEach((d, i) => {
-      if (inputs[i]) inputs[i].value = d;
+      if (inputs[i]) {
+        inputs[i].value = d;
+        inputs[i].classList.add('filled');
+      }
     });
   } else {
     document.querySelector('.otp-input').focus();
@@ -208,7 +224,10 @@ async function authRenvoyerOTP() {
   try {
     const res = await API.Auth.envoyerOTP(APP.authTel);
     UI.toastOk('Code renvoyé !');
-    document.querySelectorAll('.otp-input').forEach(i => i.value = '');
+    document.querySelectorAll('.otp-input').forEach(i => {
+      i.value = '';
+      i.classList.remove('filled');
+    });
     afficherOTP(APP.authTel, res.debugCode);
   } catch(e) {
     UI.toastErr('Erreur renvoi');
@@ -233,22 +252,29 @@ async function chargerAccueil() {
   const paysEl = document.getElementById('home-pays');
   if (APP.config?.pays && paysEl) {
     paysEl.innerHTML = APP.config.pays.slice(0,6).map(p => `
-      <div onclick="pickupSelectPays('${p.code}')" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-width:40px">
+      <div onclick="pickupSelectPays('${p.code}')" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-width:40px;transition:transform 0.15s" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'" ontouchstart="this.style.transform='scale(0.9)'" ontouchend="this.style.transform='scale(1)'">
         <span style="font-size:26px;line-height:1">${p.drapeau}</span>
         <span style="font-size:10px;font-weight:500;color:var(--muted)">${p.nom.split(' ')[0]}</span>
       </div>`).join('');
   }
 
+  // Skeleton pendant le chargement
+  const homeColis = document.getElementById('home-colis-list');
+  homeColis.innerHTML = UI.skeletonColis(3);
+
   try {
     const data = await API.Colis.mesColis();
     APP.colis = data.colis || [];
     renderColisHome(APP.colis.slice(0,3));
+
+    // Compteur animé pour les stats
     const nbEl = document.querySelector('#home-stats .stat-val');
-    if (nbEl) nbEl.textContent = APP.colis.length;
+    if (nbEl) UI.animerCompteur(nbEl, APP.colis.length);
+
     const actif = APP.colis.some(c => c.statut === 'en_transit' || c.statut === 'collecte');
     document.getElementById('nav-dot').style.display = actif ? 'block' : 'none';
   } catch(e) {
-    document.getElementById('home-colis-list').innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div>Aucun envoi pour l'instant</div>`;
+    homeColis.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div>Aucun envoi pour l'instant</div>`;
   }
 }
 
@@ -259,7 +285,7 @@ function renderColisHome(liste) {
     return;
   }
   el.innerHTML = liste.map(c => `
-    <div class="row" onclick="voirColis('${c._id}')">
+    <div class="row fade-in" onclick="voirColis('${c._id}')">
       <div class="row-icon">${UI.SVG.box()}</div>
       <div class="row-main">
         <div class="row-title">#${c.numeroSuivi}</div>
@@ -440,15 +466,17 @@ window.confirmerCommande = confirmerCommande;
 
 // ── MES COLIS ───────────────────────────────────────────────
 async function chargerColis() {
-  UI.showLoader();
+  // Skeleton pendant le chargement
+  const container = document.getElementById('colis-list-container');
+  container.innerHTML = `<div class="card">${UI.skeletonColis(4)}</div>`;
+
   try {
     const data = await API.Colis.mesColis();
     APP.colis = data.colis || [];
     renderListeColis();
   } catch(e) {
     UI.toastErr('Erreur chargement');
-  } finally {
-    UI.hideLoader();
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div>Erreur de chargement</div>`;
   }
 }
 
@@ -459,7 +487,7 @@ function renderListeColis() {
     return;
   }
   el.innerHTML = `<div class="card">${APP.colis.map(c => `
-    <div class="row" onclick="voirColis('${c._id}')">
+    <div class="row fade-in" onclick="voirColis('${c._id}')">
       <div class="row-icon">${UI.SVG.box()}</div>
       <div class="row-main">
         <div class="row-title">#${c.numeroSuivi}</div>
@@ -507,7 +535,7 @@ function afficherSuivi(c) {
               ? UI.SVG.check()
               : `<div style="width:8px;height:8px;border-radius:50%;background:${e.statut==='en_cours'?'var(--green)':'var(--line2)'}"></div>`;
             return `
-              <div class="tl-row">
+              <div class="tl-row fade-in" style="animation-delay:${i * 0.06}s">
                 <div class="tl-left">
                   <div class="tl-dot ${dotCls}">${ico}</div>
                   ${!isLast ? `<div class="tl-line ${e.statut === 'fait' ? 'done' : ''}"></div>` : ''}
@@ -556,15 +584,13 @@ function afficherSuivi(c) {
 // ── REMBOURSEMENT ────────────────────────────────────────────
 function ouvrirRemboursement(colisId) {
   APP.colisIdRemb = colisId;
-
-  // Supprimer l'ancienne modal si elle existe
   document.getElementById('modal-remb')?.remove();
 
   const modal = document.createElement('div');
   modal.id = 'modal-remb';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;justify-content:center;z-index:200';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;justify-content:center;z-index:200;animation:fadeInUp 0.3s cubic-bezier(0.22,1,0.36,1) both';
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px 16px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom))">
+    <div style="background:white;border-radius:16px 16px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom));animation:sheetUp 0.35s cubic-bezier(0.22,1,0.36,1) both">
       <h3 style="font-size:16px;font-weight:600;margin-bottom:16px">💰 Demander un remboursement</h3>
       <div style="margin-bottom:14px">
         <label style="display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:6px">Motif</label>
@@ -584,8 +610,8 @@ function ouvrirRemboursement(colisId) {
         ⏱ Nous traitons les demandes sous <strong>48h ouvrées</strong>. Vous serez notifié par SMS.
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="document.getElementById('modal-remb').remove()" style="flex:1;height:48px;border-radius:8px;border:1px solid var(--line);background:var(--off);font-family:var(--font);font-size:15px;cursor:pointer">Annuler</button>
-        <button onclick="envoyerRemboursement()" style="flex:1;height:48px;border-radius:8px;border:none;background:var(--danger);color:white;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer">Envoyer</button>
+        <button onclick="document.getElementById('modal-remb').remove()" style="flex:1;height:48px;border-radius:8px;border:1px solid var(--line);background:var(--off);font-family:var(--font);font-size:15px;cursor:pointer;transition:opacity 0.15s">Annuler</button>
+        <button onclick="envoyerRemboursement()" style="flex:1;height:48px;border-radius:8px;border:none;background:var(--danger);color:white;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer;transition:opacity 0.15s">Envoyer</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -594,22 +620,17 @@ function ouvrirRemboursement(colisId) {
 async function envoyerRemboursement() {
   const motif = document.getElementById('remb-motif').value;
   const desc  = document.getElementById('remb-desc').value.trim();
-
   UI.showLoader();
   try {
     const headers = { 'Content-Type': 'application/json' };
     const token = API.getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
-
     const res = await fetch('https://diasporalink-api.onrender.com/api/remboursements', {
-      method: 'POST',
-      headers,
+      method: 'POST', headers,
       body: JSON.stringify({ colisId: APP.colisIdRemb, motif, description: desc }),
     });
     const data = await res.json();
-
     if (!data.succes) throw new Error(data.message || 'Erreur');
-
     document.getElementById('modal-remb')?.remove();
     UI.toastOk('Demande envoyée ! Nous vous répondrons sous 48h. ✅');
   } catch(e) {
@@ -619,7 +640,7 @@ async function envoyerRemboursement() {
   }
 }
 
-window.ouvrirRemboursement = ouvrirRemboursement;
+window.ouvrirRemboursement  = ouvrirRemboursement;
 window.envoyerRemboursement = envoyerRemboursement;
 
 // ── MESSAGES ────────────────────────────────────────────────
@@ -699,15 +720,19 @@ async function chargerProfil() {
     document.getElementById('profil-av').textContent  = u.initiales || '?';
     document.getElementById('profil-nom').textContent = u.nomComplet || `${u.prenom} ${u.nom}`;
     document.getElementById('profil-tel').textContent = u.telephone;
-    document.getElementById('profil-nb-envois').textContent = s.totalEnvois;
-    document.getElementById('profil-total').textContent = UI.formatEur(s.totalDepense);
+
+    // Compteurs animés
+    UI.animerCompteur(document.getElementById('profil-nb-envois'), s.totalEnvois);
+
+    const totalEl = document.getElementById('profil-total');
+    if (totalEl) totalEl.textContent = UI.formatEur(s.totalDepense);
 
     const hist = document.getElementById('profil-historique');
     if (!APP.colis.length) {
       hist.innerHTML = `<div class="empty-state" style="padding:20px">Aucun envoi</div>`;
     } else {
-      hist.innerHTML = APP.colis.slice(0,5).map(c => `
-        <div class="row" onclick="voirColis('${c._id}')">
+      hist.innerHTML = APP.colis.slice(0,5).map((c, i) => `
+        <div class="row fade-in" style="animation-delay:${i * 0.06}s" onclick="voirColis('${c._id}')">
           <div class="row-icon">${UI.SVG.box()}</div>
           <div class="row-main">
             <div class="row-title">#${c.numeroSuivi}</div>
