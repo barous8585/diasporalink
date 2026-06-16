@@ -298,6 +298,21 @@
         </div>
         <button class="btn btn-primary" onclick="envoyerOTP()">Recevoir le code</button>
       </div>
+
+      <div class="auth-sheet" id="auth-register-sheet" style="display:none">
+        <h2>Créer un compte livreur</h2>
+        <p>Quelques informations pour commencer</p>
+        <div style="margin-bottom:16px">
+          <label class="label">Prénom</label>
+          <input class="input" id="auth-prenom" type="text" placeholder="Moussa" />
+        </div>
+        <div style="margin-bottom:16px">
+          <label class="label">Nom</label>
+          <input class="input" id="auth-nom" type="text" placeholder="Diallo" />
+        </div>
+        <button class="btn btn-primary" onclick="creerCompteLivreur()">Continuer</button>
+      </div>
+
       <div class="auth-sheet" id="auth-otp-sheet" style="display:none">
         <h2>Code de vérification</h2>
         <p id="otp-desc">Code envoyé au +33...</p>
@@ -575,26 +590,57 @@ async function envoyerOTP() {
   try {
     const res = await fetch(`${API_URL}/auth/envoyer-otp`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ telephone: tel })
+      body: JSON.stringify({ telephone: tel, interface: 'livreur' })
     });
     const data = await res.json();
-    document.getElementById('auth-phone-sheet').style.display = 'none';
-    document.getElementById('auth-otp-sheet').style.display = 'block';
-    const desc = document.getElementById('otp-desc');
-    if (data.debugCode) {
-      desc.innerHTML = `Code envoyé au ${tel}<br>
-        <span style="background:#EAF5F0;color:#116647;padding:6px 14px;border-radius:6px;font-size:20px;font-weight:700;letter-spacing:4px;display:inline-block;margin-top:8px">${data.debugCode}</span>`;
-      const inputs = document.querySelectorAll('.otp-input');
-      data.debugCode.toString().split('').forEach((d, i) => {
-        if (inputs[i]) { inputs[i].value = d; inputs[i].classList.add('filled'); }
-      });
-    } else {
-      desc.textContent = `Code envoyé au ${tel}`;
-      document.querySelector('.otp-input').focus();
+
+    if (data.nouvelUtilisateur && !data.debugCode && data.message?.includes('requis')) {
+      // Nouvel utilisateur sans prénom/nom — montrer le formulaire d'inscription
+      document.getElementById('auth-phone-sheet').style.display = 'none';
+      document.getElementById('auth-register-sheet').style.display = 'block';
+      return;
     }
+
+    afficherOTPSheet(tel, data.debugCode);
   } catch(e) {
     toast('Erreur envoi SMS', 'err');
   } finally { hideLoader(); }
+}
+
+async function creerCompteLivreur() {
+  const prenom = document.getElementById('auth-prenom').value.trim();
+  const nom    = document.getElementById('auth-nom').value.trim();
+  if (!prenom || !nom) return toast('Prénom et nom requis', 'err');
+  showLoader();
+  try {
+    const res = await fetch(`${API_URL}/auth/envoyer-otp`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telephone: MON_TEL, prenom, nom, interface: 'livreur' })
+    });
+    const data = await res.json();
+    document.getElementById('auth-register-sheet').style.display = 'none';
+    afficherOTPSheet(MON_TEL, data.debugCode);
+  } catch(e) {
+    toast('Erreur', 'err');
+  } finally { hideLoader(); }
+}
+
+function afficherOTPSheet(tel, debugCode) {
+  document.getElementById('auth-phone-sheet').style.display = 'none';
+  document.getElementById('auth-register-sheet').style.display = 'none';
+  document.getElementById('auth-otp-sheet').style.display = 'block';
+  const desc = document.getElementById('otp-desc');
+  if (debugCode) {
+    desc.innerHTML = `Code envoyé au ${tel}<br>
+      <span style="background:#EAF5F0;color:#116647;padding:6px 14px;border-radius:6px;font-size:20px;font-weight:700;letter-spacing:4px;display:inline-block;margin-top:8px">${debugCode}</span>`;
+    const inputs = document.querySelectorAll('.otp-input');
+    debugCode.toString().split('').forEach((d, i) => {
+      if (inputs[i]) { inputs[i].value = d; inputs[i].classList.add('filled'); }
+    });
+  } else {
+    desc.textContent = `Code envoyé au ${tel}`;
+    document.querySelector('.otp-input').focus();
+  }
 }
 
 async function verifierOTP() {
@@ -668,7 +714,6 @@ function navGo(s) {
 
 // ── ACCUEIL ─────────────────────────────────
 async function chargerAccueil() {
-  // Skeleton
   document.getElementById('pickups-list').innerHTML = skeletonColis(2);
   document.getElementById('transit-list').innerHTML = skeletonColis(2);
   showLoader();
@@ -681,7 +726,6 @@ async function chargerAccueil() {
     const collectes = MES_COLIS.filter(c => c.statut === 'collecte');
     const enTransit = MES_COLIS.filter(c => c.statut === 'en_transit');
 
-    // Compteurs animés
     animerCompteur(document.getElementById('stat-today'), pickups.length);
     animerCompteur(document.getElementById('stat-done'),  collectes.length);
 
