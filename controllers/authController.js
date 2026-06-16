@@ -17,10 +17,8 @@ const envoyerOtpCtrl = async (req, res) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({ succes: false, erreurs: errors.array() });
   }
-
   try {
-    const { telephone, prenom, nom } = req.body;
-
+    const { telephone, prenom, nom, interface: interfaceOrigine } = req.body;
     let user = await User.findOne({ telephone });
 
     if (!user) {
@@ -31,7 +29,11 @@ const envoyerOtpCtrl = async (req, res) => {
           nouvelUtilisateur: true,
         });
       }
-      user = new User({ telephone, prenom, nom, role: ROLES.CLIENT });
+
+      // Si la requête vient de l'app livreur, on assigne directement le rôle livreur
+      const role = interfaceOrigine === 'livreur' ? ROLES.LIVREUR : ROLES.CLIENT;
+
+      user = new User({ telephone, prenom, nom, role });
     }
 
     const code = user.genererOTP();
@@ -45,7 +47,6 @@ const envoyerOtpCtrl = async (req, res) => {
       // Code visible en développement uniquement
       ...(process.env.NODE_ENV !== 'production' && { debugCode: code }),
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ succes: false, message: 'Erreur serveur.' });
@@ -58,31 +59,24 @@ const verifierOtpCtrl = async (req, res) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({ succes: false, erreurs: errors.array() });
   }
-
   try {
     const { telephone, code } = req.body;
-
     const user = await User.findOne({ telephone });
     if (!user) {
       return res.status(404).json({ succes: false, message: 'Utilisateur introuvable.' });
     }
-
     if (!user.verifierOTP(code)) {
       return res.status(401).json({ succes: false, message: 'Code invalide ou expiré.' });
     }
-
     user.verifie = true;
     user.otp = undefined;
     await user.save();
-
     const token = genererToken(user._id);
-
     res.json({
       succes: true,
       token,
       utilisateur: user,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ succes: false, message: 'Erreur serveur.' });
