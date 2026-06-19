@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const Tarif  = require('../models/Tarif');
-const { authentifier, autoriser } = require('../middleware/auth');
+const { auth, role } = require('../middleware/auth');
 const { PAYS, CRENEAUX, TYPES_COLIS } = require('../config/constants');
 
 // ── GET /api/config ───────────────────────
@@ -10,7 +10,6 @@ router.get('/', async (req, res) => {
     const config = await Tarif.getConfig();
     const prixKg = Object.fromEntries(config.prixKg);
 
-    // Enrichir chaque pays avec son prix actuel depuis MongoDB
     const paysAvecPrix = PAYS.map(p => ({
       ...p,
       prixKg: prixKg[p.code] || 8.0,
@@ -23,7 +22,6 @@ router.get('/', async (req, res) => {
       typesColis: TYPES_COLIS,
     });
   } catch (e) {
-    // Fallback si MongoDB échoue
     console.warn('[config] Fallback constants.js :', e.message);
     res.json({
       succes:     true,
@@ -35,8 +33,8 @@ router.get('/', async (req, res) => {
 });
 
 // ── GET /api/config/tarifs ────────────────
-// Lire les tarifs actuels (admin uniquement)
-router.get('/tarifs', authentifier, autoriser('admin'), async (req, res) => {
+// Lire les tarifs (admin uniquement)
+router.get('/tarifs', auth, role('admin'), async (req, res) => {
   try {
     const config = await Tarif.getConfig();
     res.json({
@@ -54,8 +52,7 @@ router.get('/tarifs', authentifier, autoriser('admin'), async (req, res) => {
 
 // ── PATCH /api/config/tarifs ──────────────
 // Sauvegarder les tarifs (admin uniquement)
-// Le frontend envoie tauxAssurance en % (ex: 2.3), on stocke en décimal (0.023)
-router.patch('/tarifs', authentifier, autoriser('admin'), async (req, res) => {
+router.patch('/tarifs', auth, role('admin'), async (req, res) => {
   try {
     const { prixKg, fraisPickup, tauxAssurance } = req.body;
     const config = await Tarif.getConfig();
@@ -74,7 +71,7 @@ router.patch('/tarifs', authentifier, autoriser('admin'), async (req, res) => {
 
     if (tauxAssurance !== undefined) {
       const val = parseFloat(tauxAssurance);
-      // Le frontend envoie en % → on divise par 100 pour stocker en décimal
+      // Frontend envoie en % → on divise par 100 pour stocker en décimal
       if (!isNaN(val) && val >= 0) config.tauxAssurance = val / 100;
     }
 
