@@ -88,6 +88,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   setupOTPInputs();
+
+  // Vérifier si retour depuis Stripe (paiement annulé)
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('paiement') === 'annule') {
+    UI.toastErr('Paiement annulé. Votre commande est sauvegardée, vous pouvez réessayer.');
+    // Nettoyer l'URL
+    window.history.replaceState({}, '', '/');
+  }
 });
 
 function setupBackIcons() {
@@ -117,7 +125,6 @@ function setupOTPInputs() {
   inputs.forEach((inp, i) => {
     inp.addEventListener('input', () => {
       inp.value = inp.value.replace(/\D/,'');
-      // Animation case remplie
       inp.classList.toggle('filled', !!inp.value);
       if (inp.value && i < inputs.length - 1) inputs[i+1].focus();
     });
@@ -258,7 +265,6 @@ async function chargerAccueil() {
       </div>`).join('');
   }
 
-  // Skeleton pendant le chargement
   const homeColis = document.getElementById('home-colis-list');
   homeColis.innerHTML = UI.skeletonColis(3);
 
@@ -267,7 +273,6 @@ async function chargerAccueil() {
     APP.colis = data.colis || [];
     renderColisHome(APP.colis.slice(0,3));
 
-    // Compteur animé pour les stats
     const nbEl = document.querySelector('#home-stats .stat-val');
     if (nbEl) UI.animerCompteur(nbEl, APP.colis.length);
 
@@ -398,10 +403,10 @@ async function pickupSuivant() {
 window.pickupSuivant = pickupSuivant;
 
 function afficherRecap() {
-  const f   = APP.form;
+  const f    = APP.form;
   const pays = APP.config?.pays?.find(p => p.code === f.paysCode);
-  const t   = f.tarif;
-  const fmt = v => parseFloat(v || 0).toFixed(2) + ' €';
+  const t    = f.tarif;
+  const fmt  = v => parseFloat(v || 0).toFixed(2) + ' €';
 
   document.getElementById('recap-commande').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
@@ -431,10 +436,13 @@ function selectPay(el, mode) {
 }
 window.selectPay = selectPay;
 
+// ── CONFIRMER COMMANDE + STRIPE ──────────────────────────────
 async function confirmerCommande() {
   UI.showLoader();
   try {
     const f = APP.form;
+
+    // 1. Créer le colis en base
     const payload = {
       adresseCollecte:  f.adresse,
       villeCollecte:    f.adresse.split(',').pop().trim() || 'France',
@@ -450,12 +458,37 @@ async function confirmerCommande() {
     };
     const data = await API.Colis.creer(payload);
     APP.colisActif = data.colis;
-    UI.toastOk('Commande confirmée ! 🎉');
+
+    // 2. Paiement par carte → Stripe Checkout
+    if (_payMode === 'carte') {
+      const token = API.getToken();
+      const res   = await fetch('https://diasporalink-api.onrender.com/api/paiements/creer-session', {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ colisId: data.colis._id }),
+      });
+      const session = await res.json();
+      if (!session.succes || !session.url) {
+        throw new Error(session.message || 'Erreur création session Stripe');
+      }
+      // Réinitialiser le formulaire avant la redirection
+      APP.form = { paysCode: 'SN', typeColis: 'vetements' };
+      // Rediriger vers Stripe Checkout
+      window.location.href = session.url;
+      return;
+    }
+
+    // 3. Mobile Money ou Virement → flux manuel
+    UI.toastOk('Commande enregistrée ! Nous vous contacterons pour le paiement. 🎉');
     APP.form = { paysCode: 'SN', typeColis: 'vetements' };
     setTimeout(() => {
       navGo('colis');
       voirColis(data.colis._id);
-    }, 1000);
+    }, 1500);
+
   } catch(e) {
     UI.toastErr(e.message || 'Erreur création commande');
   } finally {
@@ -466,10 +499,8 @@ window.confirmerCommande = confirmerCommande;
 
 // ── MES COLIS ───────────────────────────────────────────────
 async function chargerColis() {
-  // Skeleton pendant le chargement
   const container = document.getElementById('colis-list-container');
   container.innerHTML = `<div class="card">${UI.skeletonColis(4)}</div>`;
-
   try {
     const data = await API.Colis.mesColis();
     APP.colis = data.colis || [];
@@ -490,7 +521,7 @@ function renderListeColis() {
     <div class="row fade-in" onclick="voirColis('${c._id}')">
       <div class="row-icon">${UI.SVG.box()}</div>
       <div class="row-main">
-        <div class="row-title">#${c.numeroSuivi}</div>
+        <div class="row-title">#${c.numeroSuivi}${c.paiementStatut === 'paye' ? ' <span style="background:#EAF5F0;color:#116647;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;vertical-align:middle">Payé</span>' : ''}</div>
         <div class="row-sub">${c.villeDestination}, ${c.paysDestination} · ${UI.formatDate(c.createdAt)}</div>
       </div>
       <div class="row-right">
@@ -518,12 +549,29 @@ window.voirColis = voirColis;
 function afficherSuivi(c) {
   document.getElementById('suivi-titre').textContent = `#${c.numeroSuivi}`;
   const el = document.getElementById('suivi-content');
+
+  // Badge paiement
+  const badgePaiement = c.paiementStatut === 'paye'
+    ? `<span style="background:#EAF5F0;color:#116647;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px">✓ Payé</span>`
+    : `<span style="background:#FEF3E2;color:#B7680A;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px">⏳ En attente de paiement</span>`;
+
   el.innerHTML = `
     <div class="track-alert">
       <div class="track-id">#${c.numeroSuivi}</div>
       <div class="track-dest">${c.villeDestination}, ${c.paysDestination} · ${c.nomDestinataire}</div>
-      ${UI.badgeStatut(c.statut)}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        ${UI.badgeStatut(c.statut)}
+        ${badgePaiement}
+      </div>
     </div>
+    ${c.paiementStatut !== 'paye' ? `
+    <div style="background:#FEF3E2;border:1px solid #F0DFA0;border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#B7680A;margin-bottom:2px">Paiement en attente</div>
+        <div style="font-size:12px;color:#B7680A">Montant : ${UI.formatEur(c.tarif?.total)}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="payerColis('${c._id}')" style="width:auto;padding:0 16px;white-space:nowrap">Payer maintenant</button>
+    </div>` : ''}
     <div>
       <div class="section-title" style="margin-bottom:8px">Étapes de livraison</div>
       <div class="card" style="padding:16px">
@@ -580,6 +628,31 @@ function afficherSuivi(c) {
       💰 Demander un remboursement
     </button>` : ''}`;
 }
+
+// ── PAYER UN COLIS EXISTANT ──────────────────────────────────
+async function payerColis(colisId) {
+  UI.showLoader();
+  try {
+    const token = API.getToken();
+    const res   = await fetch('https://diasporalink-api.onrender.com/api/paiements/creer-session', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ colisId }),
+    });
+    const session = await res.json();
+    if (!session.succes || !session.url) {
+      throw new Error(session.message || 'Erreur création session Stripe');
+    }
+    window.location.href = session.url;
+  } catch(e) {
+    UI.toastErr(e.message || 'Erreur paiement');
+    UI.hideLoader();
+  }
+}
+window.payerColis = payerColis;
 
 // ── REMBOURSEMENT ────────────────────────────────────────────
 function ouvrirRemboursement(colisId) {
@@ -721,7 +794,6 @@ async function chargerProfil() {
     document.getElementById('profil-nom').textContent = u.nomComplet || `${u.prenom} ${u.nom}`;
     document.getElementById('profil-tel').textContent = u.telephone;
 
-    // Compteurs animés
     UI.animerCompteur(document.getElementById('profil-nb-envois'), s.totalEnvois);
 
     const totalEl = document.getElementById('profil-total');
