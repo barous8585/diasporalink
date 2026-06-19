@@ -17,7 +17,9 @@ const creerColis = async (req, res) => {
       typeColis, poidsKg, valeurDeclare, description,
     } = req.body;
 
-    const tarif = calculerTarif(paysDestination, poidsKg, valeurDeclare);
+    // calculerTarif est maintenant async
+    const tarif = await calculerTarif(paysDestination, poidsKg, valeurDeclare);
+
     const colis = new Colis({
       client: req.user._id,
       adresseCollecte, villeCollecte,
@@ -47,7 +49,7 @@ const mesColis = async (req, res) => {
         : { client: req.user._id };
 
     const colis = await Colis.find(filtre)
-      .populate('client', 'prenom nom telephone')
+      .populate('client',  'prenom nom telephone')
       .populate('livreur', 'prenom nom telephone')
       .sort({ createdAt: -1 });
     res.json({ succes: true, colis });
@@ -66,7 +68,7 @@ const unColis = async (req, res) => {
         : { _id: req.params.id, client: req.user._id };
 
     const colis = await Colis.findOne(filtre)
-      .populate('client', 'prenom nom telephone')
+      .populate('client',  'prenom nom telephone')
       .populate('livreur', 'prenom nom telephone');
 
     if (!colis) {
@@ -139,7 +141,7 @@ const assignerLivreur = async (req, res) => {
       return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
     }
 
-    const User = require('../models/User');
+    const User    = require('../models/User');
     const livreur = await User.findById(livreurId);
     if (!livreur) {
       return res.status(404).json({ succes: false, message: 'Livreur introuvable.' });
@@ -147,7 +149,6 @@ const assignerLivreur = async (req, res) => {
 
     colis.livreur = livreurId;
 
-    // Passer automatiquement en "confirmé" si en attente
     if (colis.statut === 'en_attente') {
       colis.statut = 'confirme';
       if (colis.etapes[0]) {
@@ -181,7 +182,7 @@ const calculerTarifCtrl = async (req, res) => {
     if (!pays || !poids) {
       return res.status(400).json({ succes: false, message: 'Pays et poids requis.' });
     }
-    const tarif = calculerTarif(pays, poids, valeur);
+    const tarif = await calculerTarif(pays, poids, valeur);
     res.json({ succes: true, tarif });
   } catch (err) {
     res.status(500).json({ succes: false, message: 'Erreur serveur.' });
@@ -189,6 +190,11 @@ const calculerTarifCtrl = async (req, res) => {
 };
 
 module.exports = {
-  creerColis, mesColis, unColis, suiviPublic,
-  mettreAJourStatut, calculerTarifCtrl, assignerLivreur
+  creerColis,
+  mesColis,
+  unColis,
+  suiviPublic,
+  mettreAJourStatut,
+  calculerTarifCtrl,
+  assignerLivreur,
 };
