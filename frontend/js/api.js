@@ -6,7 +6,10 @@ const getToken = () => localStorage.getItem('dl_token');
 const setToken = (t) => localStorage.setItem('dl_token', t);
 const getUser  = () => JSON.parse(localStorage.getItem('dl_user') || 'null');
 const setUser  = (u) => localStorage.setItem('dl_user', JSON.stringify(u));
-const clear    = () => { localStorage.removeItem('dl_token'); localStorage.removeItem('dl_user'); };
+const clear    = () => {
+  localStorage.removeItem('dl_token');
+  localStorage.removeItem('dl_user');
+};
 
 async function request(method, path, body = null, auth = true) {
   const headers = { 'Content-Type': 'application/json' };
@@ -16,11 +19,9 @@ async function request(method, path, body = null, auth = true) {
   }
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
-
   const res = await fetch(`${API_URL}${path}`, opts);
   let data = {};
   try { data = await res.json(); } catch(e) {}
-
   if (!res.ok) {
     const msg = data.message
       || data.erreurs?.[0]?.msg
@@ -33,15 +34,21 @@ async function request(method, path, body = null, auth = true) {
 
 // ── AUTH ───────────────────────────────────────────────────
 const Auth = {
-  envoyerOTP: (telephone, prenom, nom) =>
-    request('POST', '/auth/envoyer-otp', { telephone, prenom, nom }, false),
-
+  // N'envoie prenom/nom que s'ils sont définis
+  envoyerOTP: (telephone, prenom, nom) => {
+    const body = { telephone };
+    if (prenom) body.prenom = prenom;
+    if (nom)    body.nom    = nom;
+    return request('POST', '/auth/envoyer-otp', body, false);
+  },
   verifierOTP: async (telephone, code) => {
     const data = await request('POST', '/auth/verifier-otp', { telephone, code }, false);
-    if (data.token) { setToken(data.token); setUser(data.utilisateur); }
+    if (data.token) {
+      setToken(data.token);
+      setUser(data.utilisateur);
+    }
     return data;
   },
-
   moi:         () => request('GET', '/auth/moi'),
   deconnecter: () => clear(),
   estConnecte: () => !!getToken(),
@@ -76,7 +83,7 @@ const Utilisateur = {
 
 // ── REMBOURSEMENTS ─────────────────────────────────────────
 const Remboursements = {
-  creer:    (colisId, motif, description) =>
+  creer:       (colisId, motif, description) =>
     request('POST', '/remboursements', { colisId, motif, description }),
   mesDemandes: () => request('GET', '/remboursements/mes'),
 };
