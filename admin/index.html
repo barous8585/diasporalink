@@ -44,60 +44,27 @@
 
     /* ── SCREENS ── */
     .screen { display:none; }
-    .screen.active {
-      display:block;
-      animation:screenIn 0.3s cubic-bezier(0.22,1,0.36,1) both;
-    }
-    @keyframes screenIn {
-      from { opacity:0; transform:translateY(10px); }
-      to   { opacity:1; transform:translateY(0); }
-    }
-    @keyframes slideInLeft {
-      from { opacity:0; transform:translateX(-20px); }
-      to   { opacity:1; transform:translateX(0); }
-    }
-    @keyframes fadeInUp {
-      from { opacity:0; transform:translateY(8px); }
-      to   { opacity:1; transform:translateY(0); }
-    }
-    @keyframes shimmer {
-      0%   { background-position:200% 0; }
-      100% { background-position:-200% 0; }
-    }
-    @keyframes countUp {
-      from { opacity:0.3; }
-      to   { opacity:1; }
-    }
+    .screen.active { display:block; animation:screenIn 0.3s cubic-bezier(0.22,1,0.36,1) both; }
+    @keyframes screenIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes slideInLeft { from { opacity:0; transform:translateX(-20px); } to { opacity:1; transform:translateX(0); } }
+    @keyframes fadeInUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
     /* ── LOGIN ── */
     #screen-login { display:flex; align-items:center; justify-content:center; height:100vh; background:var(--green-dark); }
-    .login-box {
-      background:white; border-radius:12px; padding:40px; width:400px;
-      box-shadow:0 20px 60px rgba(0,0,0,0.2);
-      animation:loginBoxIn 0.5s cubic-bezier(0.22,1,0.36,1) both;
-    }
-    @keyframes loginBoxIn {
-      from { opacity:0; transform:translateY(24px) scale(0.97); }
-      to   { opacity:1; transform:translateY(0) scale(1); }
-    }
+    .login-box { background:white; border-radius:12px; padding:40px; width:400px; box-shadow:0 20px 60px rgba(0,0,0,0.2); animation:loginBoxIn 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+    @keyframes loginBoxIn { from { opacity:0; transform:translateY(24px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
     .login-logo { font-size:24px; font-weight:700; color:var(--green-dark); margin-bottom:4px; animation:fadeInUp 0.5s 0.1s both; }
     .login-logo span { color:rgba(0,0,0,0.3); font-weight:400; }
     .login-sub { font-size:13px; color:var(--muted); margin-bottom:28px; animation:fadeInUp 0.5s 0.15s both; }
-    .otp-box {
-      width:44px; height:52px; border:1.5px solid var(--line); border-radius:8px;
-      text-align:center; font-size:20px; font-weight:600; font-family:var(--font); color:var(--text);
-      transition:transform 0.15s cubic-bezier(0.34,1.56,0.64,1), border-color 0.15s, background 0.15s;
-    }
+    .otp-box { width:44px; height:52px; border:1.5px solid var(--line); border-radius:8px; text-align:center; font-size:20px; font-weight:600; font-family:var(--font); color:var(--text); transition:transform 0.15s cubic-bezier(0.34,1.56,0.64,1), border-color 0.15s, background 0.15s; }
     .otp-box:focus { outline:none; border-color:var(--green); box-shadow:0 0 0 3px rgba(26,140,100,0.1); }
     .otp-box.filled { border-color:var(--green); background:var(--green-light); transform:scale(1.08); }
 
     /* ── STATS ── */
     .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
-    .stat-card {
-      background:var(--white); border:1px solid var(--line); border-radius:10px; padding:20px;
-      animation:fadeInUp 0.4s cubic-bezier(0.22,1,0.36,1) both;
-      transition:transform 0.2s, box-shadow 0.2s;
-    }
+    .stat-card { background:var(--white); border:1px solid var(--line); border-radius:10px; padding:20px; animation:fadeInUp 0.4s cubic-bezier(0.22,1,0.36,1) both; transition:transform 0.2s, box-shadow 0.2s; }
     .stat-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,0.06); }
     .stat-card:nth-child(1) { animation-delay:0.04s; }
     .stat-card:nth-child(2) { animation-delay:0.08s; }
@@ -109,6 +76,12 @@
     .stat-card .value.green { color:var(--green); }
     .stat-card .value.warn { color:var(--warn); }
     .stat-card .sub { font-size:12px; color:var(--muted); margin-top:4px; }
+
+    /* ── REFRESH BTN ── */
+    #btn-refresh-dashboard { display:none; transition:all 0.2s; }
+    #btn-refresh-dashboard.spinning { pointer-events:none; opacity:0.6; }
+    .refresh-icon { display:inline-block; transition:transform 0.4s; }
+    #btn-refresh-dashboard.spinning .refresh-icon { animation:spin 0.8s linear infinite; }
 
     /* ── CARD ── */
     .card { background:var(--white); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
@@ -132,10 +105,7 @@
     .badge-err  { background:#FDECEA; color:#C0392B; }
     .badge-grey { background:#EFEFED; color:#6B6B66; }
     .badge-info { background:#E8EEF8; color:#1B4FA8; }
-    @keyframes badgePulse {
-      0%,100% { opacity:1; }
-      50%      { opacity:0.6; }
-    }
+    @keyframes badgePulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
 
     /* ── BTN ── */
     .btn { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:6px; border:none; font-family:var(--font); font-size:13px; font-weight:500; cursor:pointer; transition:opacity 0.15s, transform 0.15s cubic-bezier(0.34,1.56,0.64,1); }
@@ -157,19 +127,9 @@
     /* ── MODAL ── */
     .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:none; align-items:center; justify-content:center; z-index:100; }
     .modal-overlay.show { display:flex; animation:overlayIn 0.2s ease both; }
-    @keyframes overlayIn {
-      from { opacity:0; }
-      to   { opacity:1; }
-    }
-    .modal {
-      background:white; border-radius:12px; width:520px; max-height:90vh; overflow-y:auto;
-      box-shadow:0 20px 60px rgba(0,0,0,0.2);
-      animation:modalIn 0.3s cubic-bezier(0.22,1,0.36,1) both;
-    }
-    @keyframes modalIn {
-      from { opacity:0; transform:translateY(16px) scale(0.97); }
-      to   { opacity:1; transform:translateY(0) scale(1); }
-    }
+    @keyframes overlayIn { from { opacity:0; } to { opacity:1; } }
+    .modal { background:white; border-radius:12px; width:520px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); animation:modalIn 0.3s cubic-bezier(0.22,1,0.36,1) both; }
+    @keyframes modalIn { from { opacity:0; transform:translateY(16px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
     .modal-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--line); }
     .modal-header h3 { font-size:15px; font-weight:600; }
     .modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--muted); transition:color 0.15s, transform 0.15s; }
@@ -178,14 +138,7 @@
     .modal-footer { padding:16px 24px; border-top:1px solid var(--line); display:flex; gap:10px; justify-content:flex-end; }
 
     /* ── TOAST ── */
-    .toast {
-      position:fixed; bottom:24px; right:24px; background:#1A1A18; color:white;
-      padding:12px 18px; border-radius:8px; font-size:13px; font-weight:500;
-      opacity:0; pointer-events:none;
-      transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
-      z-index:999; max-width:400px;
-      transform:translateY(8px);
-    }
+    .toast { position:fixed; bottom:24px; right:24px; background:#1A1A18; color:white; padding:12px 18px; border-radius:8px; font-size:13px; font-weight:500; opacity:0; pointer-events:none; transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1); z-index:999; max-width:400px; transform:translateY(8px); }
     .toast.show { opacity:1; transform:translateY(0); }
     .toast.ok  { background:var(--green); }
     .toast.err { background:var(--danger); }
@@ -196,12 +149,7 @@
     .loader { text-align:center; padding:48px; color:var(--muted); }
 
     /* ── SKELETON ── */
-    .skeleton {
-      background:linear-gradient(90deg,#f0f0ee 25%,#e4e4e0 50%,#f0f0ee 75%);
-      background-size:200% 100%;
-      animation:shimmer 1.4s infinite;
-      border-radius:4px;
-    }
+    .skeleton { background:linear-gradient(90deg,#f0f0ee 25%,#e4e4e0 50%,#f0f0ee 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:4px; }
     .skeleton-row { display:flex; gap:12px; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line); }
     .skeleton-row:last-child { border-bottom:none; }
     .skeleton-icon  { width:36px; height:36px; border-radius:6px; flex-shrink:0; }
@@ -238,10 +186,7 @@
     .tl-dot { width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; flex-shrink:0; background:white; font-size:10px; transition:border-color 0.3s, background 0.3s; }
     .tl-dot.done { border-color:var(--green); background:var(--green); color:white; }
     .tl-dot.now  { border-color:var(--warn); background:#FEF3E2; color:var(--warn); animation:dotPulse 2s infinite; }
-    @keyframes dotPulse {
-      0%,100% { box-shadow:0 0 0 0 rgba(183,104,10,0.3); }
-      50%      { box-shadow:0 0 0 5px rgba(183,104,10,0); }
-    }
+    @keyframes dotPulse { 0%,100% { box-shadow:0 0 0 0 rgba(183,104,10,0.3); } 50% { box-shadow:0 0 0 5px rgba(183,104,10,0); } }
     .tl-line { width:2px; flex:1; min-height:12px; background:var(--line); margin:2px 0; }
     .tl-line.done { background:var(--green); }
     .tl-content { padding-bottom:14px; flex:1; padding-top:2px; }
@@ -289,19 +234,8 @@
       .modal { width:100% !important; border-radius:16px 16px 0 0; max-height:85vh; }
       .btn-sm { padding:6px 10px; font-size:11px; }
       .toast { bottom:80px; right:16px; left:16px; text-align:center; }
-      .mobile-nav {
-        display:flex; position:fixed; bottom:0; left:0; right:0;
-        background:var(--green-dark); height:60px; align-items:center;
-        z-index:100; padding-bottom:env(safe-area-inset-bottom);
-        box-shadow:0 -2px 10px rgba(0,0,0,0.2);
-      }
-      .mobile-nav-btn {
-        flex:1; display:flex; flex-direction:column; align-items:center;
-        justify-content:center; gap:2px; cursor:pointer; padding:6px 2px;
-        background:none; border:none; color:rgba(255,255,255,0.55);
-        font-family:var(--font); font-size:9px; font-weight:500;
-        transition:color 0.15s, transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
-      }
+      .mobile-nav { display:flex; position:fixed; bottom:0; left:0; right:0; background:var(--green-dark); height:60px; align-items:center; z-index:100; padding-bottom:env(safe-area-inset-bottom); box-shadow:0 -2px 10px rgba(0,0,0,0.2); }
+      .mobile-nav-btn { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; padding:6px 2px; background:none; border:none; color:rgba(255,255,255,0.55); font-family:var(--font); font-size:9px; font-weight:500; transition:color 0.15s, transform 0.2s cubic-bezier(0.34,1.56,0.64,1); }
       .mobile-nav-btn:active { transform:scale(0.88); }
       .mobile-nav-btn.active { color:white; }
       .mobile-nav-btn .mni { font-size:17px; }
@@ -318,12 +252,9 @@
     <div id="login-step-tel">
       <div class="field" style="margin-bottom:20px">
         <label>Téléphone admin</label>
-        <input type="tel" id="login-tel" placeholder="+33 6 XX XX XX XX"
-          onkeydown="if(event.key==='Enter') loginEnvoyerOTP()" />
+        <input type="tel" id="login-tel" placeholder="+33 6 XX XX XX XX" onkeydown="if(event.key==='Enter') loginEnvoyerOTP()" />
       </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="loginEnvoyerOTP()">
-        Recevoir le code
-      </button>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="loginEnvoyerOTP()">Recevoir le code</button>
     </div>
     <div id="login-step-otp" style="display:none">
       <p id="login-otp-desc" style="font-size:13px;color:var(--muted);margin-bottom:20px;text-align:center;line-height:1.8"></p>
@@ -335,16 +266,10 @@
         <input class="otp-box" maxlength="1" inputmode="numeric" />
         <input class="otp-box" maxlength="1" inputmode="numeric" />
       </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:10px" onclick="loginVerifierOTP()">
-        Se connecter
-      </button>
-      <button class="btn btn-ghost" style="width:100%;justify-content:center" onclick="loginEnvoyerOTP()">
-        Renvoyer le code
-      </button>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:10px" onclick="loginVerifierOTP()">Se connecter</button>
+      <button class="btn btn-ghost" style="width:100%;justify-content:center" onclick="loginEnvoyerOTP()">Renvoyer le code</button>
     </div>
-    <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px">
-      Accès réservé aux administrateurs DiasporaLink
-    </p>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px">Accès réservé aux administrateurs DiasporaLink</p>
   </div>
 </div>
 
@@ -370,6 +295,10 @@
     <div class="topbar">
       <div class="topbar-title" id="topbar-title">Tableau de bord</div>
       <div class="topbar-actions">
+        <!-- Bouton refresh — visible uniquement sur le dashboard -->
+        <button class="btn btn-sm btn-ghost" id="btn-refresh-dashboard" onclick="chargerDashboard(false)">
+          <span class="refresh-icon">🔄</span> Actualiser
+        </button>
         <span style="font-size:12px;color:var(--muted)" id="topbar-date"></span>
         <div style="width:32px;height:32px;border-radius:6px;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark);cursor:pointer;transition:background 0.15s" id="topbar-avatar" onclick="deconnexion()">AD</div>
       </div>
@@ -440,13 +369,10 @@
       <!-- LIVREURS -->
       <div class="screen" id="screen-livreurs">
         <div class="card">
-          <div class="card-header">
-            <span class="card-title">Livreurs</span>
-            <span id="livreurs-count" style="font-size:12px;color:var(--muted)"></span>
-          </div>
+          <div class="card-header"><span class="card-title">Livreurs</span><span id="livreurs-count" style="font-size:12px;color:var(--muted)"></span></div>
           <div style="padding:16px 20px;border-bottom:1px solid var(--line)">
             <div class="info-box">
-              Pour ajouter un livreur : demandez-lui de se connecter sur <strong>diasporalink-livreur.netlify.app</strong> avec son numéro de téléphone, puis changez son rôle en <strong>"livreur"</strong> dans MongoDB Atlas.
+              Pour ajouter un livreur : demandez-lui de se connecter sur <strong>diasporalink-livreur.netlify.app</strong> avec son numéro de téléphone. Le rôle <strong>livreur</strong> est assigné automatiquement à l'inscription.
             </div>
           </div>
           <div class="table-wrap">
@@ -461,8 +387,11 @@
       <!-- TARIFS -->
       <div class="screen" id="screen-tarifs">
         <div class="card">
-          <div class="card-header"><span class="card-title">Tarifs par pays (€/kg)</span><button class="btn btn-primary btn-sm" onclick="sauvegarderTarifs()">Sauvegarder</button></div>
-          <div style="padding:20px" id="tarifs-grid"></div>
+          <div class="card-header">
+            <span class="card-title">Tarifs par pays (€/kg)</span>
+            <button class="btn btn-primary btn-sm" id="btn-save-tarifs" onclick="sauvegarderTarifs()">Sauvegarder</button>
+          </div>
+          <div style="padding:20px" id="tarifs-grid"><div class="loader">Chargement des tarifs...</div></div>
         </div>
         <div class="card" style="margin-top:20px">
           <div class="card-header"><span class="card-title">Frais fixes</span></div>
@@ -476,10 +405,7 @@
       <!-- REMBOURSEMENTS -->
       <div class="screen" id="screen-remboursements">
         <div class="card">
-          <div class="card-header">
-            <span class="card-title">Remboursements</span>
-            <span id="remb-count" style="font-size:12px;color:var(--muted)"></span>
-          </div>
+          <div class="card-header"><span class="card-title">Remboursements</span><span id="remb-count" style="font-size:12px;color:var(--muted)"></span></div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Client</th><th>Colis</th><th>Motif</th><th>Montant</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead>
@@ -601,6 +527,7 @@ let REMB_ACTIF = null;
 let LIVREURS_ALL = [];
 let ASSIGNER_COLIS_ID = null;
 let LOGIN_TEL = '';
+let SCREEN_ACTIF = 'dashboard';
 
 const MOTIFS = {
   colis_perdu:'Colis perdu', colis_endommage:'Colis endommagé',
@@ -610,6 +537,22 @@ const REMB_STATUTS = {
   en_attente:['badge-go','En attente'], en_cours:['badge-info','En cours'],
   approuve:['badge-ok','Approuvé'], refuse:['badge-err','Refusé'], rembourse:['badge-ok','Remboursé'],
 };
+
+// Pays sans prix hardcodés — les prix viennent de MongoDB
+const PAYS_INFO = [
+  { code:'SN', nom:'Sénégal',       drapeau:'🇸🇳' },
+  { code:'CI', nom:"Côte d'Ivoire", drapeau:'🇨🇮' },
+  { code:'CM', nom:'Cameroun',      drapeau:'🇨🇲' },
+  { code:'GN', nom:'Guinée',        drapeau:'🇬🇳' },
+  { code:'ML', nom:'Mali',          drapeau:'🇲🇱' },
+  { code:'BF', nom:'Burkina Faso',  drapeau:'🇧🇫' },
+  { code:'CD', nom:'RD Congo',      drapeau:'🇨🇩' },
+  { code:'MR', nom:'Mauritanie',    drapeau:'🇲🇷' },
+  { code:'TG', nom:'Togo',          drapeau:'🇹🇬' },
+  { code:'BJ', nom:'Bénin',         drapeau:'🇧🇯' },
+  { code:'SL', nom:'Sierra Leone',  drapeau:'🇸🇱' },
+  { code:'GH', nom:'Ghana',         drapeau:'🇬🇭' },
+];
 
 // ── UTILS ──────────────────────────────────
 function toast(msg, type='') {
@@ -741,6 +684,8 @@ async function loginVerifierOTP() {
 }
 
 function deconnexion() {
+  // Arrêter l'auto-refresh
+  if (window._refreshInterval) { clearInterval(window._refreshInterval); window._refreshInterval = null; }
   localStorage.removeItem('dl_admin_token');
   TOKEN = null;
   document.getElementById('app').style.display = 'none';
@@ -757,6 +702,14 @@ function afficherApp() {
   document.getElementById('app').style.display = 'flex';
   document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
   goTo('dashboard');
+
+  // ── AUTO-REFRESH toutes les 30 secondes ──
+  if (window._refreshInterval) clearInterval(window._refreshInterval);
+  window._refreshInterval = setInterval(() => {
+    if (SCREEN_ACTIF === 'dashboard') {
+      chargerDashboard(true); // silencieux = pas de toast
+    }
+  }, 30000);
 }
 
 // ── NAVIGATION ───────────────────────────────
@@ -766,6 +719,7 @@ const TITRES = {
 };
 
 function goTo(screen) {
+  SCREEN_ACTIF = screen;
   document.querySelectorAll('.screen').forEach(s => {
     if (s.id === `screen-${screen}` && !s.classList.contains('active')) {
       s.style.animation = 'none';
@@ -781,7 +735,12 @@ function goTo(screen) {
   document.querySelector(`[data-screen="${screen}"]`)?.classList.add('active');
   document.querySelector(`[data-mnav="${screen}"]`)?.classList.add('active');
   document.getElementById('topbar-title').textContent = TITRES[screen] || screen;
-  if (screen === 'dashboard')      chargerDashboard();
+
+  // Afficher le bouton refresh uniquement sur le dashboard
+  const btnRefresh = document.getElementById('btn-refresh-dashboard');
+  if (btnRefresh) btnRefresh.style.display = screen === 'dashboard' ? 'inline-flex' : 'none';
+
+  if (screen === 'dashboard')      chargerDashboard(false);
   if (screen === 'colis')          chargerColis();
   if (screen === 'clients')        chargerClients();
   if (screen === 'livreurs')       chargerLivreursPage();
@@ -790,12 +749,18 @@ function goTo(screen) {
 }
 
 // ── DASHBOARD ────────────────────────────────
-async function chargerDashboard() {
+async function chargerDashboard(silencieux = false) {
+  const btnRefresh = document.getElementById('btn-refresh-dashboard');
+
+  if (!silencieux && btnRefresh) {
+    btnRefresh.classList.add('spinning');
+    btnRefresh.innerHTML = '<span class="refresh-icon">🔄</span> Actualisation...';
+  }
+
   try {
-    const data = await api('GET', '/colis');
+    const data  = await api('GET', '/colis');
     const colis = data.colis || [];
 
-    // Compteurs animés
     animerCompteur(document.getElementById('s-total'),   colis.length);
     animerCompteur(document.getElementById('s-transit'), colis.filter(c => c.statut === 'en_transit').length);
     animerCompteur(document.getElementById('s-livre'),   colis.filter(c => c.statut === 'livre').length);
@@ -807,7 +772,7 @@ async function chargerDashboard() {
     rc.innerHTML = !colis.length
       ? `<div class="empty"><div class="empty-icon">📦</div><p>Aucune commande</p></div>`
       : `<table><tbody>${colis.slice(0,5).map((c,i) => `
-          <tr class="fade-in" style="animation-delay:${i*0.06}s" onclick="voirColis('${c._id}')" style="cursor:pointer">
+          <tr class="fade-in" style="animation-delay:${i*0.06}s;cursor:pointer" onclick="voirColis('${c._id}')">
             <td class="td-mono">#${c.numeroSuivi}</td>
             <td>${c.villeDestination}</td>
             <td>${badge(c.statut)}</td>
@@ -819,12 +784,20 @@ async function chargerDashboard() {
         <div class="fade-in"><div style="font-size:24px;font-weight:700;color:var(--green)">${colis.length}</div><div style="font-size:12px;color:var(--muted)">Commandes</div></div>
         <div class="fade-in" style="animation-delay:0.08s"><div style="font-size:24px;font-weight:700">${colis.filter(c=>c.statut==='en_attente').length}</div><div style="font-size:12px;color:var(--muted)">En attente</div></div>
       </div>`;
-  } catch(e) { toast('Erreur chargement dashboard', 'err'); }
+
+    if (!silencieux) toast('Dashboard mis à jour ✓', 'ok');
+  } catch(e) {
+    if (!silencieux) toast('Erreur chargement dashboard', 'err');
+  } finally {
+    if (btnRefresh) {
+      btnRefresh.classList.remove('spinning');
+      btnRefresh.innerHTML = '<span class="refresh-icon">🔄</span> Actualiser';
+    }
+  }
 }
 
 // ── COLIS ────────────────────────────────────
 async function chargerColis() {
-  // Skeleton
   document.getElementById('colis-tbody').innerHTML = skeletonRows(5, 9);
   try {
     const data = await api('GET', '/colis');
@@ -1027,37 +1000,74 @@ async function chargerLivreursPage() {
   }
 }
 
-// ── TARIFS ───────────────────────────────────
-const PAYS_TARIFS = [
-  { code:'SN', nom:'Sénégal',       drapeau:'🇸🇳', prix:7.5 },
-  { code:'CI', nom:"Côte d'Ivoire", drapeau:'🇨🇮', prix:8.0 },
-  { code:'CM', nom:'Cameroun',      drapeau:'🇨🇲', prix:7.8 },
-  { code:'GN', nom:'Guinée',        drapeau:'🇬🇳', prix:8.5 },
-  { code:'ML', nom:'Mali',          drapeau:'🇲🇱', prix:8.2 },
-  { code:'BF', nom:'Burkina Faso',  drapeau:'🇧🇫', prix:8.3 },
-  { code:'CD', nom:'RD Congo',      drapeau:'🇨🇩', prix:9.0 },
-  { code:'MR', nom:'Mauritanie',    drapeau:'🇲🇷', prix:8.6 },
-  { code:'TG', nom:'Togo',          drapeau:'🇹🇬', prix:8.1 },
-  { code:'BJ', nom:'Bénin',         drapeau:'🇧🇯', prix:8.0 },
-  { code:'GH', nom:'Ghana',         drapeau:'🇬🇭', prix:8.4 },
-];
+// ── TARIFS (depuis MongoDB) ───────────────────
+async function chargerTarifs() {
+  const grid = document.getElementById('tarifs-grid');
+  grid.innerHTML = '<div class="loader">Chargement des tarifs...</div>';
+  try {
+    const data = await api('GET', '/config/tarifs');
+    const prixKg = data.prixKg || {};
 
-function chargerTarifs() {
-  document.getElementById('tarifs-grid').innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-    ${PAYS_TARIFS.map((p,i) => `
-      <div class="fade-in" style="animation-delay:${i*0.04}s;display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:8px;transition:border-color 0.2s,box-shadow 0.2s" onmouseenter="this.style.borderColor='var(--green)';this.style.boxShadow='0 2px 8px rgba(26,140,100,0.1)'" onmouseleave="this.style.borderColor='var(--line)';this.style.boxShadow='none'">
-        <span style="font-size:22px">${p.drapeau}</span>
-        <div style="flex:1">
-          <div style="font-size:12px;font-weight:500">${p.nom}</div>
-          <input type="number" id="tarif-${p.code}" value="${p.prix}" step="0.1" min="1"
-            style="width:70px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;font-size:13px;margin-top:3px;transition:border-color 0.2s" />
-          <span style="font-size:11px;color:var(--muted)"> €/kg</span>
-        </div>
-      </div>`).join('')}
-  </div>`;
+    // Remplir les frais fixes
+    document.getElementById('frais-pickup').value   = data.fraisPickup   || 5.0;
+    document.getElementById('taux-assurance').value = ((data.tauxAssurance || 0.023) * 100).toFixed(1);
+
+    // Afficher la grille des pays avec les vrais prix MongoDB
+    grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      ${PAYS_INFO.map((p,i) => `
+        <div class="fade-in" style="animation-delay:${i*0.04}s;display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:8px;transition:border-color 0.2s,box-shadow 0.2s"
+          onmouseenter="this.style.borderColor='var(--green)';this.style.boxShadow='0 2px 8px rgba(26,140,100,0.1)'"
+          onmouseleave="this.style.borderColor='var(--line)';this.style.boxShadow='none'">
+          <span style="font-size:22px">${p.drapeau}</span>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:500">${p.nom}</div>
+            <input type="number" id="tarif-${p.code}" value="${prixKg[p.code] || 8.0}" step="0.1" min="1"
+              style="width:70px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;font-size:13px;margin-top:3px;transition:border-color 0.2s"
+              onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--line)'" />
+            <span style="font-size:11px;color:var(--muted)"> €/kg</span>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  } catch(e) {
+    // Fallback : afficher grille avec valeurs par défaut si la route n'existe pas encore
+    grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      ${PAYS_INFO.map((p,i) => `
+        <div class="fade-in" style="animation-delay:${i*0.04}s;display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:8px">
+          <span style="font-size:22px">${p.drapeau}</span>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:500">${p.nom}</div>
+            <input type="number" id="tarif-${p.code}" value="8.0" step="0.1" min="1"
+              style="width:70px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;font-size:13px;margin-top:3px" />
+            <span style="font-size:11px;color:var(--muted)"> €/kg</span>
+          </div>
+        </div>`).join('')}
+    </div>`;
+    toast('Tarifs chargés depuis les valeurs par défaut', '');
+  }
 }
 
-function sauvegarderTarifs() { toast('Tarifs sauvegardés ✓', 'ok'); }
+async function sauvegarderTarifs() {
+  const btn = document.getElementById('btn-save-tarifs');
+  if (btn) { btn.textContent = '⏳ Sauvegarde...'; btn.disabled = true; }
+  try {
+    // Collecter tous les prix depuis les inputs
+    const prixKg = {};
+    PAYS_INFO.forEach(p => {
+      const val = parseFloat(document.getElementById(`tarif-${p.code}`)?.value);
+      if (!isNaN(val) && val > 0) prixKg[p.code] = val;
+    });
+
+    const fraisPickup   = parseFloat(document.getElementById('frais-pickup').value) || 5.0;
+    const tauxAssurance = parseFloat(document.getElementById('taux-assurance').value) || 2.3;
+
+    await api('PATCH', '/config/tarifs', { prixKg, fraisPickup, tauxAssurance });
+    toast('Tarifs sauvegardés et synchronisés sur tous les espaces ✓', 'ok');
+  } catch(e) {
+    toast(e.message || 'Erreur sauvegarde tarifs', 'err');
+  } finally {
+    if (btn) { btn.textContent = 'Sauvegarder'; btn.disabled = false; }
+  }
+}
 
 // ── REMBOURSEMENTS ───────────────────────────
 async function chargerRemboursements() {
