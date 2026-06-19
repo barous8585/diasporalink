@@ -1,7 +1,7 @@
-const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const Colis   = require('../models/Colis');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const Colis  = require('../models/Colis');
 
-// ── POST /api/paiement/creer-session ─────
+// ── POST /api/paiements/creer-session ────
 const creerSession = async (req, res) => {
   try {
     const { colisId } = req.body;
@@ -38,9 +38,9 @@ const creerSession = async (req, res) => {
         quantity: 1,
       }],
       metadata: {
-        colisId:      colis._id.toString(),
-        numeroSuivi:  colis.numeroSuivi,
-        clientId:     req.user._id.toString(),
+        colisId:     colis._id.toString(),
+        numeroSuivi: colis.numeroSuivi,
+        clientId:    req.user._id.toString(),
       },
       success_url: `${process.env.FRONTEND_URL}/paiement-succes.html?session_id={CHECKOUT_SESSION_ID}&colis=${colis._id}`,
       cancel_url:  `${process.env.FRONTEND_URL}?paiement=annule`,
@@ -53,11 +53,11 @@ const creerSession = async (req, res) => {
   }
 };
 
-// ── POST /api/paiement/webhook ────────────
-// Stripe appelle cette route pour confirmer le paiement
-const webhook = async (req, res) => {
-  const sig     = req.headers['stripe-signature'];
-  const secret  = process.env.STRIPE_WEBHOOK_SECRET;
+// ── POST /api/paiements/webhook ───────────
+// ⚠️ raw body déjà géré dans server.js avant express.json
+const webhookStripe = async (req, res) => {
+  const sig    = req.headers['stripe-signature'];
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
   let event;
   try {
@@ -70,16 +70,15 @@ const webhook = async (req, res) => {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const colisId = session.metadata?.colisId;
-
     if (colisId) {
       try {
         await Colis.findByIdAndUpdate(colisId, {
           paiementStatut:  'paye',
           paiementSession: session.id,
         });
-        console.log(`[webhook] Colis ${colisId} marqué payé.`);
+        console.log(`[webhook] Colis ${colisId} marqué payé ✓`);
       } catch (err) {
-        console.error('[webhook] Erreur mise à jour colis:', err);
+        console.error('[webhook] Erreur update colis:', err);
       }
     }
   }
@@ -87,20 +86,21 @@ const webhook = async (req, res) => {
   res.json({ received: true });
 };
 
-// ── GET /api/paiement/verifier/:sessionId ─
-// Le frontend vérifie que le paiement est bien confirmé
+// ── GET /api/paiements/verifier/:sessionId
 const verifierSession = async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
     const colisId = session.metadata?.colisId;
 
     if (session.payment_status === 'paid' && colisId) {
-      // S'assurer que la BDD est bien à jour (cas où webhook tarde)
+      // Sécurité : forcer la mise à jour si le webhook a été lent
       await Colis.findByIdAndUpdate(colisId, {
         paiementStatut:  'paye',
         paiementSession: session.id,
       });
-      const colis = await Colis.findById(colisId);
+      const colis = await Colis.findById(colisId)
+        .populate('client',  'prenom nom telephone')
+        .populate('livreur', 'prenom nom telephone');
       return res.json({ succes: true, paye: true, colis });
     }
 
@@ -111,4 +111,4 @@ const verifierSession = async (req, res) => {
   }
 };
 
-module.exports = { creerSession, webhook, verifierSession };
+module.exports = { creerSession, webhookStripe, verifierSession };
