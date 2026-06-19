@@ -1,14 +1,15 @@
 const router = require('express').Router();
 const { auth } = require('../middleware/auth');
-const { creerIntention, webhookStripe, historiquePaiements } = require('../controllers/paiementController');
+const {
+  creerSession,
+  verifierSession,
+} = require('../controllers/paiementController');
 
-// Webhook Stripe (raw body — déclaré en dehors d'express.json)
-router.post('/webhook', webhookStripe);
+// ⚠️ Le webhook est monté directement dans server.js
+// car il nécessite le raw body AVANT express.json
 
-// Créer intention de paiement
-router.post('/intention', auth, creerIntention);
-
-// Historique
-router.get('/historique', auth, historiquePaiements);
+// Routes protégées par JWT
+router.post('/creer-session',      auth, creerSession);
+router.get('/verifier/:sessionId', auth, verifierSession);
 
 module.exports = router;
