@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "SERVIR_APPS=1 nodemon server.js",
     "test": "node --test tests/tarif.test.js",
-    "test:parcours": "node --test tests/parcours.test.js"
+    "test:parcours": "node --test tests/parcours.test.js",
+    "sync-apps": "node scripts/sync-apps.js"
   },
   "dependencies": {
     "express": "^4.19.2",

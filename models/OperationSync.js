@@ -10,4 +10,7 @@ const operationSchema = new mongoose.Schema({
   resultat: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true });
 
+// Purge automatique après 60 jours
+operationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 24 * 3600 });
+
 module.exports = mongoose.model('OperationSync', operationSchema);

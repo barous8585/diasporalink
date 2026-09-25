@@ -50,7 +50,7 @@ connectDB();
 app.post(
   '/api/paiements/webhook',
   express.raw({ type: 'application/json' }),
-  require('./controllers/paiementController').webhookStripe
+  (req, res, next) => require('./controllers/paiementController').webhookStripe(req, res).catch(next)
 );
 
 // ── Middlewares ───────────────────────────
