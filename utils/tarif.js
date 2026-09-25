@@ -1,6 +1,9 @@
 // ─────────────────────────────────────────────────────────────
 //  Règles de calcul — fonctions pures (testables sans base)
+//  Ce même fichier est copié dans les apps (npm run sync-apps)
+//  pour que l'estimation fonctionne aussi hors-ligne.
 // ─────────────────────────────────────────────────────────────
+(function (racine) {
 
 const arrondi2 = (n) => Math.round(n * 100) / 100;
 // Le GNF n'a pas de centimes : on arrondit aux 500 GNF supérieurs
@@ -73,4 +76,7 @@ function calculerSolde(colis, config, maintenant = new Date()) {
   };
 }
 
-module.exports = { calculerTarif, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2 };
+const api = { calculerTarif, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2 };
+if (typeof module !== 'undefined' && module.exports) module.exports = api;
+else racine.KolisTarif = api;
+})(typeof window !== 'undefined' ? window : globalThis);

@@ -1,838 +1,568 @@
-// ── ÉTAT GLOBAL ────────────────────────────────────────────
-let APP = {
-  config:    null,
-  colis:     [],
-  colisActif: null,
-  form: {
-    paysCode: 'SN',
-    typeColis: 'vetements',
-  },
-  authTel:    '',
-  authNouvel: false,
-  debugCode:  null,
-  colisIdRemb: null,
-};
+// ─────────────────────────────────────────────────────────────
+//  App client : suivi, envoi, mes colis
+// ─────────────────────────────────────────────────────────────
+(function () {
+  const { api, session, stock, esc, gnf, eur, kg, date, heure, ic, toast, modale, normTel } = K;
+  const main = document.getElementById('contenu');
+  let CONFIG = null;
 
-// ── ICONES NAV ──────────────────────────────────────────────
-const NAV_ICONS = {
-  home:   { off: '%23A0A09A', on: '%231A8C64', path: "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/><polyline points='9 22 9 12 15 12 15 22" },
-  pickup: { off: '%23A0A09A', on: '%231A8C64', path: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z'/><line x1='12' y1='8' x2='12' y2='16'/><line x1='8' y1='12' x2='16' y2='12" },
-  colis:  { off: '%23A0A09A', on: '%231A8C64', path: "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3" },
-  profil: { off: '%23A0A09A', on: '%231A8C64', path: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4" },
-};
+  // ── Utilitaires d'affichage ──
+  document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = ic(el.dataset.ic); });
 
-function navIcon(key, active) {
-  const ic = NAV_ICONS[key];
-  const c = active ? ic.on : ic.off;
-  return `data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='${c}' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${ic.path}'/%3E%3C/svg%3E`;
-}
+  const ETAPES = [
+    { lib: 'Dépôt', statuts: ['depose', 'charge'] },
+    { lib: 'En route', statuts: ['en_transit'] },
+    { lib: 'Arrivé', statuts: ['arrive'] },
+    { lib: 'Guichet', statuts: ['pret', 'remis'] },
+  ];
+  const indexEtape = (s) => ETAPES.findIndex(e => e.statuts.includes(s));
+  const icMode = (mode) => ic(mode === 'mer' ? 'bateau' : 'avion');
+  const nomGuichet = (code) => CONFIG?.guichets?.find(g => g.code === code)?.nom || code;
+  const lienWhatsApp = (tel, texte = '') => `https://wa.me/${String(tel || '').replace(/[^\d]/g, '')}${texte ? `?text=${encodeURIComponent(texte)}` : ''}`;
 
-function refreshNavIcons(active) {
-  ['home','pickup','colis','profil'].forEach(k => {
-    const el = document.getElementById(`nav-${k}-icon`);
-    if (el) el.src = navIcon(k, k === active);
-  });
-  document.querySelectorAll('.nav-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.screen === active);
-  });
-}
-
-// ── NAVIGATION ──────────────────────────────────────────────
-const MAIN_SCREENS = ['home','pickup','paiement','colis','suivi','messages','profil'];
-
-function navGo(screen) {
-  MAIN_SCREENS.forEach(s => {
-    const el = document.getElementById(`screen-${s}`);
-    if (!el) return;
-    if (s === screen && !el.classList.contains('active')) {
-      el.style.animation = 'none';
-      el.classList.add('active');
-      void el.offsetWidth;
-      el.style.animation = '';
-    } else if (s !== screen) {
-      el.classList.remove('active');
-    }
-  });
-  refreshNavIcons(screen);
-  APP.currentScreen = screen;
-  if (screen === 'home')   chargerAccueil();
-  if (screen === 'pickup') initPickup();
-  if (screen === 'colis')  chargerColis();
-  if (screen === 'profil') chargerProfil();
-}
-
-// ── INIT ────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-  setupBackIcons();
-
-  const sendBtn = document.getElementById('chat-send-btn');
-  if (sendBtn) sendBtn.innerHTML = UI.SVG.send('%23FFFFFF', 18);
-
-  const mapPin = document.getElementById('map-pin-icon');
-  if (mapPin) mapPin.innerHTML = `<img src="data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/%3E%3Ccircle cx='12' cy='10' r='3'/%3E%3C/svg%3E" style="transform:rotate(45deg);width:16px;height:16px;display:block">`;
-
-  refreshNavIcons('home');
-
-  try {
-    const data = await API.Config.get();
-    APP.config = data;
-  } catch(e) {
-    console.warn('Config non chargée:', e);
+  function bandeauReseau(majLe) {
+    const el = document.getElementById('reseau');
+    if (majLe) {
+      el.innerHTML = `${ic('horsligne', 'ic-sm')}<span>Connexion faible. Infos du ${esc(date(majLe))}.</span>`;
+      el.classList.remove('cache');
+    } else el.classList.add('cache');
   }
 
-  if (API.Auth.estConnecte()) {
-    afficherApp();
-  } else {
-    document.getElementById('screen-auth').classList.add('active');
-    document.getElementById('screen-app').classList.remove('active');
+  function majBoutonCompte() {
+    const u = session.utilisateur();
+    const b = document.querySelector('[data-bouton-compte]');
+    b.innerHTML = u ? `<span class="gras">${esc((u.prenom?.[0] || '') + (u.nom?.[0] || ''))}</span>` : ic('personne');
   }
 
-  setupOTPInputs();
+  // ── Routeur ──
+  const routes = [
+    [/^\/?$/, accueil, 'accueil'],
+    [/^\/suivi\/([\w-]+)$/, suivi, null],
+    [/^\/envoyer$/, envoyer, 'envoyer'],
+    [/^\/mes-colis$/, mesColis, 'mes-colis'],
+    [/^\/guichets$/, guichets, 'guichets'],
+    [/^\/compte$/, compte, null],
+    [/^\/connexion$/, connexion, null],
+  ];
 
-  // Vérifier si retour depuis Stripe (paiement annulé)
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('paiement') === 'annule') {
-    UI.toastErr('Paiement annulé. Votre commande est sauvegardée, vous pouvez réessayer.');
-    // Nettoyer l'URL
-    window.history.replaceState({}, '', '/');
-  }
-});
-
-function setupBackIcons() {
-  const backSrc = `data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='15 18 9 12 15 6'/%3E%3C/svg%3E`;
-  ['pickup-back','paiement-back','colis-back','suivi-back','messages-back','profil-back'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = `<img src="${backSrc}" width="20" height="20" style="display:block">`;
-  });
-}
-
-function afficherApp() {
-  document.getElementById('screen-auth').classList.remove('active');
-  document.getElementById('screen-app').classList.add('active');
-  navGo('home');
-}
-
-// ── AUTH ────────────────────────────────────────────────────
-function montrerFicheInscription() {
-  document.getElementById('auth-phone-sheet').style.display = 'none';
-  document.getElementById('auth-register-sheet').style.display = 'block';
-  document.getElementById('auth-otp-sheet').style.display = 'none';
-  APP.authNouvel = true;
-}
-
-function setupOTPInputs() {
-  const inputs = document.querySelectorAll('.otp-input');
-  inputs.forEach((inp, i) => {
-    inp.addEventListener('input', () => {
-      inp.value = inp.value.replace(/\D/,'');
-      inp.classList.toggle('filled', !!inp.value);
-      if (inp.value && i < inputs.length - 1) inputs[i+1].focus();
-    });
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Backspace') {
-        inp.classList.remove('filled');
-        if (!inp.value && i > 0) inputs[i-1].focus();
+  async function router() {
+    const chemin = location.hash.replace(/^#/, '') || '/';
+    bandeauReseau(null);
+    for (const [re, vue, nav] of routes) {
+      const m = chemin.match(re);
+      if (m) {
+        document.querySelectorAll('[data-nav]').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === nav) || a.removeAttribute('aria-current'));
+        document.querySelectorAll('[data-nav]').forEach(a => { if (a.dataset.nav === nav) a.setAttribute('aria-current', 'page'); });
+        main.innerHTML = '<div class="chargement" aria-label="Chargement"></div>';
+        try { await vue(...m.slice(1)); } catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
+        main.focus({ preventScroll: true });
+        window.scrollTo(0, 0);
+        majBoutonCompte();
+        return;
       }
+    }
+    location.hash = '#/';
+  }
+
+  const exigerConnexion = () => {
+    if (session.connecte()) return true;
+    stock.ecrire('retour', location.hash);
+    location.hash = '#/connexion';
+    return false;
+  };
+
+  // ════════════════════════════════════════════════════════
+  //  ACCUEIL
+  // ════════════════════════════════════════════════════════
+  async function accueil() {
+    const u = session.utilisateur();
+    let mes = stock.lire('mes_colis');
+    main.innerHTML = `
+      <div class="pile">
+        <div>
+          ${u ? `<p class="muet">Bonjour ${esc(u.prenom)}</p>` : ''}
+          <h1 style="margin-top:4px">Où est mon colis ?</h1>
+        </div>
+        <form class="recherche" role="search" data-recherche>
+          <label>${ic('loupe', 'ic-sm')}<input name="numero" placeholder="N° de suivi (ex. KL-26-00012)" aria-label="Numéro de suivi" autocomplete="off" autocapitalize="characters" required></label>
+          <button class="btn btn-noir btn-carre" type="submit" aria-label="Rechercher">${ic('suivant')}</button>
+        </form>
+        <div data-vedette></div>
+        <div class="grille-2">
+          <a class="tuile ocre" href="#/envoyer">${ic('colis', 'ic-lg')}Envoyer un colis</a>
+          <a class="tuile" href="#/envoyer">${ic('prix', 'ic-lg')}Calculer le prix</a>
+          <a class="tuile" href="#/guichets">${ic('lieu', 'ic-lg')}Guichets &amp; horaires</a>
+          <a class="tuile" href="#/mes-colis">${ic('liste', 'ic-lg')}Mes colis</a>
+        </div>
+        <div data-autres class="pile" style="--gap:10px"></div>
+      </div>`;
+    main.querySelector('[data-recherche]').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const n = new FormData(e.target).get('numero').trim().toUpperCase();
+      if (n) location.hash = `#/suivi/${encodeURIComponent(n)}`;
     });
-  });
-}
 
-function getOTPValue() {
-  return Array.from(document.querySelectorAll('.otp-input')).map(i => i.value).join('');
-}
-
-function formatTelephone() {
-  const raw = document.getElementById('auth-phone').value.replace(/\D/g,'');
-  return '+33' + (raw.startsWith('0') ? raw.slice(1) : raw);
-}
-
-async function authEnvoyerOTP() {
-  const tel = formatTelephone();
-  if (tel.length < 10) return UI.toastErr('Numéro invalide');
-  APP.authTel = tel;
-  UI.showLoader();
-  try {
-    const res = await API.Auth.envoyerOTP(tel);
-    APP.debugCode = res.debugCode || null;
-    if (res.nouvelUtilisateur) {
-      montrerFicheInscription();
-    } else {
-      afficherOTP(tel, res.debugCode);
+    if (!u) return;
+    try {
+      const r = await api.get('/colis');
+      mes = { colis: r.colis, le: Date.now() };
+      stock.ecrire('mes_colis', mes);
+    } catch (e) {
+      if (!e.reseau) return;
+      if (mes) bandeauReseau(mes.le);
     }
-  } catch(e) {
-    if (e.message && (
-      e.message.includes('Prénom') ||
-      e.message.includes('prenom') ||
-      e.message.includes('inscription') ||
-      e.message.includes('requis pour')
-    )) {
-      montrerFicheInscription();
-    } else {
-      UI.toastErr(e.message || 'Erreur envoi SMS');
+    if (!mes?.colis?.length) return;
+    const actifs = mes.colis.filter(c => !['remis', 'annule'].includes(c.statut));
+    const vedette = actifs.find(c => c.statut === 'pret') || actifs[0];
+    if (vedette) main.querySelector('[data-vedette]').innerHTML = carteVedette(vedette);
+    const autres = actifs.filter(c => c !== vedette).slice(0, 4);
+    if (autres.length) {
+      main.querySelector('[data-autres]').innerHTML = `<h2>Mes autres colis</h2>${autres.map(ligneColis).join('')}`;
     }
-  } finally {
-    UI.hideLoader();
   }
-}
 
-async function authCreerCompte() {
-  const prenom = document.getElementById('auth-prenom').value.trim();
-  const nom    = document.getElementById('auth-nom').value.trim();
-  if (!prenom || !nom) return UI.toastErr('Prénom et nom requis');
-  UI.showLoader();
-  try {
-    const res = await API.Auth.envoyerOTP(APP.authTel, prenom, nom);
-    APP.debugCode = res.debugCode || null;
-    afficherOTP(APP.authTel, res.debugCode);
-  } catch(e) {
-    UI.toastErr(e.message || 'Erreur');
-  } finally {
-    UI.hideLoader();
+  function carteVedette(c) {
+    const i = indexEtape(c.statut);
+    return `
+      <div class="carte-vert pile vedette" style="--gap:14px">
+        <div class="ligne entre" style="align-items:flex-start">
+          <div>
+            <div class="petit" style="opacity:.85">${esc(c.numeroSuivi)} · ${c.mode === 'mer' ? 'bateau' : 'avion'}</div>
+            <div class="etat titre">${esc(c.statutLabel)}</div>
+            <div style="font-size:15px">${esc(nomGuichet(c.guichet))}</div>
+          </div>
+        </div>
+        <div class="progression" aria-hidden="true">${ETAPES.map((_, k) => `<span class="${k <= i ? 'fait' : ''}"></span>`).join('')}</div>
+        <div class="progression-lib" aria-hidden="true">${ETAPES.map(e => `<span>${e.lib}</span>`).join('')}</div>
+        <div class="encart-code">
+          ${c.codeRetrait ? `<div><div class="tres-petit muet">Code de retrait</div><div class="valeur">${esc(c.codeRetrait)}</div></div>`
+                          : `<div class="petit">${c.statut === 'reserve' ? `Prix estimé : <b>${gnf(c.tarif?.totalGnf)}</b>` : c.solde?.soldeGnf > 0 ? `Reste à payer : <b>${gnf(c.solde.soldeGnf)}</b>` : 'Tout est payé'}</div>`}
+          <a class="btn btn-noir" href="#/suivi/${encodeURIComponent(c.numeroSuivi)}">Détails ${ic('suivant', 'ic-sm')}</a>
+        </div>
+      </div>`;
   }
-}
 
-function afficherOTP(tel, debugCode) {
-  document.getElementById('auth-phone-sheet').style.display = 'none';
-  document.getElementById('auth-register-sheet').style.display = 'none';
-  document.getElementById('auth-otp-sheet').style.display = 'block';
-  const desc = document.getElementById('auth-otp-desc');
-  desc.textContent = `Code envoyé au ${tel}`;
-  if (debugCode) {
-    desc.innerHTML = `Code envoyé au ${tel}<br><span style="background:#EAF5F0;color:#116647;padding:6px 14px;border-radius:6px;font-size:20px;font-weight:700;letter-spacing:4px;display:inline-block;margin-top:8px">${debugCode}</span>`;
-    const inputs = document.querySelectorAll('.otp-input');
-    debugCode.toString().split('').forEach((d, i) => {
-      if (inputs[i]) {
-        inputs[i].value = d;
-        inputs[i].classList.add('filled');
+  function ligneColis(c) {
+    const classe = c.statut === 'pret' ? 'pret' : c.mode;
+    return `
+      <a class="ligne-colis" href="#/suivi/${encodeURIComponent(c.numeroSuivi)}">
+        <span class="pastille ${classe}">${c.statut === 'pret' ? ic('ok') : icMode(c.mode)}</span>
+        <span class="grandit">
+          <span class="gras" style="display:block">${esc(c.statutLabel)}</span>
+          <span class="petit muet">${esc(c.numeroSuivi)} · pour ${esc(c.destinataire?.nom || '')}</span>
+        </span>
+        ${ic('suivant', 'ic-sm')}
+      </a>`;
+  }
+
+  // ════════════════════════════════════════════════════════
+  //  SUIVI D'UN COLIS
+  // ════════════════════════════════════════════════════════
+  async function suivi(numero) {
+    numero = decodeURIComponent(numero).toUpperCase();
+    const caches = stock.lire('suivis', {});
+    let c = null, complet = false, horsLigne = null;
+    try {
+      if (session.connecte()) {
+        try { c = (await api.get(`/colis/${numero}`)).colis; complet = true; }
+        catch (e) { if (e.reseau) throw e; }
       }
+      if (!c) c = (await api.get(`/colis/suivi/${numero}`)).colis;
+      caches[numero] = { c, complet, le: Date.now() };
+      // on garde les 20 derniers
+      const cles = Object.keys(caches).sort((a, b) => caches[b].le - caches[a].le).slice(0, 20);
+      stock.ecrire('suivis', Object.fromEntries(cles.map(k => [k, caches[k]])));
+    } catch (e) {
+      if (e.reseau && caches[numero]) { ({ c, complet } = caches[numero]); horsLigne = caches[numero].le; }
+      else if (e.status === 404) {
+        main.innerHTML = `<div class="pile"><a href="#/" class="btn btn-rond" aria-label="Retour">${ic('retour')}</a>
+          <h1>Numéro introuvable</h1><p class="muet">Vérifiez le numéro <b>${esc(numero)}</b> sur votre reçu ou votre SMS.</p>
+          <a class="btn btn-principal btn-plein" href="#/">Nouvelle recherche</a></div>`;
+        return;
+      } else throw e;
+    }
+    bandeauReseau(horsLigne);
+
+    const g = complet ? c.guichetInfo : c.guichet;
+    const solde = complet ? c.solde : { soldeGnf: c.soldeGnf, soldeEur: c.soldeEur, magasinage: c.magasinage };
+    const pret = c.statut === 'pret';
+    const historique = [...(c.historique || [])].reverse();
+    const poids = complet ? (c.poidsReel || c.poidsEstime) : c.poids;
+    const peutAutoriser = complet && !['reserve', 'remis', 'annule'].includes(c.statut);
+    const estime = c.statut === 'reserve';
+    const mag = solde.magasinage;
+    const joursRestants = mag?.gratuitJusquau ? Math.ceil((new Date(mag.gratuitJusquau) - Date.now()) / 86400000) : null;
+
+    main.innerHTML = `
+      <div class="pile">
+        <div class="ligne">
+          <a href="#/" class="btn btn-rond" aria-label="Retour">${ic('retour')}</a>
+          <div class="grandit"><div class="tres-petit muet">Colis</div><div class="titre" style="font-size:19px;font-weight:700">${esc(c.numeroSuivi)}</div></div>
+          <button class="btn btn-rond" data-partager aria-label="Partager le suivi">${ic('partager')}</button>
+        </div>
+
+        <div class="carte-vert pile" style="--gap:10px">
+          <span class="badge" style="align-self:flex-start;background:var(--ocre);color:var(--encre)">${pret ? ic('ok', 'ic-sm') : icMode(c.mode).replace('class="ic ', 'class="ic ic-sm ')} ${esc(c.statutLabel)}</span>
+          <h1 style="font-size:26px">${esc(titreStatut(c, g))}</h1>
+          <p style="opacity:.9">${poids ? esc(kg(poids)) : ''}${c.nbCartons ? ` · ${c.nbCartons} carton${c.nbCartons > 1 ? 's' : ''}` : ''}${c.lotCode ? ` · lot ${esc(c.lotCode)}` : ''}</p>
+        </div>
+
+        ${pret && c.codeRetrait ? `
+          <div class="carte pile">
+            <h3>Code de retrait</h3>
+            <div class="code-4">${c.codeRetrait.split('').map(d => `<div>${esc(d)}</div>`).join('')}</div>
+            <p class="petit muet">Montrez ce code et une pièce d'identité à l'agent du guichet.</p>
+          </div>` : pret ? `
+          <div class="carte pile">
+            <h3>Code de retrait</h3>
+            <p class="petit muet">Le code a été envoyé par SMS au destinataire. ${session.connecte() ? '' : 'Connectez-vous avec son numéro pour le revoir ici.'}</p>
+            ${session.connecte() ? '' : `<a class="btn btn-plein" href="#/connexion" data-memo-retour>Se connecter</a>`}
+          </div>` : ''}
+
+        ${complet && c.tiersAutorise?.nom ? `<p class="bandeau bandeau-vert">${ic('ajoutPers', 'ic-sm')}<span><b>${esc(c.tiersAutorise.nom)}</b> peut retirer ce colis.</span></p>` : ''}
+        ${peutAutoriser ? `<button class="btn btn-plein" data-tiers>${ic('ajoutPers', 'ic-sm')} Envoyer quelqu'un à ma place</button>` : ''}
+
+        ${(solde.soldeGnf > 0 || pret) ? `
+        <div class="grille-2">
+          ${solde.soldeGnf > 0 ? `
+          <div class="carte-ocre pile" style="--gap:6px">
+            <div class="tres-petit gras">${estime ? 'Prix estimé' : 'Reste à payer'}</div>
+            <div class="titre" style="font-size:22px;font-weight:800">${gnf(solde.soldeGnf)}</div>
+            <div class="tres-petit">soit ${eur(solde.soldeEur)}${estime ? ' · fixé à la pesée' : ''}</div>
+            ${c.statut !== 'reserve' ? `<button class="btn btn-noir btn-petit" data-payer style="margin-top:6px">Payer</button>` : ''}
+          </div>` : `
+          <div class="carte pile" style="--gap:6px"><div class="tres-petit gras muet">Paiement</div><div class="titre" style="font-size:20px;font-weight:800">Tout est payé</div></div>`}
+          ${pret && joursRestants !== null ? `
+          <div class="carte pile" style="--gap:6px">
+            <div class="tres-petit gras muet">${joursRestants > 0 ? 'Retrait gratuit' : 'Frais de garde'}</div>
+            <div class="titre" style="font-size:22px;font-weight:800">${joursRestants > 0 ? `encore ${joursRestants} j` : gnf(mag.fraisGnf)}</div>
+            <div class="tres-petit muet">${joursRestants > 0 ? `Ensuite ${gnf(CONFIG?.magasinage?.fraisJourGnf)} par jour` : `${mag.joursFactures} jour(s) facturé(s)`}</div>
+          </div>` : ''}
+        </div>` : ''}
+
+        ${c.statut === 'reserve' ? `
+          <div class="carte pile">
+            <h3>Prochaine étape : le dépôt</h3>
+            <p class="petit">Apportez le colis au dépôt avec ce numéro. Il sera pesé et le prix final sera fixé à ce moment-là.</p>
+            ${(CONFIG?.depots || []).map(d => `<p class="petit"><b>${esc(d.nom)}</b>${d.adresse ? ` · ${esc(d.adresse)}` : ''}${d.horaires ? `<br><span class="muet">${esc(d.horaires)}</span>` : ''}</p>`).join('')}
+          </div>` : ''}
+
+        <div class="carte">
+          <h2 style="margin-bottom:14px">Historique</h2>
+          <div class="frise">
+            ${historique.map(h => `
+              <div class="etape"><div class="rail"><div class="point"></div><div class="trait"></div></div>
+                <div class="texte"><div class="gras">${esc(h.label)}</div><div class="petit muet">${esc(date(h.le))}${h.detail ? ` · ${esc(h.detail)}` : ''}</div></div>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        ${g?.nom ? `
+        <div class="grille-3">
+          ${g.telephone ? `<a class="tuile" style="min-height:72px;gap:4px;align-items:center;justify-content:center;font-size:13px" href="tel:${esc(g.telephone)}">${ic('tel')}Appeler</a>
+          <a class="tuile" style="min-height:72px;gap:4px;align-items:center;justify-content:center;font-size:13px" href="${esc(lienWhatsApp(g.telephone, `Bonjour, je vous contacte pour le colis ${c.numeroSuivi}.`))}" target="_blank" rel="noopener">${ic('bulle')}WhatsApp</a>` : ''}
+          <a class="tuile" style="min-height:72px;gap:4px;align-items:center;justify-content:center;font-size:13px" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${g.nom} ${g.adresse || ''} ${g.ville || 'Conakry'}`)}" target="_blank" rel="noopener">${ic('lieu')}Itinéraire</a>
+        </div>
+        <p class="petit muet centre">${esc(g.nom)}${g.horaires ? ` · ${esc(g.horaires)}` : ''}</p>` : ''}
+        ${complet && c.statut === 'reserve' ? `<button class="btn btn-lien" data-annuler>Annuler cette réservation</button>` : ''}
+      </div>`;
+
+    main.querySelector('[data-memo-retour]')?.addEventListener('click', () => stock.ecrire('retour', location.hash));
+    main.querySelector('[data-partager]').addEventListener('click', async () => {
+      const url = `${location.origin}${location.pathname}#/suivi/${c.numeroSuivi}`;
+      const texte = `Suivi du colis ${c.numeroSuivi}`;
+      if (navigator.share) { try { await navigator.share({ title: texte, text: texte, url }); } catch {} }
+      else { window.open(lienWhatsApp('', `${texte} : ${url}`), '_blank', 'noopener'); }
     });
-  } else {
-    document.querySelector('.otp-input').focus();
-  }
-}
-
-async function authVerifierOTP() {
-  const code = getOTPValue();
-  if (code.length !== 6) return UI.toastErr('Entrez les 6 chiffres');
-  UI.showLoader();
-  try {
-    await API.Auth.verifierOTP(APP.authTel, code);
-    UI.toastOk('Connexion réussie !');
-    afficherApp();
-  } catch(e) {
-    UI.toastErr(e.message || 'Code invalide');
-  } finally {
-    UI.hideLoader();
-  }
-}
-
-async function authRenvoyerOTP() {
-  UI.showLoader();
-  try {
-    const res = await API.Auth.envoyerOTP(APP.authTel);
-    UI.toastOk('Code renvoyé !');
-    document.querySelectorAll('.otp-input').forEach(i => {
-      i.value = '';
-      i.classList.remove('filled');
+    main.querySelector('[data-tiers]')?.addEventListener('click', () => autoriserTiers(c));
+    main.querySelector('[data-payer]')?.addEventListener('click', () => payer(c, solde));
+    main.querySelector('[data-annuler]')?.addEventListener('click', async () => {
+      if (!confirm('Annuler cette réservation ?')) return;
+      try { await api.del(`/colis/${c.numeroSuivi}`); toast('Réservation annulée.', 'ok'); router(); }
+      catch (e) { toast(e.message, 'erreur'); }
     });
-    afficherOTP(APP.authTel, res.debugCode);
-  } catch(e) {
-    UI.toastErr('Erreur renvoi');
-  } finally {
-    UI.hideLoader();
-  }
-}
-
-window.authEnvoyerOTP  = authEnvoyerOTP;
-window.authCreerCompte = authCreerCompte;
-window.authVerifierOTP = authVerifierOTP;
-window.authRenvoyerOTP = authRenvoyerOTP;
-
-// ── ACCUEIL ─────────────────────────────────────────────────
-async function chargerAccueil() {
-  const user = API.getUser();
-  if (user) {
-    document.getElementById('home-greeting').textContent = `Bonjour, ${user.prenom} 👋`;
-    document.getElementById('home-avatar').textContent = user.initiales || (user.prenom[0] + user.nom[0]).toUpperCase();
   }
 
-  const paysEl = document.getElementById('home-pays');
-  if (APP.config?.pays && paysEl) {
-    paysEl.innerHTML = APP.config.pays.slice(0,6).map(p => `
-      <div onclick="pickupSelectPays('${p.code}')" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-width:40px;transition:transform 0.15s" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'" ontouchstart="this.style.transform='scale(0.9)'" ontouchend="this.style.transform='scale(1)'">
-        <span style="font-size:26px;line-height:1">${p.drapeau}</span>
-        <span style="font-size:10px;font-weight:500;color:var(--muted)">${p.nom.split(' ')[0]}</span>
-      </div>`).join('');
+  function titreStatut(c, g) {
+    const nom = g?.nom || 'guichet';
+    switch (c.statut) {
+      case 'reserve': return 'Réservé : à déposer au dépôt';
+      case 'depose': return 'Reçu au dépôt, bientôt en route';
+      case 'charge': return `Chargé, départ ${c.mode === 'mer' ? 'en bateau' : 'en avion'} prochainement`;
+      case 'en_transit': return `En route vers la Guinée ${c.mode === 'mer' ? 'par bateau' : 'par avion'}`;
+      case 'arrive': return 'Arrivé en Guinée, en cours de dédouanement';
+      case 'pret': return `Votre colis vous attend au ${nom}`;
+      case 'remis': return 'Colis remis. Merci !';
+      default: return c.statutLabel;
+    }
   }
 
-  const homeColis = document.getElementById('home-colis-list');
-  homeColis.innerHTML = UI.skeletonColis(3);
-
-  try {
-    const data = await API.Colis.mesColis();
-    APP.colis = data.colis || [];
-    renderColisHome(APP.colis.slice(0,3));
-
-    const nbEl = document.querySelector('#home-stats .stat-val');
-    if (nbEl) UI.animerCompteur(nbEl, APP.colis.length);
-
-    const actif = APP.colis.some(c => c.statut === 'en_transit' || c.statut === 'collecte');
-    document.getElementById('nav-dot').style.display = actif ? 'block' : 'none';
-  } catch(e) {
-    homeColis.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div>Aucun envoi pour l'instant</div>`;
+  function autoriserTiers(c) {
+    const { el, fermer } = modale(`
+      <form class="pile" style="--gap:14px">
+        <div class="ligne entre"><h2>Qui vient retirer ?</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+        <p class="petit muet">Cette personne recevra le code de retrait par SMS. Elle devra montrer sa pièce d'identité.</p>
+        <label class="champ">Nom complet <input class="saisie" name="nom" required autocomplete="name"></label>
+        <label class="champ">Téléphone <input class="saisie" name="telephone" type="tel" inputmode="tel" required placeholder="6XX XX XX XX"></label>
+        <button class="btn btn-principal btn-grand" type="submit">Autoriser</button>
+      </form>`);
+    el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      try {
+        await api.patch(`/colis/${c.numeroSuivi}/tiers`, { nom: f.get('nom'), telephone: normTel(f.get('telephone')) });
+        fermer(); toast('Personne autorisée. Elle va recevoir un SMS.', 'ok'); router();
+      } catch (err) { toast(err.message, 'erreur'); }
+    });
   }
-}
 
-function renderColisHome(liste) {
-  const el = document.getElementById('home-colis-list');
-  if (!liste.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div>Aucun envoi pour l'instant<br><button class="btn btn-primary btn-sm" style="margin-top:12px;width:auto;padding:0 20px" onclick="navGo('pickup')">Premier envoi</button></div>`;
-    return;
+  function payer(c, solde) {
+    const { el } = modale(`
+      <div class="pile" style="--gap:14px">
+        <div class="ligne entre"><h2>Payer ${gnf(solde.soldeGnf)}</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+        <button class="btn btn-plein btn-grand" data-carte>${ic('carte')} Carte bancaire (${eur(solde.soldeEur)})</button>
+        <button class="btn btn-plein btn-grand" disabled>Orange Money · bientôt</button>
+        <button class="btn btn-plein btn-grand" disabled>MTN MoMo · bientôt</button>
+        <p class="bandeau bandeau-ocre">${ic('billet', 'ic-sm')}<span>Vous pouvez aussi payer en espèces au guichet, au moment du retrait.</span></p>
+      </div>`);
+    el.querySelector('[data-carte]').addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try { const r = await api.post('/paiements/creer-session', { numero: c.numeroSuivi }); location.href = r.url; }
+      catch (err) { toast(err.message, 'erreur'); e.target.disabled = false; }
+    });
   }
-  el.innerHTML = liste.map(c => `
-    <div class="row fade-in" onclick="voirColis('${c._id}')">
-      <div class="row-icon">${UI.SVG.box()}</div>
-      <div class="row-main">
-        <div class="row-title">#${c.numeroSuivi}</div>
-        <div class="row-sub">${c.villeDestination}, ${c.paysDestination} · ${c.nomDestinataire}</div>
-      </div>
-      <div class="row-right">${UI.badgeStatut(c.statut)}</div>
-    </div>`).join('');
-}
 
-// ── PICKUP ──────────────────────────────────────────────────
-function initPickup() {
-  if (!APP.config) return;
+  // ════════════════════════════════════════════════════════
+  //  ENVOYER : estimation + réservation
+  // ════════════════════════════════════════════════════════
+  async function envoyer() {
+    const etat = stock.lire('brouillon_envoi') || { mode: 'air', poids: 5, type: 'vetements', assurance: false, valeur: '' };
+    const modes = CONFIG.modes;
+    const types = CONFIG.typesColis;
 
-  const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
-  document.getElementById('f-date').min = tmr.toISOString().split('T')[0];
+    main.innerHTML = `
+      <div class="pile">
+        <div class="ligne"><a href="#/" class="btn btn-rond" aria-label="Retour">${ic('retour')}</a><h1 style="font-size:24px">Envoyer un colis</h1></div>
 
-  const crSel = document.getElementById('f-creneau');
-  crSel.innerHTML = APP.config.creneaux.map(c => `<option value="${c.key}">${c.label}</option>`).join('');
+        <section class="pile" style="--gap:8px" aria-labelledby="q1">
+          <h3 id="q1">1. Comment l'envoyer ?</h3>
+          <div class="grille-2">${modes.map(m => `
+            <button type="button" class="choix" style="min-height:112px;justify-content:space-between" data-mode="${m.key}" aria-pressed="${etat.mode === m.key}">
+              ${icMode(m.key).replace('class="ic ', 'class="ic ic-lg ')}
+              <span class="nom" style="font-size:17px">${esc(m.label)}</span>
+              <span class="sous">${esc(m.delai)}</span>
+            </button>`).join('')}
+          </div>
+        </section>
 
-  const paysGrid = document.getElementById('f-pays-grid');
-  paysGrid.innerHTML = APP.config.pays.map(p => `
-    <div class="country-chip ${APP.form.paysCode === p.code ? 'on' : ''}" onclick="pickupSelectPays('${p.code}')">
-      <span class="flag">${p.drapeau}</span>
-      <span>${p.nom.split(' ')[0]}</span>
-    </div>`).join('');
+        <section class="pile" style="--gap:8px" aria-labelledby="q2">
+          <h3 id="q2">2. Poids estimé</h3>
+          <div class="carte pile">
+            <div class="pas-a-pas">
+              <button type="button" class="btn" data-moins aria-label="Moins un kilo">−</button>
+              <div><div class="valeur" data-poids aria-live="polite"></div><div class="tres-petit muet centre" data-note-poids></div></div>
+              <button type="button" class="btn" data-plus aria-label="Plus un kilo">+</button>
+            </div>
+            <div class="ligne" style="--gap:6px;flex-wrap:wrap">${[2, 5, 10, 20, 30].map(k => `<button type="button" class="choix choix-noir" style="min-height:44px;flex:1;align-items:center;padding:0 4px;white-space:nowrap;font-weight:600" data-preset="${k}">${k} kg</button>`).join('')}</div>
+          </div>
+        </section>
 
-  refreshVilles(APP.form.paysCode);
+        <section class="pile" style="--gap:8px" aria-labelledby="q3">
+          <h3 id="q3">3. Contenu</h3>
+          <div class="grille-3">${types.map(t => `
+            <button type="button" class="choix choix-ocre" style="align-items:center;text-align:center;min-height:68px" data-type="${t.key}" aria-pressed="${etat.type === t.key}">
+              <span class="nom" style="font-size:15px">${esc(t.label)}</span>${t.surcharge ? `<span class="sous">+${Math.round(t.surcharge * 100)} %</span>` : ''}
+            </button>`).join('')}
+          </div>
+          <label class="case"><input type="checkbox" data-assurance ${etat.assurance ? 'checked' : ''}> Assurer le colis (${(CONFIG.tauxAssurance * 100).toLocaleString('fr-FR')} % de la valeur)</label>
+          <label class="champ ${etat.assurance ? '' : 'cache'}" data-champ-valeur>Valeur du contenu (€)
+            <input class="saisie" type="number" inputmode="decimal" min="0" data-valeur value="${esc(etat.valeur)}">
+          </label>
+        </section>
 
-  const typeGrid = document.getElementById('f-type-grid');
-  const iconsType = { vetements:'👕', electronique:'📱', medicaments:'💊', documents:'📄', alimentaire:'🥫', mixte:'📦' };
-  typeGrid.innerHTML = APP.config.typesColis.map(t => `
-    <div class="pkg-chip ${APP.form.typeColis === t.key ? 'on' : ''}" onclick="pickupSelectType('${t.key}')">
-      <div class="pkg-icon" style="font-size:18px">${iconsType[t.key]||'📦'}</div>
-      <span>${t.label}</span>
-    </div>`).join('');
+        <div class="carte-noire pile" style="--gap:4px" aria-live="polite">
+          <div class="petit" style="color:#D6CFC0">Prix estimé</div>
+          <div class="prix-gnf" data-prix-gnf></div>
+          <div data-prix-eur></div>
+          <div style="height:1px;background:#3A3830;margin:10px 0 6px"></div>
+          <div class="ligne tres-petit" style="color:#D6CFC0;align-items:flex-start">${ic('balance', 'ic-sm')}<span>Le prix final est fixé à la pesée au dépôt. Taux : 1 € = ${gnf(CONFIG.tauxEurGnf)}, bloqué sur votre reçu.</span></div>
+        </div>
 
-  ['f-poids','f-valeur'].forEach(id => {
-    document.getElementById(id).oninput = () => rafraichirTarif();
-  });
-}
+        <form class="pile" style="--gap:12px" data-form novalidate>
+          <h3>4. Pour qui ?</h3>
+          <label class="champ">Nom du destinataire <input class="saisie" name="nom" required autocomplete="off"></label>
+          <label class="champ">Son téléphone en Guinée <input class="saisie" name="telephone" type="tel" inputmode="tel" required placeholder="6XX XX XX XX"></label>
+          <label class="champ">Guichet de retrait
+            <select class="saisie" name="guichet" required>${CONFIG.guichets.map(g => `<option value="${esc(g.code)}">${esc(g.nom)}</option>`).join('')}</select>
+          </label>
+          <label class="champ">Nombre de cartons <input class="saisie" name="nbCartons" type="number" inputmode="numeric" min="1" value="1"></label>
+          <label class="champ">Contenu (facultatif) <input class="saisie" name="description" placeholder="Ex. vêtements, chaussures"></label>
+          <label class="case"><input type="checkbox" name="payeurArrivee"> Le destinataire paiera à l'arrivée</label>
+          <button class="btn btn-principal btn-grand btn-plein" type="submit">Réserver mon envoi</button>
+          <p class="tres-petit muet centre">Vous recevrez un numéro de suivi à présenter au dépôt.</p>
+        </form>
+      </div>`;
 
-function refreshVilles(paysCode) {
-  const pays = APP.config?.pays?.find(p => p.code === paysCode);
-  const sel  = document.getElementById('f-ville');
-  if (sel && pays) sel.innerHTML = pays.villes.map(v => `<option>${v}</option>`).join('');
-}
-
-function pickupSelectPays(code) {
-  APP.form.paysCode = code;
-  document.querySelectorAll('#f-pays-grid .country-chip').forEach(c => {
-    c.classList.toggle('on', c.getAttribute('onclick').includes(`'${code}'`));
-  });
-  refreshVilles(code);
-  rafraichirTarif();
-}
-window.pickupSelectPays = pickupSelectPays;
-
-function pickupSelectType(key) {
-  APP.form.typeColis = key;
-  document.querySelectorAll('#f-type-grid .pkg-chip').forEach(c => {
-    c.classList.toggle('on', c.getAttribute('onclick').includes(`'${key}'`));
-  });
-}
-window.pickupSelectType = pickupSelectType;
-
-async function rafraichirTarif() {
-  const poids  = document.getElementById('f-poids').value;
-  const valeur = document.getElementById('f-valeur').value;
-  if (!poids) return;
-  try {
-    const data = await API.Colis.tarif(APP.form.paysCode, poids, valeur);
-    const t = data.tarif;
-    const f = v => parseFloat(v).toFixed(2) + ' €';
-    document.getElementById('tarif-preview').innerHTML = `
-      <div class="recap-line"><span class="lbl">Pick-up à domicile</span><span>${f(t.fraisCollecte)}</span></div>
-      <div class="recap-line"><span class="lbl">Transport · ${t.poids} kg</span><span>${f(t.fraisTransport)}</span></div>
-      ${t.fraisAssurance > 0 ? `<div class="recap-line"><span class="lbl">Assurance</span><span>${f(t.fraisAssurance)}</span></div>` : ''}
-      <div class="recap-total"><span class="lbl">Total</span><span class="amt">${f(t.total)}</span></div>`;
-    APP.form.tarif = t;
-  } catch(e) {}
-}
-
-async function pickupSuivant() {
-  const adresse      = document.getElementById('f-adresse').value.trim();
-  const date         = document.getElementById('f-date').value;
-  const creneau      = document.getElementById('f-creneau').value;
-  const ville        = document.getElementById('f-ville').value;
-  const destinataire = document.getElementById('f-destinataire').value.trim();
-  const telDest      = document.getElementById('f-tel-dest').value.trim();
-  const poids        = document.getElementById('f-poids').value;
-
-  if (!adresse)      return UI.toastErr('Adresse de collecte requise');
-  if (!date)         return UI.toastErr('Date de collecte requise');
-  if (!destinataire) return UI.toastErr('Nom du destinataire requis');
-  if (!telDest)      return UI.toastErr('Téléphone du destinataire requis');
-  if (!poids)        return UI.toastErr('Poids du colis requis');
-
-  APP.form.adresse      = adresse;
-  APP.form.date         = date;
-  APP.form.creneau      = creneau;
-  APP.form.ville        = ville;
-  APP.form.destinataire = destinataire;
-  APP.form.telDest      = telDest;
-  APP.form.poids        = poids;
-  APP.form.valeur       = document.getElementById('f-valeur').value || 0;
-
-  afficherRecap();
-  navGo('paiement');
-}
-window.pickupSuivant = pickupSuivant;
-
-function afficherRecap() {
-  const f    = APP.form;
-  const pays = APP.config?.pays?.find(p => p.code === f.paysCode);
-  const t    = f.tarif;
-  const fmt  = v => parseFloat(v || 0).toFixed(2) + ' €';
-
-  document.getElementById('recap-commande').innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-      <span style="font-size:26px">${pays?.drapeau || ''}</span>
-      <div>
-        <div style="font-size:14px;font-weight:600">${pays?.nom || f.paysCode} · ${f.ville}</div>
-        <div style="font-size:12px;color:var(--muted)">${f.destinataire} · ${f.poids} kg</div>
-      </div>
-    </div>
-    ${t ? `
-    <div class="recap-line"><span class="lbl">Pick-up</span><span>${fmt(t.fraisCollecte)}</span></div>
-    <div class="recap-line"><span class="lbl">Transport</span><span>${fmt(t.fraisTransport)}</span></div>
-    ${t.fraisAssurance > 0 ? `<div class="recap-line"><span class="lbl">Assurance</span><span>${fmt(t.fraisAssurance)}</span></div>` : ''}
-    <div class="recap-total"><span class="lbl">Total</span><span class="amt">${fmt(t.total)}</span></div>
-    ` : ''}`;
-
-  const btnPayer = document.getElementById('btn-payer');
-  if (btnPayer && t) btnPayer.textContent = `Confirmer — ${fmt(t.total)}`;
-}
-
-let _payMode = 'carte';
-function selectPay(el, mode) {
-  _payMode = mode;
-  document.querySelectorAll('.pay-row').forEach(r => r.classList.remove('on'));
-  el.classList.add('on');
-  el.querySelector('input').checked = true;
-}
-window.selectPay = selectPay;
-
-// ── CONFIRMER COMMANDE + STRIPE ──────────────────────────────
-async function confirmerCommande() {
-  UI.showLoader();
-  try {
-    const f = APP.form;
-
-    // 1. Créer le colis en base
-    const payload = {
-      adresseCollecte:  f.adresse,
-      villeCollecte:    f.adresse.split(',').pop().trim() || 'France',
-      dateCollecte:     new Date(f.date).toISOString(),
-      creneau:          f.creneau,
-      paysDestination:  f.paysCode,
-      villeDestination: f.ville,
-      nomDestinataire:  f.destinataire,
-      telDestinataire:  f.telDest,
-      typeColis:        f.typeColis,
-      poidsKg:          parseFloat(f.poids),
-      valeurDeclare:    parseFloat(f.valeur) || 0,
+    const $ = (s) => main.querySelector(s);
+    const maj = () => {
+      stock.ecrire('brouillon_envoi', etat);
+      main.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === etat.mode));
+      main.querySelectorAll('[data-type]').forEach(b => b.setAttribute('aria-pressed', b.dataset.type === etat.type));
+      main.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', Number(b.dataset.preset) === etat.poids));
+      $('[data-champ-valeur]').classList.toggle('cache', !etat.assurance);
+      const m = modes.find(x => x.key === etat.mode);
+      $('[data-poids]').textContent = kg(etat.poids);
+      $('[data-note-poids]').textContent = etat.poids < m.poidsMin ? `minimum facturé : ${m.poidsMin} kg` : `${eur(m.prixKg)} le kilo`;
+      const t = KolisTarif.calculerTarif(CONFIG.regles, { mode: etat.mode, poidsKg: etat.poids, typeColis: etat.type, valeurDeclaree: etat.valeur, assurance: etat.assurance });
+      $('[data-prix-gnf]').textContent = gnf(t.totalGnf);
+      $('[data-prix-eur]').textContent = `soit ${eur(t.totalEur)}`;
     };
-    const data = await API.Colis.creer(payload);
-    APP.colisActif = data.colis;
+    main.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { etat.mode = b.dataset.mode; maj(); }));
+    main.querySelectorAll('[data-type]').forEach(b => b.addEventListener('click', () => { etat.type = b.dataset.type; maj(); }));
+    main.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => { etat.poids = Number(b.dataset.preset); maj(); }));
+    $('[data-moins]').addEventListener('click', () => { etat.poids = Math.max(1, Math.round(etat.poids) - 1); maj(); });
+    $('[data-plus]').addEventListener('click', () => { etat.poids = Math.min(500, Math.round(etat.poids) + 1); maj(); });
+    $('[data-assurance]').addEventListener('change', (e) => { etat.assurance = e.target.checked; maj(); });
+    $('[data-valeur]').addEventListener('input', (e) => { etat.valeur = e.target.value; maj(); });
+    maj();
 
-    // 2. Paiement par carte → Stripe Checkout
-    if (_payMode === 'carte') {
-      const token = API.getToken();
-      const res   = await fetch('https://diasporalink-api.onrender.com/api/paiements/creer-session', {
-        method:  'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ colisId: data.colis._id }),
-      });
-      const session = await res.json();
-      if (!session.succes || !session.url) {
-        throw new Error(session.message || 'Erreur création session Stripe');
-      }
-      // Réinitialiser le formulaire avant la redirection
-      APP.form = { paysCode: 'SN', typeColis: 'vetements' };
-      // Rediriger vers Stripe Checkout
-      window.location.href = session.url;
+    $('[data-form]').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      if (!f.get('nom') || !f.get('telephone')) { toast('Indiquez le nom et le téléphone du destinataire.', 'erreur'); return; }
+      stock.ecrire('brouillon_dest', Object.fromEntries(f));
+      if (!exigerConnexion()) return;
+      const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
+      try {
+        const r = await api.post('/colis', {
+          mode: etat.mode, typeColis: etat.type, poidsEstime: etat.poids,
+          assurance: etat.assurance, valeurDeclaree: parseFloat(etat.valeur) || 0,
+          guichet: f.get('guichet'), nbCartons: parseInt(f.get('nbCartons'), 10) || 1,
+          description: f.get('description'), payeurArrivee: f.get('payeurArrivee') === 'on',
+          destinataire: { nom: f.get('nom'), telephone: normTel(f.get('telephone')) },
+        });
+        stock.suppr('brouillon_dest');
+        confirmation(r.colis);
+      } catch (err) { toast(err.message, 'erreur'); btn.disabled = false; }
+    });
+    // Formulaire restauré après la connexion
+    const brouillon = stock.lire('brouillon_dest');
+    if (brouillon) Object.entries(brouillon).forEach(([k, v]) => { const i = $(`[name="${k}"]`); if (i) i.type === 'checkbox' ? (i.checked = v === 'on') : (i.value = v); });
+  }
+
+  function confirmation(c) {
+    const d = CONFIG.depots[0] || {};
+    main.innerHTML = `
+      <div class="pile">
+        <div class="carte-vert pile" style="--gap:10px">
+          <span class="badge" style="align-self:flex-start;background:var(--ocre);color:var(--encre)">${ic('ok', 'ic-sm')} Réservé</span>
+          <h1>Votre numéro de suivi</h1>
+          <div class="titre" style="font-size:34px;font-weight:800;letter-spacing:1px">${esc(c.numeroSuivi)}</div>
+          <p>Prix estimé : <b>${gnf(c.tarif.totalGnf)}</b> (${eur(c.tarif.totalEur)})</p>
+        </div>
+        <div class="carte pile">
+          <h3>Et maintenant ?</h3>
+          <p>1. Apportez le colis au <b>${esc(d.nom || 'dépôt')}</b>${d.adresse ? `, ${esc(d.adresse)}` : ''}.</p>
+          ${d.horaires ? `<p class="petit muet">${esc(d.horaires)}</p>` : ''}
+          <p>2. Il sera pesé, vous payez et recevez votre reçu.</p>
+          <p>3. ${esc(c.destinataire.nom)} reçoit un SMS avec le code de retrait dès que le colis est au guichet.</p>
+        </div>
+        <a class="btn btn-principal btn-grand btn-plein" href="#/suivi/${encodeURIComponent(c.numeroSuivi)}">Voir le suivi</a>
+        <a class="btn btn-plein" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Je t'envoie un colis. Numéro de suivi : ${c.numeroSuivi}`)}`)}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} Prévenir ${esc(c.destinataire.nom.split(' ')[0])} sur WhatsApp</a>
+      </div>`;
+  }
+
+  // ════════════════════════════════════════════════════════
+  //  MES COLIS
+  // ════════════════════════════════════════════════════════
+  async function mesColis() {
+    if (!exigerConnexion()) return;
+    let mes = stock.lire('mes_colis');
+    try {
+      const r = await api.get('/colis');
+      mes = { colis: r.colis, le: Date.now() };
+      stock.ecrire('mes_colis', mes);
+    } catch (e) { if (!e.reseau || !mes) throw e; bandeauReseau(mes.le); }
+    const u = session.utilisateur();
+    const envoyes = mes.colis.filter(c => c.expediteur?.telephone === u.telephone || c.client === u._id);
+    const recus = mes.colis.filter(c => !envoyes.includes(c));
+    const bloc = (titre, liste) => liste.length ? `<h2>${titre}</h2><div class="pile" style="--gap:10px">${liste.map(ligneColis).join('')}</div>` : '';
+    main.innerHTML = `
+      <div class="pile">
+        <h1>Mes colis</h1>
+        ${mes.colis.length ? bloc('Je reçois', recus) + bloc('J\'envoie', envoyes)
+          : `<div class="vide pile"><p>Aucun colis pour le moment.</p><p class="petit">Les colis qui vous sont envoyés apparaissent ici automatiquement grâce à votre numéro de téléphone.</p><a class="btn btn-principal" href="#/envoyer">Envoyer un colis</a></div>`}
+      </div>`;
+  }
+
+  // ════════════════════════════════════════════════════════
+  //  GUICHETS
+  // ════════════════════════════════════════════════════════
+  async function guichets() {
+    const lieu = (l) => `
+      <div class="carte pile" style="--gap:6px">
+        <h3>${esc(l.nom)}</h3>
+        ${l.adresse ? `<p class="petit">${esc(l.adresse)}${l.ville ? `, ${esc(l.ville)}` : ''}</p>` : `<p class="petit muet">${esc(l.ville || '')}</p>`}
+        ${l.horaires ? `<p class="petit muet">${ic('horloge', 'ic-sm')} ${esc(l.horaires)}</p>` : ''}
+        ${l.telephone ? `<div class="ligne" style="--gap:8px;margin-top:6px">
+          <a class="btn btn-petit" href="tel:${esc(l.telephone)}">${ic('tel', 'ic-sm')} Appeler</a>
+          <a class="btn btn-petit" href="${esc(lienWhatsApp(l.telephone))}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} WhatsApp</a></div>` : ''}
+      </div>`;
+    main.innerHTML = `
+      <div class="pile">
+        <h1>Guichets &amp; horaires</h1>
+        <h2>Déposer un colis</h2>${CONFIG.depots.map(lieu).join('')}
+        <h2>Retirer un colis</h2>${CONFIG.guichets.map(lieu).join('')}
+      </div>`;
+  }
+
+  // ════════════════════════════════════════════════════════
+  //  COMPTE / CONNEXION
+  // ════════════════════════════════════════════════════════
+  function connexion() {
+    K.vueConnexion(main, {
+      titre: 'Connexion',
+      surSucces: () => {
+        const retour = stock.lire('retour') || '#/';
+        stock.suppr('retour');
+        location.hash = retour === '#/connexion' ? '#/' : retour;
+        if (location.hash === retour) router();
+      },
+    });
+  }
+
+  function compte() {
+    const u = session.utilisateur();
+    if (!u) { location.hash = '#/connexion'; return; }
+    main.innerHTML = `
+      <div class="pile">
+        <h1>Mon compte</h1>
+        <div class="carte pile" style="--gap:4px"><div class="gras">${esc(u.prenom)} ${esc(u.nom)}</div><div class="muet">${esc(u.telephone)}</div></div>
+        <p class="petit muet">Les colis envoyés à ce numéro apparaissent dans « Mes colis », avec leur code de retrait.</p>
+        <button class="btn btn-plein" data-sortir>${ic('sortie', 'ic-sm')} Se déconnecter</button>
+      </div>`;
+    main.querySelector('[data-sortir]').addEventListener('click', () => {
+      session.fermer(); stock.suppr('mes_colis'); location.hash = '#/';
+    });
+  }
+
+  // ── Démarrage ──
+  async function demarrer() {
+    try { CONFIG = await K.config(); } catch (e) {
+      main.innerHTML = `<div class="pile"><p class="bandeau bandeau-rouge">${ic('horsligne', 'ic-sm')} Impossible de joindre le serveur.</p><button class="btn btn-principal" onclick="location.reload()">Réessayer</button></div>`;
       return;
     }
-
-    // 3. Mobile Money ou Virement → flux manuel
-    UI.toastOk('Commande enregistrée ! Nous vous contacterons pour le paiement. 🎉');
-    APP.form = { paysCode: 'SN', typeColis: 'vetements' };
-    setTimeout(() => {
-      navGo('colis');
-      voirColis(data.colis._id);
-    }, 1500);
-
-  } catch(e) {
-    UI.toastErr(e.message || 'Erreur création commande');
-  } finally {
-    UI.hideLoader();
+    document.querySelectorAll('[data-nom-app]').forEach(el => { el.textContent = CONFIG.app; });
+    document.title = `${CONFIG.app} — Suivi de colis`;
+    // Lien de suivi reçu par SMS : /?suivi=KL-…
+    const q = new URLSearchParams(location.search).get('suivi');
+    if (q) { history.replaceState(null, '', location.pathname + `#/suivi/${encodeURIComponent(q)}`); }
+    window.addEventListener('hashchange', router);
+    router();
+    // Rafraîchit la config en arrière-plan
+    K.config({ forcer: true }).then(c => { CONFIG = c; }).catch(() => {});
   }
-}
-window.confirmerCommande = confirmerCommande;
 
-// ── MES COLIS ───────────────────────────────────────────────
-async function chargerColis() {
-  const container = document.getElementById('colis-list-container');
-  container.innerHTML = `<div class="card">${UI.skeletonColis(4)}</div>`;
-  try {
-    const data = await API.Colis.mesColis();
-    APP.colis = data.colis || [];
-    renderListeColis();
-  } catch(e) {
-    UI.toastErr('Erreur chargement');
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div>Erreur de chargement</div>`;
-  }
-}
-
-function renderListeColis() {
-  const el = document.getElementById('colis-list-container');
-  if (!APP.colis.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div>Aucun envoi pour l'instant<br><button class="btn btn-primary btn-sm" style="margin-top:12px;width:auto;padding:0 20px" onclick="navGo('pickup')">Premier envoi</button></div>`;
-    return;
-  }
-  el.innerHTML = `<div class="card">${APP.colis.map(c => `
-    <div class="row fade-in" onclick="voirColis('${c._id}')">
-      <div class="row-icon">${UI.SVG.box()}</div>
-      <div class="row-main">
-        <div class="row-title">#${c.numeroSuivi}${c.paiementStatut === 'paye' ? ' <span style="background:#EAF5F0;color:#116647;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;vertical-align:middle">Payé</span>' : ''}</div>
-        <div class="row-sub">${c.villeDestination}, ${c.paysDestination} · ${UI.formatDate(c.createdAt)}</div>
-      </div>
-      <div class="row-right">
-        <div class="row-price">${UI.formatEur(c.tarif?.total)}</div>
-        ${UI.badgeStatut(c.statut)}
-      </div>
-    </div>`).join('')}</div>`;
-}
-
-async function voirColis(id) {
-  UI.showLoader();
-  try {
-    const data = await API.Colis.unColis(id);
-    APP.colisActif = data.colis;
-    afficherSuivi(data.colis);
-    navGo('suivi');
-  } catch(e) {
-    UI.toastErr('Erreur chargement');
-  } finally {
-    UI.hideLoader();
-  }
-}
-window.voirColis = voirColis;
-
-function afficherSuivi(c) {
-  document.getElementById('suivi-titre').textContent = `#${c.numeroSuivi}`;
-  const el = document.getElementById('suivi-content');
-
-  // Badge paiement
-  const badgePaiement = c.paiementStatut === 'paye'
-    ? `<span style="background:#EAF5F0;color:#116647;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px">✓ Payé</span>`
-    : `<span style="background:#FEF3E2;color:#B7680A;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px">⏳ En attente de paiement</span>`;
-
-  el.innerHTML = `
-    <div class="track-alert">
-      <div class="track-id">#${c.numeroSuivi}</div>
-      <div class="track-dest">${c.villeDestination}, ${c.paysDestination} · ${c.nomDestinataire}</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-        ${UI.badgeStatut(c.statut)}
-        ${badgePaiement}
-      </div>
-    </div>
-    ${c.paiementStatut !== 'paye' ? `
-    <div style="background:#FEF3E2;border:1px solid #F0DFA0;border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:#B7680A;margin-bottom:2px">Paiement en attente</div>
-        <div style="font-size:12px;color:#B7680A">Montant : ${UI.formatEur(c.tarif?.total)}</div>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="payerColis('${c._id}')" style="width:auto;padding:0 16px;white-space:nowrap">Payer maintenant</button>
-    </div>` : ''}
-    <div>
-      <div class="section-title" style="margin-bottom:8px">Étapes de livraison</div>
-      <div class="card" style="padding:16px">
-        <div class="tl">
-          ${(c.etapes || []).map((e, i) => {
-            const isLast = i === c.etapes.length - 1;
-            const dotCls = e.statut === 'fait' ? 'done' : e.statut === 'en_cours' ? 'now' : '';
-            const ico = e.statut === 'fait'
-              ? UI.SVG.check()
-              : `<div style="width:8px;height:8px;border-radius:50%;background:${e.statut==='en_cours'?'var(--green)':'var(--line2)'}"></div>`;
-            return `
-              <div class="tl-row fade-in" style="animation-delay:${i * 0.06}s">
-                <div class="tl-left">
-                  <div class="tl-dot ${dotCls}">${ico}</div>
-                  ${!isLast ? `<div class="tl-line ${e.statut === 'fait' ? 'done' : ''}"></div>` : ''}
-                </div>
-                <div class="tl-content ${e.statut === 'en_cours' ? 'now' : ''}">
-                  <h4>${e.label}</h4>
-                  <p>${e.detail || ''} ${e.completeLe ? '· ' + UI.formatDate(e.completeLe) : ''}</p>
-                </div>
-              </div>`;
-          }).join('')}
-        </div>
-      </div>
-    </div>
-    <div>
-      <div class="section-title" style="margin-bottom:8px">Détails</div>
-      <div class="card">
-        <div class="row" style="cursor:default">
-          <div class="row-main">
-            <div class="row-sub">Adresse de collecte</div>
-            <div class="row-title">${c.adresseCollecte}</div>
-          </div>
-        </div>
-        <div class="row" style="cursor:default">
-          <div class="row-main">
-            <div class="row-sub">Date de collecte</div>
-            <div class="row-title">${UI.formatDate(c.dateCollecte)}</div>
-          </div>
-        </div>
-        <div class="row" style="cursor:default">
-          <div class="row-main">
-            <div class="row-sub">Montant</div>
-            <div class="row-title">${UI.formatEur(c.tarif?.total)}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <button class="btn btn-outline" onclick="ouvrirMessages('${c._id}')">
-      ${UI.SVG.chat('%231A8C64', 18)} Contacter le support
-    </button>
-    ${c.statut !== 'livre' && c.statut !== 'annule' ? `
-    <button class="btn btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="ouvrirRemboursement('${c._id}')">
-      💰 Demander un remboursement
-    </button>` : ''}`;
-}
-
-// ── PAYER UN COLIS EXISTANT ──────────────────────────────────
-async function payerColis(colisId) {
-  UI.showLoader();
-  try {
-    const token = API.getToken();
-    const res   = await fetch('https://diasporalink-api.onrender.com/api/paiements/creer-session', {
-      method:  'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ colisId }),
-    });
-    const session = await res.json();
-    if (!session.succes || !session.url) {
-      throw new Error(session.message || 'Erreur création session Stripe');
-    }
-    window.location.href = session.url;
-  } catch(e) {
-    UI.toastErr(e.message || 'Erreur paiement');
-    UI.hideLoader();
-  }
-}
-window.payerColis = payerColis;
-
-// ── REMBOURSEMENT ────────────────────────────────────────────
-function ouvrirRemboursement(colisId) {
-  APP.colisIdRemb = colisId;
-  document.getElementById('modal-remb')?.remove();
-
-  const modal = document.createElement('div');
-  modal.id = 'modal-remb';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;justify-content:center;z-index:200;animation:fadeInUp 0.3s cubic-bezier(0.22,1,0.36,1) both';
-  modal.innerHTML = `
-    <div style="background:white;border-radius:16px 16px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom));animation:sheetUp 0.35s cubic-bezier(0.22,1,0.36,1) both">
-      <h3 style="font-size:16px;font-weight:600;margin-bottom:16px">💰 Demander un remboursement</h3>
-      <div style="margin-bottom:14px">
-        <label style="display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:6px">Motif</label>
-        <select id="remb-motif" style="width:100%;height:48px;padding:0 14px;border:1px solid var(--line);border-radius:8px;font-family:var(--font);font-size:15px;color:var(--text);background:white;appearance:none;-webkit-appearance:none">
-          <option value="colis_perdu">📦 Colis perdu</option>
-          <option value="colis_endommage">💔 Colis endommagé</option>
-          <option value="retard_excessif">⏱ Retard excessif</option>
-          <option value="annulation">❌ Annulation</option>
-          <option value="autre">💬 Autre</option>
-        </select>
-      </div>
-      <div style="margin-bottom:20px">
-        <label style="display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:6px">Description (optionnel)</label>
-        <textarea id="remb-desc" placeholder="Expliquez votre situation en détail..." style="width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:8px;font-family:var(--font);font-size:15px;resize:none;height:90px;color:var(--text)"></textarea>
-      </div>
-      <div style="background:#FEF3E2;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--warn)">
-        ⏱ Nous traitons les demandes sous <strong>48h ouvrées</strong>. Vous serez notifié par SMS.
-      </div>
-      <div style="display:flex;gap:10px">
-        <button onclick="document.getElementById('modal-remb').remove()" style="flex:1;height:48px;border-radius:8px;border:1px solid var(--line);background:var(--off);font-family:var(--font);font-size:15px;cursor:pointer;transition:opacity 0.15s">Annuler</button>
-        <button onclick="envoyerRemboursement()" style="flex:1;height:48px;border-radius:8px;border:none;background:var(--danger);color:white;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer;transition:opacity 0.15s">Envoyer</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-}
-
-async function envoyerRemboursement() {
-  const motif = document.getElementById('remb-motif').value;
-  const desc  = document.getElementById('remb-desc').value.trim();
-  UI.showLoader();
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    const token = API.getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch('https://diasporalink-api.onrender.com/api/remboursements', {
-      method: 'POST', headers,
-      body: JSON.stringify({ colisId: APP.colisIdRemb, motif, description: desc }),
-    });
-    const data = await res.json();
-    if (!data.succes) throw new Error(data.message || 'Erreur');
-    document.getElementById('modal-remb')?.remove();
-    UI.toastOk('Demande envoyée ! Nous vous répondrons sous 48h. ✅');
-  } catch(e) {
-    UI.toastErr(e.message || 'Erreur envoi');
-  } finally {
-    UI.hideLoader();
-  }
-}
-
-window.ouvrirRemboursement  = ouvrirRemboursement;
-window.envoyerRemboursement = envoyerRemboursement;
-
-// ── MESSAGES ────────────────────────────────────────────────
-async function ouvrirMessages(colisId) {
-  APP.colisIdMsg = colisId;
-  const c = APP.colisActif;
-  if (c) document.getElementById('msg-colis-num').textContent = `#${c.numeroSuivi}`;
-  UI.showLoader();
-  try {
-    const data = await API.Messages.lire(colisId);
-    renderMessages(data.messages || []);
-    navGo('messages');
-  } catch(e) {
-    UI.toastErr('Erreur chargement messages');
-  } finally {
-    UI.hideLoader();
-  }
-}
-window.ouvrirMessages = ouvrirMessages;
-
-function renderMessages(msgs) {
-  const list = document.getElementById('chat-list');
-  if (!msgs.length) {
-    list.innerHTML = `<div class="empty-state">Aucun message · Envoyez le premier !</div>`;
-    return;
-  }
-  const userId = API.getUser()?._id;
-  list.innerHTML = msgs.map(m => {
-    const isUser = m.expediteur?._id === userId || m.role === 'client';
-    if (m.role === 'systeme') return `
-      <div class="bubble bubble-sys">
-        <div class="bubble-body">${m.texte}</div>
-        <div class="bubble-time">${new Date(m.createdAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
-      </div>`;
-    return `
-      <div class="bubble ${isUser ? 'bubble-user' : 'bubble-agent'}">
-        ${!isUser ? `<div class="bubble-sender">${m.expediteur?.prenom || 'Support'}</div>` : ''}
-        <div class="bubble-body">${m.texte}</div>
-        <div class="bubble-time">${new Date(m.createdAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
-      </div>`;
-  }).join('');
-  setTimeout(() => {
-    const body = document.getElementById('chat-body');
-    if (body) body.scrollTop = body.scrollHeight;
-  }, 50);
-}
-
-async function envoyerMsg() {
-  const inp   = document.getElementById('chat-input');
-  const texte = inp.value.trim();
-  if (!texte || !APP.colisIdMsg) return;
-  inp.value = '';
-  try {
-    const data = await API.Messages.envoyer(APP.colisIdMsg, texte);
-    const list = document.getElementById('chat-list');
-    const msg  = data.message;
-    const div  = document.createElement('div');
-    div.className = 'bubble bubble-user';
-    div.innerHTML = `<div class="bubble-body">${msg.texte}</div><div class="bubble-time">${new Date(msg.createdAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>`;
-    list.appendChild(div);
-    const body = document.getElementById('chat-body');
-    if (body) body.scrollTop = body.scrollHeight;
-  } catch(e) {
-    UI.toastErr('Erreur envoi');
-  }
-}
-window.envoyerMsg = envoyerMsg;
-
-// ── PROFIL ──────────────────────────────────────────────────
-async function chargerProfil() {
-  UI.showLoader();
-  try {
-    const data = await API.Utilisateur.profil();
-    const u = data.utilisateur;
-    const s = data.stats;
-
-    document.getElementById('profil-av').textContent  = u.initiales || '?';
-    document.getElementById('profil-nom').textContent = u.nomComplet || `${u.prenom} ${u.nom}`;
-    document.getElementById('profil-tel').textContent = u.telephone;
-
-    UI.animerCompteur(document.getElementById('profil-nb-envois'), s.totalEnvois);
-
-    const totalEl = document.getElementById('profil-total');
-    if (totalEl) totalEl.textContent = UI.formatEur(s.totalDepense);
-
-    const hist = document.getElementById('profil-historique');
-    if (!APP.colis.length) {
-      hist.innerHTML = `<div class="empty-state" style="padding:20px">Aucun envoi</div>`;
-    } else {
-      hist.innerHTML = APP.colis.slice(0,5).map((c, i) => `
-        <div class="row fade-in" style="animation-delay:${i * 0.06}s" onclick="voirColis('${c._id}')">
-          <div class="row-icon">${UI.SVG.box()}</div>
-          <div class="row-main">
-            <div class="row-title">#${c.numeroSuivi}</div>
-            <div class="row-sub">${c.villeDestination} · ${UI.formatDate(c.createdAt)}</div>
-          </div>
-          <div class="row-right">
-            <div class="row-price">${UI.formatEur(c.tarif?.total)}</div>
-            ${UI.badgeStatut(c.statut)}
-          </div>
-        </div>`).join('');
-    }
-
-    document.querySelector('#profil-historique + .card .row').onclick = () => {
-      API.Auth.deconnecter();
-      location.reload();
-    };
-  } catch(e) {
-    UI.toastErr('Erreur chargement profil');
-  } finally {
-    UI.hideLoader();
-  }
-}
-
-// ── SERVICE WORKER ──────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}
-
-window.navGo = navGo;
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  demarrer();
+})();

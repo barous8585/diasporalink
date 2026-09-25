@@ -22,6 +22,11 @@ router.get('/', ah(async (req, res) => {
     guichets: c.guichets,
     methodesPaiement: METHODES_PAIEMENT,
     statuts: STATUTS_LABELS,
+    // Même forme que la config serveur : utilisée par KolisTarif côté navigateur
+    regles: {
+      tarifs: c.tarifs, surcharges: c.surcharges, tauxAssurance: c.tauxAssurance,
+      tauxEurGnf: c.tauxEurGnf, magasinage: c.magasinage,
+    },
   });
 }));
 

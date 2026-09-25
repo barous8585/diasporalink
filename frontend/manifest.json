@@ -1,11 +1,11 @@
 {
-  "name": "DiasporaLink",
-  "short_name": "DiasporaLink",
-  "description": "Envoyez des colis à votre famille en Afrique",
-  "start_url": "/",
+  "name": "Kolis — Suivi de colis",
+  "short_name": "Kolis",
+  "description": "Envoyez et suivez vos colis entre l'Europe et la Guinée",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#116647",
-  "theme_color": "#116647",
+  "background_color": "#F5F1E8",
+  "theme_color": "#0E5A3C",
   "orientation": "portrait",
   "lang": "fr",
   "icons": [

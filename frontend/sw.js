@@ -1,5 +1,8 @@
-const CACHE = 'diasporalink-v1';
-const ASSETS = ['/', '/index.html', '/css/app.css', '/js/api.js', '/js/ui.js', '/js/app.js', '/manifest.json'];
+// Service worker : l'app s'ouvre même sans réseau.
+// Les réponses de l'API ne sont pas mises en cache ici : l'app garde elle-même
+// les dernières infos de suivi (avec leur heure) pour les montrer hors-ligne.
+const CACHE = 'kolis-client-v1';
+const ASSETS = ['./', './index.html', './css/app.css', './js/app.js', './commun/kolis.css', './commun/kolis.js', './commun/tarif.js', './manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -12,9 +15,18 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  if (e.request.url.includes('onrender.com')) return; // Ne pas cacher les appels API
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.pathname.includes('/api/')) return;
+  // Réseau d'abord (pour avoir les mises à jour), cache si pas de réseau
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match('/index.html')))
+    fetch(e.request)
+      .then(res => {
+        if (res.ok && (url.origin === location.origin || url.host.includes('fonts.g'))) {
+          const copie = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copie));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request).then(r => r || (e.request.mode === 'navigate' ? caches.match('./index.html') : Response.error())))
   );
 });
