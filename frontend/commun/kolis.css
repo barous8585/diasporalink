@@ -136,6 +136,12 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
 .bandeau-rouge { background: var(--rouge-doux); color: var(--rouge); }
 .bandeau-vert { background: var(--vert-doux); color: var(--vert); }
 
+/* Lignes libellé / valeur */
+.ligne-info { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--creme-2); font-size: 15px; }
+.ligne-info:last-child { border-bottom: none; }
+.ligne-info span:first-child { color: var(--gris); flex-shrink: 0; }
+.ligne-info span:last-child { text-align: right; }
+
 /* Frise d'étapes */
 .frise { display: flex; flex-direction: column; }
 .frise .etape { display: flex; gap: 14px; }

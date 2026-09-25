@@ -801,37 +801,7 @@
   // ══════════════════════════════════════════════════════════
   //  ÉTIQUETTES (QR code, 10 × 15 cm, une par carton)
   // ══════════════════════════════════════════════════════════
-  const Etiquette = {
-    lib: 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
-    async qr(texte) {
-      if (!window.qrcode) {
-        await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = this.lib; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
-      }
-      const q = window.qrcode(0, 'M'); q.addData(texte); q.make();
-      return q.createSvgTag({ cellSize: 6, margin: 0, scalable: true });
-    },
-    async apercu(el, numero) {
-      try { el.innerHTML = await this.qr(numero); } catch { el.innerHTML = `<p class="muet">QR indisponible hors-ligne. Numéro : <b>${esc(numero)}</b></p>`; }
-    },
-    async imprimer(c, config) {
-      const zone = document.querySelector('[data-etiquette]');
-      let svg = '';
-      try { svg = await this.qr(c.numeroSuivi); } catch {}
-      const g = config.guichets.find(x => x.code === c.guichet);
-      const n = c.nbCartons || 1;
-      zone.innerHTML = Array.from({ length: n }, (_, i) => `
-        <div class="page">
-          <div style="display:flex;justify-content:space-between;font-weight:700"><span>${esc(config.app)}</span><span>${c.mode === 'mer' ? 'BATEAU' : 'AVION'}</span></div>
-          <div class="num">${esc(c.numeroSuivi)}</div>
-          <div class="qr">${svg}</div>
-          <div class="grand">${esc(c.destinataire.nom)}</div>
-          <div>Tél. •••${esc(String(c.destinataire.telephone).slice(-4))}</div>
-          <div class="grand">${esc(g?.nom || c.guichet)}</div>
-          <div style="display:flex;justify-content:space-between"><span>${kg(c.poidsReel)}</span><span>Carton ${i + 1}/${n}</span><span>${esc(date(new Date(), false))}</span></div>
-        </div>`).join('');
-      setTimeout(() => window.print(), 100);
-    },
-  };
+  const Etiquette = K.etiquette;
 
   // ══════════════════════════════════════════════════════════
   //  DÉMARRAGE

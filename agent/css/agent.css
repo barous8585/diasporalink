@@ -54,8 +54,5 @@ main > .pile { --gap: 16px; }
 .gros-poids { font-family: var(--police-titre); font-size: 44px; font-weight: 800; text-align: center; height: 80px; }
 .recap-prix { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .recap-prix .valeur { font-family: var(--police-titre); font-size: 28px; font-weight: 800; }
-.ligne-info { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--creme-2); font-size: 15px; }
-.ligne-info:last-child { border-bottom: none; }
-.ligne-info span:first-child { color: var(--gris); }
 .num-grand { font-family: var(--police-titre); font-size: 30px; font-weight: 800; letter-spacing: 1px; }
 .qr-apercu svg, .qr-apercu img { width: 180px; height: 180px; }
