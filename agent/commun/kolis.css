@@ -172,15 +172,16 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
 /* Signature */
 .signature { width: 100%; height: 140px; border-radius: 14px; border: 1px dashed #B7AE9C; background: #FAF8F3; touch-action: none; display: block; }
 
-/* Étiquette à imprimer (10 × 15 cm) */
+/* Étiquettes à imprimer (10 × 15 cm, une page par carton) */
 .etiquette { display: none; }
 @media print {
   @page { size: 100mm 150mm; margin: 0; }
-  body * { visibility: hidden; }
-  .etiquette, .etiquette * { visibility: visible; }
-  .etiquette { display: flex !important; position: absolute; inset: 0; width: 100mm; height: 150mm; padding: 6mm; flex-direction: column; gap: 3mm; font-family: var(--police); color: #000; background: #fff; }
+  body > *:not(.etiquette) { display: none !important; }
+  body { background: #fff; }
+  .etiquette { display: block !important; }
+  .etiquette .page { width: 100mm; height: 150mm; padding: 6mm; display: flex; flex-direction: column; gap: 3mm; font-family: var(--police); color: #000; page-break-after: always; break-after: page; overflow: hidden; }
   .etiquette .num { font-size: 22pt; font-weight: 800; letter-spacing: 1px; }
-  .etiquette .qr svg, .etiquette .qr img { width: 55mm; height: 55mm; }
+  .etiquette .qr svg { width: 55mm; height: 55mm; display: block; }
   .etiquette .grand { font-size: 16pt; font-weight: 800; }
 }
 
