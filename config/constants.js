@@ -1,82 +1,118 @@
-// ── TARIFS PAR PAYS (€/kg) ────────────────
-const PRIX_KG = {
-  SN: 7.5,   // Sénégal
-  CI: 8.0,   // Côte d'Ivoire
-  CM: 7.8,   // Cameroun
-  GN: 8.5,   // Guinée
-  ML: 8.2,   // Mali
-  BF: 8.3,   // Burkina Faso
-  CD: 9.0,   // RD Congo
-  MR: 8.6,   // Mauritanie
-  TG: 8.1,   // Togo
-  BJ: 8.0,   // Bénin
-  SL: 8.8,   // Sierra Leone
-  GH: 8.4,   // Ghana
+// ─────────────────────────────────────────────────────────────
+//  Constantes métier — expédition Europe → Guinée
+//  Circuit : dépôt (Paris) → lot (avion / bateau) → arrivée Conakry
+//            → guichet → remise au destinataire avec code
+//  Les valeurs chiffrées ci-dessous ne sont que des valeurs de départ :
+//  l'admin les modifie dans le back-office (collection Config).
+// ─────────────────────────────────────────────────────────────
+
+const APP_NOM = process.env.APP_NOM || 'Kolis';
+
+// ── MODES DE TRANSPORT ────────────────────
+const MODES = {
+  AIR: 'air',
+  MER: 'mer',
 };
 
-// ── FRAIS FIXES ───────────────────────────
-const FRAIS_PICKUP    = 5.0;   // Collecte à domicile
-const TAUX_ASSURANCE  = 0.023; // 2.3% de la valeur déclarée
-const POIDS_MIN       = 0.5;   // kg minimum
-
-// ── PAYS DESSERVIS ────────────────────────
-const PAYS = [
-  { code: 'SN', nom: 'Sénégal',       drapeau: '🇸🇳', villes: ['Dakar', 'Saint-Louis', 'Thiès', 'Ziguinchor', 'Kaolack'] },
-  { code: 'CI', nom: "Côte d'Ivoire", drapeau: '🇨🇮', villes: ['Abidjan', 'Bouaké', 'San-Pédro', 'Yamoussoukro'] },
-  { code: 'CM', nom: 'Cameroun',      drapeau: '🇨🇲', villes: ['Douala', 'Yaoundé', 'Bafoussam', 'Garoua'] },
-  { code: 'GN', nom: 'Guinée',        drapeau: '🇬🇳', villes: ['Conakry', 'Kankan', 'Labé', 'Nzérékoré'] },
-  { code: 'ML', nom: 'Mali',          drapeau: '🇲🇱', villes: ['Bamako', 'Sikasso', 'Mopti', 'Gao'] },
-  { code: 'BF', nom: 'Burkina Faso',  drapeau: '🇧🇫', villes: ['Ouagadougou', 'Bobo-Dioulasso', 'Koudougou'] },
-  { code: 'CD', nom: 'RD Congo',      drapeau: '🇨🇩', villes: ['Kinshasa', 'Lubumbashi', 'Goma', 'Bukavu'] },
-  { code: 'MR', nom: 'Mauritanie',    drapeau: '🇲🇷', villes: ['Nouakchott', 'Nouadhibou'] },
-  { code: 'TG', nom: 'Togo',          drapeau: '🇹🇬', villes: ['Lomé', 'Sokodé', 'Kara'] },
-  { code: 'BJ', nom: 'Bénin',         drapeau: '🇧🇯', villes: ['Cotonou', 'Porto-Novo', 'Parakou'] },
-  { code: 'GH', nom: 'Ghana',         drapeau: '🇬🇭', villes: ['Accra', 'Kumasi', 'Tamale'] },
+const MODES_INFO = [
+  { key: 'air', label: 'Avion',  delai: '5 à 8 jours',     prefixeLot: 'AIR' },
+  { key: 'mer', label: 'Bateau', delai: '4 à 6 semaines',  prefixeLot: 'MER' },
 ];
 
-// ── CRÉNEAUX HORAIRES ─────────────────────
-const CRENEAUX = [
-  { key: 'matin',      label: 'Matin (8h – 12h)' },
-  { key: 'apresmidi',  label: 'Après-midi (13h – 17h)' },
-  { key: 'soir',       label: 'Soir (17h – 20h)' },
-];
-
-// ── TYPES DE COLIS ────────────────────────
+// ── TYPES DE COLIS (surcharge en % du transport) ──
 const TYPES_COLIS = [
-  { key: 'vetements',    label: 'Vêtements' },
-  { key: 'electronique', label: 'Électronique' },
-  { key: 'medicaments',  label: 'Médicaments' },
-  { key: 'documents',    label: 'Documents' },
-  { key: 'alimentaire',  label: 'Alimentaire' },
-  { key: 'mixte',        label: 'Mixte' },
+  { key: 'vetements',    label: 'Vêtements',    surcharge: 0 },
+  { key: 'alimentaire',  label: 'Alimentaire',  surcharge: 0 },
+  { key: 'documents',    label: 'Documents',    surcharge: 0 },
+  { key: 'mixte',        label: 'Mixte',        surcharge: 0 },
+  { key: 'fragile',      label: 'Fragile',      surcharge: 0.10 },
+  { key: 'electronique', label: 'Électronique', surcharge: 0.15 },
 ];
 
-// ── STATUTS COLIS ─────────────────────────
-const STATUTS = {
-  EN_ATTENTE:    'en_attente',
-  CONFIRME:      'confirme',
-  COLLECTE:      'collecte',
-  EN_TRANSIT:    'en_transit',
-  ARRIVE:        'arrive',
-  LIVRE:         'livre',
-  ANNULE:        'annule',
+// ── CONFIG PAR DÉFAUT (modifiable par l'admin) ──
+const CONFIG_DEFAUT = {
+  tarifs: {
+    air: { prixKg: 12, poidsMin: 1 },
+    mer: { prixKg: 4,  poidsMin: 10 },
+  },
+  surcharges: Object.fromEntries(TYPES_COLIS.map(t => [t.key, t.surcharge])),
+  tauxAssurance: 0.023,      // 2,3 % de la valeur déclarée (optionnel)
+  tauxEurGnf: 10000,         // 1 € = X GNF — À METTRE À JOUR par l'admin
+  magasinage: {
+    joursGratuits: 10,       // jours gratuits au guichet
+    fraisJourGnf: 5000,      // frais par jour au-delà
+  },
+  depots: [
+    { code: 'PARIS', nom: 'Dépôt Paris', ville: 'Paris', pays: 'FR', adresse: '', telephone: '', horaires: '' },
+  ],
+  guichets: [
+    { code: 'KALOUM', nom: 'Guichet Kaloum', ville: 'Conakry', pays: 'GN', adresse: '', telephone: '', horaires: '' },
+    { code: 'MATOTO', nom: 'Guichet Matoto', ville: 'Conakry', pays: 'GN', adresse: '', telephone: '', horaires: '' },
+  ],
 };
 
-// ── ROLES UTILISATEURS ────────────────────
-const ROLES = {
-  CLIENT:   'client',
-  LIVREUR:  'livreur',
-  ADMIN:    'admin',
+// ── STATUTS COLIS (ordre du circuit) ──────
+const STATUTS = {
+  RESERVE:    'reserve',     // réservé en ligne, pas encore déposé
+  DEPOSE:     'depose',      // pesé et enregistré au dépôt
+  CHARGE:     'charge',      // mis dans un lot, attend le départ
+  EN_TRANSIT: 'en_transit',  // lot parti
+  ARRIVE:     'arrive',      // arrivé en Guinée (aéroport / port)
+  PRET:       'pret',        // disponible au guichet, code envoyé
+  REMIS:      'remis',       // remis au destinataire
+  ANNULE:     'annule',
 };
+
+const STATUTS_LABELS = {
+  reserve:    'Réservé — à déposer',
+  depose:     'Déposé au dépôt',
+  charge:     'Chargé, en attente de départ',
+  en_transit: 'En route',
+  arrive:     'Arrivé en Guinée',
+  pret:       'Prêt au guichet',
+  remis:      'Remis au destinataire',
+  annule:     'Annulé',
+};
+
+// ── STATUTS LOT ───────────────────────────
+const STATUTS_LOT = {
+  PREPARATION: 'preparation',
+  PARTI:       'parti',
+  ARRIVE:      'arrive',
+  CLOTURE:     'cloture',
+};
+
+// ── PAIEMENT ──────────────────────────────
+const METHODES_PAIEMENT = [
+  { key: 'especes',      label: 'Espèces' },
+  { key: 'orange_money', label: 'Orange Money' },
+  { key: 'mtn_momo',     label: 'MTN MoMo' },
+  { key: 'carte',        label: 'Carte bancaire' },
+  { key: 'virement',     label: 'Virement' },
+];
+const DEVISES = ['EUR', 'GNF'];
+
+// ── RÔLES ─────────────────────────────────
+const ROLES = {
+  CLIENT: 'client',
+  AGENT:  'agent',
+  ADMIN:  'admin',
+};
+
+// ── SÉCURITÉ CODE DE RETRAIT ──────────────
+const CODE_RETRAIT_ESSAIS_MAX = 5;
 
 module.exports = {
-  PRIX_KG,
-  FRAIS_PICKUP,
-  TAUX_ASSURANCE,
-  POIDS_MIN,
-  PAYS,
-  CRENEAUX,
+  APP_NOM,
+  MODES,
+  MODES_INFO,
   TYPES_COLIS,
+  CONFIG_DEFAUT,
   STATUTS,
+  STATUTS_LABELS,
+  STATUTS_LOT,
+  METHODES_PAIEMENT,
+  DEVISES,
   ROLES,
+  CODE_RETRAIT_ESSAIS_MAX,
 };

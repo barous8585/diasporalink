@@ -1,11 +1,13 @@
 {
-  "name": "diasporalink-backend",
+  "name": "kolis-api",
   "version": "1.0.0",
-  "description": "API DiasporaLink — Pick-up & livraison de colis pour la diaspora africaine",
+  "description": "API — expédition de colis Europe → Guinée : dépôt, lots, guichets, remise par code",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "SERVIR_APPS=1 nodemon server.js",
+    "test": "node --test tests/tarif.test.js",
+    "test:parcours": "node --test tests/parcours.test.js"
   },
   "dependencies": {
     "express": "^4.19.2",

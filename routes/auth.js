@@ -2,21 +2,19 @@ const router = require('express').Router();
 const { body } = require('express-validator');
 const { envoyerOtpCtrl, verifierOtpCtrl, moiCtrl } = require('../controllers/authController');
 const { auth } = require('../middleware/auth');
+const { ah, valider } = require('../utils/http');
 
-// Envoyer OTP
 router.post('/envoyer-otp', [
-  body('telephone').notEmpty().withMessage('Numéro de téléphone requis'),
-  body('prenom').optional().trim().notEmpty(),
-  body('nom').optional().trim().notEmpty(),
-], envoyerOtpCtrl);
+  body('telephone').trim().notEmpty().withMessage('Numéro de téléphone requis'),
+  body('prenom').optional().trim(),
+  body('nom').optional().trim(),
+], valider, ah(envoyerOtpCtrl));
 
-// Vérifier OTP
 router.post('/verifier-otp', [
-  body('telephone').notEmpty().withMessage('Numéro requis'),
-  body('code').isLength({ min: 6, max: 6 }).isNumeric().withMessage('Code OTP invalide'),
-], verifierOtpCtrl);
+  body('telephone').trim().notEmpty().withMessage('Numéro requis'),
+  body('code').isLength({ min: 6, max: 6 }).isNumeric().withMessage('Code à 6 chiffres'),
+], valider, ah(verifierOtpCtrl));
 
-// Profil connecté
 router.get('/moi', auth, moiCtrl);
 
 module.exports = router;

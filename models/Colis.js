@@ -1,110 +1,139 @@
 const mongoose = require('mongoose');
-const { STATUTS, CRENEAUX, TYPES_COLIS } = require('../config/constants');
+const crypto = require('crypto');
+const Compteur = require('./Compteur');
+const {
+  STATUTS, STATUTS_LABELS, TYPES_COLIS, MODES, METHODES_PAIEMENT, DEVISES,
+} = require('../config/constants');
 
-const etapeSchema = new mongoose.Schema({
-  label:       { type: String, required: true },
-  detail:      { type: String },
-  statut:      { type: String, enum: ['fait', 'en_cours', 'attente'], default: 'attente' },
-  completeLe:  { type: Date },
+const personneSchema = new mongoose.Schema({
+  nom:       { type: String, required: true, trim: true },
+  telephone: { type: String, required: true, trim: true },
+}, { _id: false });
+
+const paiementSchema = new mongoose.Schema({
+  montant:  { type: Number, required: true, min: 0 },
+  devise:   { type: String, enum: DEVISES, required: true },
+  methode:  { type: String, enum: METHODES_PAIEMENT.map(m => m.key), required: true },
+  objet:    { type: String, enum: ['transport', 'douane', 'magasinage', 'global'], default: 'global' },
+  lieu:     { type: String },          // code dépôt / guichet
+  agent:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reference:{ type: String },          // ref. Orange Money, Stripe…
+  opId:     { type: String },          // idempotence (hors-ligne)
+  le:       { type: Date, default: Date.now },
+}, { _id: true });
+
+const evenementSchema = new mongoose.Schema({
+  statut: { type: String },
+  label:  { type: String, required: true },
+  detail: { type: String },
+  lieu:   { type: String },
+  agent:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  le:     { type: Date, default: Date.now },
 }, { _id: false });
 
 const colisSchema = new mongoose.Schema({
-  // Identifiant de suivi
-  numeroSuivi: { type: String, unique: true },
+  numeroSuivi: { type: String, unique: true, index: true },
 
-  // Client
-  client: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  // Compte client qui a réservé (absent si déposé directement au guichet)
+  client: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
-  // Collecte
-  adresseCollecte: { type: String, required: true },
-  villeCollecte:   { type: String, required: true },
-  dateCollecte:    { type: Date, required: true },
-  creneau:         { type: String, enum: CRENEAUX.map(c => c.key), required: true },
+  expediteur:   { type: personneSchema, required: true },
+  destinataire: { type: personneSchema, required: true },
+  tiersAutorise:{ nom: String, telephone: String, autoriseLe: Date },
 
-  // Destination
-  paysDestination:  { type: String, required: true },
-  villeDestination: { type: String, required: true },
-  nomDestinataire:  { type: String, required: true },
-  telDestinataire:  { type: String, required: true },
+  // Circuit
+  mode:        { type: String, enum: Object.values(MODES), required: true },
+  depot:       { type: String, default: 'PARIS' },     // code dépôt de départ
+  guichet:     { type: String, required: true },       // code guichet d'arrivée
+  lot:         { type: mongoose.Schema.Types.ObjectId, ref: 'Lot' },
+  lotCode:     { type: String, index: true },
+  emplacement: { type: String },                        // étagère au guichet
 
-  // Colis
-  typeColis:     { type: String, enum: TYPES_COLIS.map(t => t.key), required: true },
-  poidsKg:       { type: Number, required: true, min: 0.1 },
-  valeurDeclare: { type: Number, default: 0 },
-  description:   { type: String },
+  // Contenu
+  typeColis:      { type: String, enum: TYPES_COLIS.map(t => t.key), required: true },
+  description:    { type: String, trim: true },
+  nbCartons:      { type: Number, default: 1, min: 1 },
+  poidsEstime:    { type: Number, min: 0 },
+  poidsReel:      { type: Number, min: 0 },
+  valeurDeclaree: { type: Number, default: 0 },
+  assurance:      { type: Boolean, default: false },
 
-  // Tarification
+  // Prix (taux EUR/GNF figé au moment de la pesée)
   tarif: {
-    fraisCollecte:  { type: Number, required: true },
-    fraisTransport: { type: Number, required: true },
-    fraisAssurance: { type: Number, default: 0 },
-    total:          { type: Number, required: true },
+    mode: String, prixKg: Number, poidsFacture: Number, transport: Number,
+    surcharge: Number, assurance: Number, totalEur: Number, taux: Number, totalGnf: Number,
+    estime: { type: Boolean, default: true },
   },
+  fraisDouaneGnf: { type: Number, default: 0 },
+  payeurArrivee:  { type: Boolean, default: false }, // le destinataire paie à Conakry
+  paiements:      [paiementSchema],
 
   // Statut
-  statut: {
-    type: String,
-    enum: Object.values(STATUTS),
-    default: STATUTS.EN_ATTENTE,
+  statut:     { type: String, enum: Object.values(STATUTS), default: STATUTS.RESERVE, index: true },
+  historique: [evenementSchema],
+  arriveGuichetLe: { type: Date },
+
+  // Retrait
+  codeRetrait:      { type: String, select: false },
+  codeEssais:       { type: Number, default: 0, select: false },
+  remise: {
+    le:           Date,
+    agent:        { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    retirePar:    { type: String, enum: ['destinataire', 'tiers'] },
+    nomRetrait:   String,
+    pieceVerifiee:Boolean,
+    signature:    String, // image PNG en data URL
+    opId:         String,
   },
 
-  // Étapes de suivi
-  etapes: [etapeSchema],
-
-  // Livreur assigné
-  livreur: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  livreurNom:  { type: String },
-  livreurTel:  { type: String },
-
-  // Paiement
-  paiementId:     { type: String },
-  paiementStatut: { type: String, enum: ['en_attente', 'paye', 'rembourse'], default: 'en_attente' },
-  paiementMethode: { type: String },
-
-  // Notes
   notesAdmin: { type: String },
-
 }, {
   timestamps: true,
   toJSON: {
     virtuals: true,
-    transform: (_, obj) => { delete obj.__v; return obj; }
-  }
+    transform: (_, obj) => { delete obj.__v; delete obj.codeRetrait; delete obj.codeEssais; return obj; },
+  },
 });
 
-// Générer numéro de suivi automatiquement
-colisSchema.pre('save', async function (next) {
-  if (!this.numeroSuivi) {
-    const count = await mongoose.model('Colis').countDocuments();
-    const numero = String(count + 1000).padStart(4, '0');
-    this.numeroSuivi = `DL-${numero}`;
-  }
-  next();
+colisSchema.index({ 'destinataire.telephone': 1 });
+colisSchema.index({ 'expediteur.telephone': 1 });
+
+colisSchema.virtual('statutLabel').get(function () {
+  return STATUTS_LABELS[this.statut] || this.statut;
 });
 
-// Étapes par défaut
-colisSchema.methods.initEtapes = function () {
-  this.etapes = [
-    { label: 'Commande confirmée',       detail: 'Votre commande a été enregistrée',    statut: 'attente' },
-    { label: 'Colis collecté',           detail: 'Le livreur a récupéré votre colis',   statut: 'attente' },
-    { label: 'En transit',               detail: 'Votre colis est en route',             statut: 'attente' },
-    { label: "Arrivée à destination",    detail: 'Le colis est arrivé dans le pays',     statut: 'attente' },
-    { label: 'Livré au destinataire',    detail: 'Le destinataire a reçu le colis',      statut: 'attente' },
-  ];
+// Numéro de suivi : KL-26-00001 (préfixe, année, séquence)
+colisSchema.pre('validate', async function (next) {
+  try {
+    if (!this.numeroSuivi) {
+      const n = await Compteur.suivant('colis');
+      const an = String(new Date().getFullYear()).slice(-2);
+      const prefixe = (process.env.PREFIXE_SUIVI || 'KL').toUpperCase();
+      this.numeroSuivi = `${prefixe}-${an}-${String(n).padStart(5, '0')}`;
+    }
+    next();
+  } catch (e) { next(e); }
+});
+
+colisSchema.methods.ajouterEvenement = function (statut, detail, { lieu, agent, label } = {}) {
+  if (statut) this.statut = statut;
+  this.historique.push({
+    statut,
+    label: label || STATUTS_LABELS[statut] || statut,
+    detail, lieu, agent, le: new Date(),
+  });
 };
 
-// Libellé du statut
-colisSchema.virtual('statutLabel').get(function () {
-  const labels = {
-    en_attente:  'En attente',
-    confirme:    'Confirmé',
-    collecte:    'Collecté',
-    en_transit:  'En transit',
-    arrive:      'Arrivé',
-    livre:       'Livré',
-    annule:      'Annulé',
-  };
-  return labels[this.statut] || this.statut;
-});
+colisSchema.methods.genererCodeRetrait = function () {
+  const code = String(crypto.randomInt(0, 10000)).padStart(4, '0');
+  this.codeRetrait = code;
+  this.codeEssais = 0;
+  return code;
+};
+
+// Empreinte du code : permet à l'app agent de vérifier un code hors-ligne
+// (même calcul côté navigateur avec crypto.subtle). Seuls les agents la reçoivent.
+colisSchema.statics.empreinteCode = (numero, code) =>
+  crypto.createHash('sha256').update(`${numero}:${code}`).digest('hex');
 
 module.exports = mongoose.model('Colis', colisSchema);

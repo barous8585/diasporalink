@@ -1,48 +1,62 @@
-const twilio = require('twilio');
+// ─────────────────────────────────────────────────────────────
+//  Notifications : SMS (Twilio) + WhatsApp (à brancher en v2)
+//  En développement, tout est affiché dans la console.
+// ─────────────────────────────────────────────────────────────
+const { APP_NOM } = require('../config/constants');
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+let twilioClient = null;
+const getTwilio = () => {
+  if (!twilioClient && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+    twilioClient = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  }
+  return twilioClient;
+};
 
-/**
- * Envoyer un SMS
- * @param {string} to - Numéro destinataire
- * @param {string} body - Contenu du SMS
- */
 const envoyerSMS = async (to, body) => {
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`📱 [SMS DEV] → ${to} : ${body}`);
+  if (!to) return false;
+  if (process.env.NODE_ENV !== 'production' || !getTwilio()) {
+    console.log(`📱 [SMS] → ${to} : ${body}`);
     return true;
   }
-
   try {
-    await client.messages.create({
-      body,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to,
-    });
+    await getTwilio().messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to });
     return true;
   } catch (err) {
-    console.error('Erreur SMS Twilio :', err.message);
+    console.error('Erreur SMS :', err.message);
     return false;
   }
 };
 
-/**
- * Envoyer un OTP par SMS
- */
-const envoyerOTP = async (telephone, code) => {
-  const message = `Votre code DiasporaLink : ${code}\nValable 10 minutes. Ne le partagez pas.`;
-  return envoyerSMS(telephone, message);
+// WhatsApp : brancher ici la WhatsApp Business Cloud API (Meta) en v2.
+const envoyerWhatsApp = async (to, body) => {
+  if (!to) return false;
+  console.log(`💬 [WhatsApp — non branché] → ${to} : ${body}`);
+  return false;
 };
 
-/**
- * Notifier le client d'un changement de statut
- */
-const notifierStatut = async (telephone, numeroSuivi, statutLabel) => {
-  const message = `DiasporaLink — Colis #${numeroSuivi} : ${statutLabel}. Suivez votre colis sur diasporalinkafrique.netlify.app`;
-  return envoyerSMS(telephone, message);
+const notifier = async (to, body) => {
+  const ok = await envoyerWhatsApp(to, body);
+  if (!ok) return envoyerSMS(to, body);
+  return true;
 };
 
-module.exports = { envoyerSMS, envoyerOTP, notifierStatut };
+const urlSuivi = (numero) => `${process.env.FRONTEND_URL || ''}/?suivi=${encodeURIComponent(numero)}`;
+
+const envoyerOTP = (telephone, code) =>
+  envoyerSMS(telephone, `${APP_NOM} : votre code de connexion est ${code}. Valable 10 minutes. Ne le partagez pas.`);
+
+const MESSAGES = {
+  depose: (c) => `${APP_NOM} : colis ${c.numeroSuivi} bien reçu au dépôt (${c.poidsReel} kg). Suivi : ${urlSuivi(c.numeroSuivi)}`,
+  en_transit: (c) => `${APP_NOM} : votre colis ${c.numeroSuivi} est parti vers la Guinée. Suivi : ${urlSuivi(c.numeroSuivi)}`,
+  arrive: (c) => `${APP_NOM} : le colis ${c.numeroSuivi} est arrivé en Guinée. Nous vous prévenons dès qu'il est au guichet.`,
+  pret: (c, code, guichet, solde) =>
+    `${APP_NOM} : le colis ${c.numeroSuivi} vous attend au ${guichet}. Code de retrait : ${code}. ` +
+    (solde > 0 ? `Reste à payer : ${solde.toLocaleString('fr-FR')} GNF. ` : '') +
+    `Venez avec une pièce d'identité.`,
+  remis: (c) => `${APP_NOM} : le colis ${c.numeroSuivi} a été remis. Merci de votre confiance !`,
+  tiers: (c, nom) => `${APP_NOM} : ${nom} est autorisé(e) à retirer le colis ${c.numeroSuivi}.`,
+  relance: (c, guichet, jours) =>
+    `${APP_NOM} : le colis ${c.numeroSuivi} vous attend au ${guichet} depuis ${jours} jours. Des frais de garde s'appliquent.`,
+};
+
+module.exports = { envoyerSMS, envoyerWhatsApp, notifier, envoyerOTP, MESSAGES, urlSuivi };

@@ -1,91 +1,84 @@
 const router = require('express').Router();
-const Tarif  = require('../models/Tarif');
+const Config = require('../models/Config');
 const { auth, role } = require('../middleware/auth');
-const { PAYS, CRENEAUX, TYPES_COLIS } = require('../config/constants');
+const { ah } = require('../utils/http');
+const {
+  APP_NOM, MODES_INFO, TYPES_COLIS, METHODES_PAIEMENT, STATUTS_LABELS, ROLES,
+} = require('../config/constants');
 
-// ── GET /api/config ───────────────────────
-// Données publiques enrichies avec les prix MongoDB
-router.get('/', async (req, res) => {
-  try {
-    const config = await Tarif.getConfig();
-    const prixKg = Object.fromEntries(config.prixKg);
+// ── GET /api/config ── données publiques pour les 3 apps
+router.get('/', ah(async (req, res) => {
+  const c = await Config.get();
+  res.json({
+    succes: true,
+    app: APP_NOM,
+    modes: MODES_INFO.map(m => ({ ...m, ...c.tarifs[m.key] })),
+    typesColis: TYPES_COLIS.map(t => ({ ...t, surcharge: c.surcharges?.[t.key] ?? t.surcharge })),
+    tauxAssurance: c.tauxAssurance,
+    tauxEurGnf: c.tauxEurGnf,
+    tauxMisAJourLe: c.tauxMisAJourLe,
+    magasinage: c.magasinage,
+    depots: c.depots,
+    guichets: c.guichets,
+    methodesPaiement: METHODES_PAIEMENT,
+    statuts: STATUTS_LABELS,
+  });
+}));
 
-    const paysAvecPrix = PAYS.map(p => ({
-      ...p,
-      prixKg: prixKg[p.code] || 8.0,
-    }));
+// ── GET /api/config/admin ── config complète
+router.get('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
+  res.json({ succes: true, config: await Config.get() });
+}));
 
-    res.json({
-      succes:     true,
-      pays:       paysAvecPrix,
-      creneaux:   CRENEAUX,
-      typesColis: TYPES_COLIS,
-    });
-  } catch (e) {
-    console.warn('[config] Fallback constants.js :', e.message);
-    res.json({
-      succes:     true,
-      pays:       PAYS,
-      creneaux:   CRENEAUX,
-      typesColis: TYPES_COLIS,
-    });
-  }
-});
+// ── PATCH /api/config/admin ── modifier tarifs, taux, guichets…
+const nombre = (v, min = 0) => { const n = parseFloat(v); return Number.isFinite(n) && n >= min ? n : undefined; };
+const codeValide = (s) => /^[A-Z0-9_-]{2,20}$/.test(s);
 
-// ── GET /api/config/tarifs ────────────────
-// Lire les tarifs (admin uniquement)
-router.get('/tarifs', auth, role('admin'), async (req, res) => {
-  try {
-    const config = await Tarif.getConfig();
-    res.json({
-      succes:        true,
-      prixKg:        Object.fromEntries(config.prixKg),
-      fraisPickup:   config.fraisPickup,
-      tauxAssurance: config.tauxAssurance,
-      poidsMin:      config.poidsMin,
-    });
-  } catch (err) {
-    console.error('[config/tarifs GET]', err);
-    res.status(500).json({ succes: false, message: 'Erreur serveur.' });
-  }
-});
+router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
+  Config.invalider();
+  const actuel = await Config.get();
+  const doc = await Config.findById(actuel._id);
+  const b = req.body || {};
 
-// ── PATCH /api/config/tarifs ──────────────
-// Sauvegarder les tarifs (admin uniquement)
-router.patch('/tarifs', auth, role('admin'), async (req, res) => {
-  try {
-    const { prixKg, fraisPickup, tauxAssurance } = req.body;
-    const config = await Tarif.getConfig();
-
-    if (prixKg && typeof prixKg === 'object') {
-      Object.entries(prixKg).forEach(([code, prix]) => {
-        const val = parseFloat(prix);
-        if (!isNaN(val) && val > 0) config.prixKg.set(code, val);
-      });
+  for (const mode of ['air', 'mer']) {
+    if (b.tarifs?.[mode]) {
+      const prix = nombre(b.tarifs[mode].prixKg, 0.01);
+      const min = nombre(b.tarifs[mode].poidsMin, 0);
+      if (prix !== undefined) doc.tarifs[mode].prixKg = prix;
+      if (min !== undefined) doc.tarifs[mode].poidsMin = min;
     }
-
-    if (fraisPickup !== undefined) {
-      const val = parseFloat(fraisPickup);
-      if (!isNaN(val) && val >= 0) config.fraisPickup = val;
-    }
-
-    if (tauxAssurance !== undefined) {
-      const val = parseFloat(tauxAssurance);
-      // Frontend envoie en % → on divise par 100 pour stocker en décimal
-      if (!isNaN(val) && val >= 0) config.tauxAssurance = val / 100;
-    }
-
-    config.markModified('prixKg');
-    await config.save();
-
-    res.json({
-      succes:  true,
-      message: 'Tarifs mis à jour et synchronisés.',
-    });
-  } catch (err) {
-    console.error('[config/tarifs PATCH]', err);
-    res.status(500).json({ succes: false, message: 'Erreur serveur.' });
   }
-});
+  if (b.surcharges && typeof b.surcharges === 'object') {
+    const s = { ...(doc.surcharges || {}) };
+    for (const t of TYPES_COLIS) {
+      const v = nombre(b.surcharges[t.key]);
+      if (v !== undefined && v <= 5) s[t.key] = v;
+    }
+    doc.surcharges = s;
+    doc.markModified('surcharges');
+  }
+  const assu = nombre(b.tauxAssurance);
+  if (assu !== undefined && assu < 1) doc.tauxAssurance = assu;
+  const taux = nombre(b.tauxEurGnf, 1);
+  if (taux !== undefined && taux !== doc.tauxEurGnf) { doc.tauxEurGnf = taux; doc.tauxMisAJourLe = new Date(); }
+  if (b.magasinage) {
+    const j = nombre(b.magasinage.joursGratuits);
+    const f = nombre(b.magasinage.fraisJourGnf);
+    if (j !== undefined) doc.magasinage.joursGratuits = Math.round(j);
+    if (f !== undefined) doc.magasinage.fraisJourGnf = Math.round(f);
+  }
+  for (const liste of ['depots', 'guichets']) {
+    if (Array.isArray(b[liste])) {
+      const lieux = b[liste]
+        .map(l => ({ ...l, code: String(l.code || '').toUpperCase().trim() }))
+        .filter(l => codeValide(l.code) && l.nom);
+      if (!lieux.length) return res.status(400).json({ succes: false, message: `Au moins un ${liste === 'depots' ? 'dépôt' : 'guichet'} requis.` });
+      doc[liste] = lieux;
+    }
+  }
+  await doc.save();
+  Config.invalider();
+  res.json({ succes: true, config: await Config.get(), message: 'Configuration enregistrée.' });
+}));
 
 module.exports = router;
