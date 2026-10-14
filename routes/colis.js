@@ -53,17 +53,20 @@ router.get('/', auth, ah(async (req, res) => {
   res.json({ succes: true, colis });
 }));
 
-// Le code de retrait n'est montré qu'à l'expéditeur, au destinataire et au tiers autorisé.
+// Le code de retrait n'est montré qu'au compte qui a réservé, et à l'expéditeur, au
+// destinataire ou au tiers autorisé SI leur numéro a été vérifié (par SMS ou par l'agence).
+// Sans vérification, n'importe qui pourrait créer un compte avec le numéro d'un autre.
 function estAutorisePourCode(colis, user) {
-  return [colis.destinataire?.telephone, colis.expediteur?.telephone, colis.tiersAutorise?.telephone].includes(user.telephone)
-    || String(colis.client) === String(user._id);
+  if (String(colis.client) === String(user._id)) return true;
+  if (!user.verifie) return false;
+  return [colis.destinataire?.telephone, colis.expediteur?.telephone, colis.tiersAutorise?.telephone].includes(user.telephone);
 }
 
 // ── GET /api/colis/:numero
 router.get('/:numero', auth, ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.toUpperCase(), ...filtreUtilisateur(req.user) }).select('+codeRetrait');
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
-  res.json({ succes: true, colis: await vueComplete(colis, { avecCode: true }) });
+  res.json({ succes: true, colis: await vueComplete(colis, { avecCode: estAutorisePourCode(colis, req.user) }) });
 }));
 
 // ── POST /api/colis ── réservation en ligne (le prix définitif est fixé à la pesée)
@@ -107,8 +110,8 @@ router.patch('/:numero/tiers', auth, [
 ], valider, ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.toUpperCase() }).select('+codeRetrait');
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
-  const autorise = [colis.destinataire.telephone, colis.expediteur.telephone].includes(req.user.telephone)
-    || String(colis.client) === String(req.user._id) || req.user.role === ROLES.ADMIN;
+  const autorise = String(colis.client) === String(req.user._id) || req.user.role === ROLES.ADMIN
+    || (req.user.verifie && [colis.destinataire.telephone, colis.expediteur.telephone].includes(req.user.telephone));
   if (!autorise) return res.status(403).json({ succes: false, message: 'Seuls l\'expéditeur et le destinataire peuvent faire cela.' });
   if ([STATUTS.REMIS, STATUTS.ANNULE].includes(colis.statut)) return res.status(409).json({ succes: false, message: 'Colis déjà remis.' });
 
@@ -120,7 +123,7 @@ router.patch('/:numero/tiers', auth, [
   if (colis.statut === STATUTS.PRET && colis.codeRetrait) {
     notifier(colis.tiersAutorise.telephone, `${msg} Code de retrait : ${colis.codeRetrait}.`);
   }
-  res.json({ succes: true, colis: await vueComplete(colis, { avecCode: true }) });
+  res.json({ succes: true, colis: await vueComplete(colis, { avecCode: estAutorisePourCode(colis, req.user) }) });
 }));
 
 // ── DELETE /api/colis/:numero ── annuler une réservation pas encore déposée

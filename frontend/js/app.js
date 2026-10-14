@@ -229,7 +229,7 @@
           </div>` : pret ? `
           <div class="carte pile">
             <h3>Code de retrait</h3>
-            <p class="petit muet">Le code a été envoyé par SMS au destinataire. ${session.connecte() ? '' : 'Connectez-vous avec son numéro pour le revoir ici.'}</p>
+            <p class="petit muet">Le code de retrait est visible dans le compte de la personne qui a envoyé le colis : elle peut vous le transmettre. ${session.connecte() ? '' : 'Si c\'est vous, connectez-vous pour le voir ici.'}</p>
             ${session.connecte() ? '' : `<a class="btn btn-plein" href="#/connexion" data-memo-retour>Se connecter</a>`}
           </div>` : ''}
 
@@ -605,10 +605,14 @@
       <div class="pile">
         <h1>Mon compte</h1>
         <div class="carte pile" style="--gap:4px"><div class="gras">${esc(u.prenom)} ${esc(u.nom)}</div><div class="muet">${esc(u.telephone)}</div></div>
-        <p class="petit muet">Les colis envoyés à ce numéro apparaissent dans « Mes colis », avec leur code de retrait.</p>
+        <p class="petit muet">${u.verifie
+          ? 'Les colis envoyés à ce numéro apparaissent dans « Mes colis », avec leur code de retrait.'
+          : 'Vos envois apparaissent dans « Mes colis ». Pour voir aussi les codes de retrait des colis qu\'on vous envoie, faites vérifier votre numéro en agence.'}</p>
+        <button class="btn btn-plein" data-mdp>Changer mon mot de passe</button>
         <button class="btn btn-plein" data-sortir>${ic('sortie', 'ic-sm')} Se déconnecter</button>
         ${mentions()}
       </div>`;
+    main.querySelector('[data-mdp]').addEventListener('click', () => K.changerMotDePasse());
     main.querySelector('[data-sortir]').addEventListener('click', () => {
       session.fermer(); stock.suppr('mes_colis'); location.hash = '#/';
     });

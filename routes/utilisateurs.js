@@ -32,6 +32,7 @@ router.post('/equipe', auth, role(ROLES.ADMIN), [
   body('nom').trim().notEmpty().withMessage('Nom requis'),
   body('role').isIn([ROLES.AGENT, ROLES.ADMIN]).withMessage('Rôle invalide'),
   body('lieu').trim().notEmpty().withMessage('Lieu de travail requis'),
+  body('motDePasse').optional({ values: 'falsy' }).isLength({ min: 8, max: 100 }).withMessage('Mot de passe : 8 caractères minimum'),
 ], valider, ah(async (req, res) => {
   const lieu = await Config.lieu(req.body.lieu);
   if (!lieu) return res.status(400).json({ succes: false, message: 'Lieu inconnu.' });
@@ -40,8 +41,11 @@ router.post('/equipe', auth, role(ROLES.ADMIN), [
   if (user) {
     Object.assign(user, { prenom: req.body.prenom, nom: req.body.nom, role: req.body.role, lieu: lieu.code, actif: true });
   } else {
+    if (!req.body.motDePasse) return res.status(400).json({ succes: false, message: 'Choisissez un mot de passe pour ce compte.' });
     user = new User({ telephone, prenom: req.body.prenom, nom: req.body.nom, role: req.body.role, lieu: lieu.code });
   }
+  user.verifie = true; // numéro vérifié par l'admin
+  if (req.body.motDePasse) await user.definirMotDePasse(req.body.motDePasse);
   await user.save();
   res.status(201).json({ succes: true, utilisateur: user });
 }));
@@ -57,9 +61,34 @@ router.patch('/equipe/:id', auth, role(ROLES.ADMIN), ah(async (req, res) => {
     user.lieu = req.body.lieu;
   }
   if (req.body.role && [ROLES.AGENT, ROLES.ADMIN, ROLES.CLIENT].includes(req.body.role)) user.role = req.body.role;
-  if (typeof req.body.actif === 'boolean') user.actif = req.body.actif;
+  if (typeof req.body.actif === 'boolean') {
+    user.actif = req.body.actif;
+    if (!user.actif) user.jetonVersion = (user.jetonVersion || 0) + 1; // coupe ses sessions ouvertes
+  }
+  if (req.body.motDePasse) {
+    if (!User.mdpValide(req.body.motDePasse)) return res.status(400).json({ succes: false, message: 'Mot de passe : 8 caractères minimum.' });
+    await user.definirMotDePasse(req.body.motDePasse);
+  }
   await user.save();
   res.json({ succes: true, utilisateur: user });
+}));
+
+// ── POST /api/utilisateurs/client-mot-de-passe ── admin : (ré)initialiser le mot de passe
+// d'un client venu à l'agence avec sa pièce d'identité. Marque aussi son numéro comme vérifié.
+router.post('/client-mot-de-passe', auth, role(ROLES.ADMIN), [
+  body('telephone').trim().notEmpty().withMessage('Téléphone requis'),
+  body('motDePasse').isLength({ min: 8, max: 100 }).withMessage('Mot de passe : 8 caractères minimum'),
+], valider, ah(async (req, res) => {
+  const telephone = normTel(req.body.telephone);
+  let user = await User.findOne({ telephone });
+  if (!user) {
+    if (!req.body.prenom || !req.body.nom) return res.status(404).json({ succes: false, message: 'Aucun compte avec ce numéro. Indiquez prénom et nom pour le créer.' });
+    user = new User({ telephone, prenom: req.body.prenom, nom: req.body.nom, role: ROLES.CLIENT });
+  }
+  user.verifie = true;
+  await user.definirMotDePasse(req.body.motDePasse);
+  await user.save();
+  res.json({ succes: true, utilisateur: user, message: 'Mot de passe défini. Le client peut se connecter.' });
 }));
 
 module.exports = router;

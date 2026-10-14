@@ -21,7 +21,8 @@ Nom affiché : `APP_NOM` (Talib Multi Services), nom court pour les SMS : `APP_N
 - **Taux EUR/GNF figé par colis.** L'admin met à jour le taux ; chaque colis garde le taux du jour de sa pesée.
 - **Espèces = moyen de paiement à part entière.** Chaque encaissement est rattaché à l'agent, puis clôturé le soir avec l'écart de caisse.
 - **Paiement à l'arrivée possible.** Le destinataire paie à Conakry (transport + douane + frais de garde).
-- **Code de retrait à 4 chiffres** envoyé par SMS quand le colis est au guichet. 5 codes faux → colis bloqué, déblocage par l'admin.
+- **Connexion par mot de passe** (pas de fournisseur SMS pour l'instant). Les clients créent leur compte ; l'admin crée les comptes agents et peut réinitialiser un mot de passe. Changer un mot de passe ferme les sessions ouvertes. 8 essais faux → compte bloqué 15 minutes.
+- **Code de retrait à 4 chiffres** créé quand le colis est en agence : visible dans le compte de la personne qui a réservé, et dans celui du destinataire si son numéro a été vérifié en agence (sinon n'importe qui pourrait créer un compte avec son numéro). Il partira aussi par SMS quand un fournisseur sera branché. 5 codes faux → colis bloqué, déblocage par l'admin.
 - **Tiers autorisé.** L'expéditeur ou le destinataire peut désigner la personne qui vient retirer ; elle reçoit le code.
 - **Frais de garde.** Gratuit X jours, puis frais par jour (réglable). Relance SMS en un clic.
 - **Hors-ligne.** L'app agent enregistre les scans et les remises sur le téléphone et les envoie au retour du réseau, sans doublon (chaque opération a un identifiant unique). Un colis scanné hors du lot attendu est signalé immédiatement, même sans réseau. L'app client affiche le dernier suivi connu avec son heure.
@@ -41,9 +42,9 @@ npm run dev                # API + les 3 apps sur http://localhost:5000
 - Agent : http://localhost:5000/agent/
 - Back-office : http://localhost:5000/admin/
 
-En développement, le code SMS s'affiche à l'écran et tous les SMS sont écrits dans la console.
+En développement, les SMS qui partiraient sont écrits dans la console.
 
-**Premier lancement :** connectez-vous au back-office avec un numéro listé dans `ADMIN_TELEPHONES`, puis :
+**Premier lancement :** connectez-vous au back-office avec un numéro listé dans `ADMIN_TELEPHONES` et le mot de passe `ADMIN_MOT_DE_PASSE` (l'app demande aussitôt d'en choisir un nouveau), puis :
 1. *Tarifs & agences* : taux EUR/GNF, prix au kilo par sens, liste des agences (France et Guinée) avec la plateforme d'arrivée de chaque pays.
 2. *Équipe* : ajoutez les agents avec leur agence.
 3. *Lots* : créez un lot (sens + avion/bateau) ; les agents de l'agence de départ y chargent les colis en les scannant.
@@ -59,7 +60,8 @@ Le test de parcours couvre : réservation, pesée, paiement, scans rejoués hors
 
 ## Déploiement
 
-- **API** : Render (ou équivalent), `npm start`, variables de `.env.example`.
+- **API** : Render (ou équivalent), `npm start`, variables de `.env.example`. Indispensables : `MONGODB_URI`, `JWT_SECRET`, `NODE_ENV=production`, `ADMIN_TELEPHONES`, `ADMIN_MOT_DE_PASSE`, `FRONTEND_URL`.
+- **Paiement par carte (Stripe)** : `STRIPE_SECRET_KEY` (Stripe → Développeurs → Clés API) et `STRIPE_WEBHOOK_SECRET` (Stripe → Développeurs → Webhooks → endpoint `https://<api>/api/paiements/webhook`, évènement `checkout.session.completed`).
 - **Apps** : 3 sites Netlify, dossiers `frontend/`, `agent/`, `admin/`. Lancer `npm run sync-apps` avant chaque publication (les fichiers communs sont copiés dans `commun/`).
 - L'adresse de l'API est définie dans `shared/kolis.js` (`API_URL`) ; on peut aussi la fixer avec `window.KOLIS_API_URL`.
 
@@ -78,6 +80,7 @@ shared/                   styles et outils communs aux 3 apps
 ## À brancher en v2
 
 - **Orange Money / MTN MoMo** : `POST /api/paiements/mobile-money` répond « bientôt disponible ». Brancher un agrégateur local.
-- **WhatsApp** : `utils/sms.js → envoyerWhatsApp` est prêt à recevoir la WhatsApp Business Cloud API (Meta). En attendant, tout part par SMS.
+- **SMS** : aucun fournisseur (Twilio retiré). Brancher un fournisseur dans `utils/sms.js → envoyerViaFournisseur`, définir `SMS_FOURNISSEUR`, et éventuellement repasser la connexion en `AUTH_MODE=sms`.
+- **WhatsApp** : `utils/sms.js → envoyerWhatsApp` est prêt à recevoir la WhatsApp Business Cloud API (Meta).
 - **Audio en langues locales** (pular, soussou, malinké) pour les messages de statut.
 - Icônes de l'app : `*/icons/` contient des icônes provisoires.

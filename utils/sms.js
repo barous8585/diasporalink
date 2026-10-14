@@ -1,26 +1,34 @@
 // ─────────────────────────────────────────────────────────────
-//  Notifications : SMS (Twilio) + WhatsApp (à brancher en v2)
-//  En développement, tout est affiché dans la console.
+//  Notifications : SMS + WhatsApp
+//  Aucun fournisseur n'est branché pour l'instant (Twilio retiré).
+//  Pour en brancher un plus tard : remplir envoyerViaFournisseur()
+//  et passer SMS_FOURNISSEUR=… dans les variables d'environnement.
 // ─────────────────────────────────────────────────────────────
 const { APP_NOM_COURT: APP_NOM } = require('../config/constants'); // nom court : SMS ≤ 160 caractères
 
-let twilioClient = null;
-const getTwilio = () => {
-  if (!twilioClient && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-    twilioClient = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  }
-  return twilioClient;
-};
+const smsDisponible = () => !!process.env.SMS_FOURNISSEUR;
+
+// eslint-disable-next-line no-unused-vars
+async function envoyerViaFournisseur(to, body) {
+  // À compléter avec l'API du fournisseur choisi (Orange SMS API, agrégateur local…)
+  return false;
+}
+
+const masquer = (tel) => String(tel || '').replace(/\d(?=\d{2})/g, '•');
 
 const envoyerSMS = async (to, body) => {
   if (!to) return false;
-  if (process.env.NODE_ENV !== 'production' || !getTwilio()) {
+  if (process.env.NODE_ENV !== 'production') {
     console.log(`📱 [SMS] → ${to} : ${body}`);
     return true;
   }
+  if (!smsDisponible()) {
+    // En production on n'écrit pas le contenu (il peut contenir un code de retrait)
+    console.log(`📱 [SMS non envoyé — aucun fournisseur] → ${masquer(to)}`);
+    return false;
+  }
   try {
-    await getTwilio().messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to });
-    return true;
+    return await envoyerViaFournisseur(to, body);
   } catch (err) {
     console.error('Erreur SMS :', err.message);
     return false;
@@ -30,7 +38,7 @@ const envoyerSMS = async (to, body) => {
 // WhatsApp : brancher ici la WhatsApp Business Cloud API (Meta) en v2.
 const envoyerWhatsApp = async (to, body) => {
   if (!to) return false;
-  console.log(`💬 [WhatsApp — non branché] → ${to} : ${body}`);
+  if (process.env.NODE_ENV !== 'production') console.log(`💬 [WhatsApp — non branché] → ${to} : ${body}`);
   return false;
 };
 
@@ -61,4 +69,4 @@ const MESSAGES = {
     `${APP_NOM} : le colis ${c.numeroSuivi} vous attend à ${guichet} depuis ${jours} jours. Des frais de garde s'appliquent.`,
 };
 
-module.exports = { envoyerSMS, envoyerWhatsApp, notifier, envoyerOTP, MESSAGES, urlSuivi };
+module.exports = { envoyerSMS, envoyerWhatsApp, notifier, envoyerOTP, MESSAGES, urlSuivi, smsDisponible };

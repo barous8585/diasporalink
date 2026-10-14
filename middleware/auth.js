@@ -16,6 +16,10 @@ const auth = async (req, res, next) => {
     if (!user || !user.actif) {
       return res.status(401).json({ succes: false, message: 'Utilisateur introuvable.' });
     }
+    // Session fermée si le mot de passe a été changé ou réinitialisé depuis
+    if ((decoded.v || 0) !== (user.jetonVersion || 0)) {
+      return res.status(401).json({ succes: false, message: 'Session expirée, reconnectez-vous.' });
+    }
 
     req.user = user;
     next();

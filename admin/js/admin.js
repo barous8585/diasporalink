@@ -470,26 +470,49 @@
       <div class="entete-page"><h1>Équipe</h1></div>
       <div class="deux-col">
         <section class="panneau"><div class="defile"><table class="tableau">
-          <thead><tr><th>Nom</th><th>Téléphone</th><th>Rôle</th><th>Lieu</th><th>Accès</th></tr></thead>
+          <thead><tr><th>Nom</th><th>Téléphone</th><th>Rôle</th><th>Agence</th><th>Accès</th><th></th></tr></thead>
           <tbody>${liste.map(u => `
             <tr data-id="${esc(u._id)}">
               <td class="gras">${esc(u.prenom)} ${esc(u.nom)}</td><td class="chiffres">${esc(u.telephone)}</td>
               <td>${u.role === 'admin' ? 'Administrateur' : 'Agent'}</td>
               <td><select class="saisie" style="min-height:40px;font-size:14px" data-lieu aria-label="Lieu de ${esc(u.prenom)}">${lieux.map(l => `<option value="${esc(l.code)}" ${l.code === u.lieu ? 'selected' : ''}>${esc(l.nom)}</option>`).join('')}${!u.lieu ? '<option value="" selected>—</option>' : ''}</select></td>
               <td><label class="case" style="min-height:40px"><input type="checkbox" data-actif ${u.actif ? 'checked' : ''}> Actif</label></td>
+              <td><button class="btn btn-petit" type="button" data-reinit>Mot de passe</button></td>
             </tr>`).join('')}</tbody></table></div></section>
         <form class="panneau" data-ajout-agent><div class="panneau-tete"><h2>Ajouter un membre</h2></div><div class="panneau-corps pile" style="--gap:10px">
           <label class="champ">Téléphone <input class="saisie" name="telephone" type="tel" required></label>
           <div class="grille-2"><label class="champ">Prénom <input class="saisie" name="prenom" required></label><label class="champ">Nom <input class="saisie" name="nom" required></label></div>
           <label class="champ">Rôle <select class="saisie" name="role"><option value="agent">Agent (dépôt ou guichet)</option><option value="admin">Administrateur</option></select></label>
-          <label class="champ">Lieu de travail <select class="saisie" name="lieu">${lieux.map(l => `<option value="${esc(l.code)}">${esc(l.nom)}</option>`).join('')}</select></label>
+          <label class="champ">Agence <select class="saisie" name="lieu">${lieux.map(l => `<option value="${esc(l.code)}">${esc(l.nom)}</option>`).join('')}</select></label>
+          <label class="champ">Mot de passe (8 caractères minimum) <input class="saisie" name="motDePasse" type="text" autocomplete="off" minlength="8" required></label>
           <button class="btn btn-principal">Ajouter</button>
-          <p class="tres-petit muet">La personne se connecte ensuite à l'app agent avec ce numéro (code par SMS).</p>
+          <p class="tres-petit muet">Donnez ce mot de passe à la personne : elle se connecte à l'app agent avec son numéro, puis peut le changer.</p>
         </div></form>
-      </div>`;
+      </div>
+      <form class="panneau" style="margin-top:20px;max-width:720px" data-mdp-client>
+        <div class="panneau-tete"><div><h2>Mot de passe d'un client</h2><p class="petit muet" style="margin-top:4px">Pour un client venu en agence avec sa pièce d'identité : son numéro est alors marqué comme vérifié et il voit les codes de retrait des colis qu'on lui envoie.</p></div></div>
+        <div class="panneau-corps formulaire-grille">
+          <label class="champ">Téléphone <input class="saisie" name="telephone" type="tel" required></label>
+          <label class="champ">Prénom (si nouveau) <input class="saisie" name="prenom"></label>
+          <label class="champ">Nom (si nouveau) <input class="saisie" name="nom"></label>
+          <label class="champ">Nouveau mot de passe <input class="saisie" name="motDePasse" type="text" autocomplete="off" minlength="8" required></label>
+          <div style="align-self:end"><button class="btn btn-noir">Enregistrer</button></div>
+        </div>
+      </form>`;
+    main.querySelector('[data-mdp-client]').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      f.telephone = normTel(f.telephone);
+      try { const r = await api.post('/utilisateurs/client-mot-de-passe', f); toast(r.message, 'ok'); e.target.reset(); } catch (err) { toast(err.message, 'erreur'); }
+    });
     main.querySelectorAll('tr[data-id]').forEach(tr => {
       const id = tr.dataset.id;
       tr.querySelector('[data-lieu]').addEventListener('change', async (e) => { try { await api.patch(`/utilisateurs/equipe/${id}`, { lieu: e.target.value }); toast('Lieu modifié.', 'ok'); } catch (err) { toast(err.message, 'erreur'); } });
+      tr.querySelector('[data-reinit]').addEventListener('click', async () => {
+        const mdp = prompt('Nouveau mot de passe (8 caractères minimum) :');
+        if (!mdp) return;
+        try { await api.patch(`/utilisateurs/equipe/${id}`, { motDePasse: mdp }); toast('Mot de passe changé. Ses sessions ouvertes sont fermées.', 'ok'); } catch (err) { toast(err.message, 'erreur'); }
+      });
       tr.querySelector('[data-actif]').addEventListener('change', async (e) => { try { await api.patch(`/utilisateurs/equipe/${id}`, { actif: e.target.checked }); toast(e.target.checked ? 'Accès activé.' : 'Accès coupé.', 'ok'); } catch (err) { toast(err.message, 'erreur'); e.target.checked = !e.target.checked; } });
     });
     main.querySelector('[data-ajout-agent]').addEventListener('submit', async (e) => {
@@ -502,6 +525,7 @@
 
   // ── Démarrage ──
   document.querySelector('[data-sortir]').addEventListener('click', () => { session.fermer(); router(); });
+  document.querySelector('[data-mdp]')?.addEventListener('click', () => K.changerMotDePasse());
   async function demarrer() {
     try { CONFIG = await K.config({ forcer: true }); } catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">Serveur injoignable.</p>`; return; }
     document.querySelectorAll('[data-nom-app]').forEach(el => { el.textContent = CONFIG.app; });

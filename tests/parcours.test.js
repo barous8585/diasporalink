@@ -21,13 +21,15 @@ async function appel(methode, chemin, corps, token) {
   return { status: res.status, ...data };
 }
 
+const ADMIN_MDP = 'MotDePasseInitial!';
+const MDP = 'motdepasse123';
+
+// Connexion par mot de passe ; crée un compte client si prénom/nom fournis et compte absent
 async function connexion(telephone, prenom, nom) {
-  let r = await appel('POST', '/auth/envoyer-otp', { telephone });
-  if (r.nouvelUtilisateur) r = await appel('POST', '/auth/envoyer-otp', { telephone, prenom, nom });
-  assert.ok(r.debugCode, 'code OTP de dev attendu');
-  const v = await appel('POST', '/auth/verifier-otp', { telephone, code: r.debugCode });
-  assert.strictEqual(v.status, 200, v.message);
-  return v.token;
+  let r = await appel('POST', '/auth/connexion', { telephone, motDePasse: telephone === ADMIN_TEL ? ADMIN_MDP : MDP });
+  if (r.status === 401 && prenom) r = await appel('POST', '/auth/inscription', { telephone, prenom, nom, motDePasse: MDP });
+  assert.ok(r.token, r.message);
+  return r.token;
 }
 
 test.before(async () => {
@@ -38,7 +40,7 @@ test.before(async () => {
   await mongoose.disconnect();
   serveur = spawn('node', ['server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT, MONGODB_URI: uri, JWT_SECRET: 'test', NODE_ENV: 'development', ADMIN_TELEPHONES: ADMIN_TEL },
+    env: { ...process.env, PORT, MONGODB_URI: uri, JWT_SECRET: 'test', NODE_ENV: 'development', ADMIN_TELEPHONES: ADMIN_TEL, ADMIN_MOT_DE_PASSE: ADMIN_MDP, AUTH_MODE: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   serveur.stderr.on('data', d => process.stderr.write(d));
@@ -52,13 +54,20 @@ test.before(async () => {
 test.after(() => serveur?.kill());
 
 test('parcours complet : réservation → dépôt → lot → guichet → remise', async () => {
-  const admin = await connexion(ADMIN_TEL, 'Admin', 'Test');
+  // Connexion : SMS désactivé, mauvais mot de passe refusé, premier accès admin
+  assert.strictEqual((await appel('POST', '/auth/envoyer-otp', { telephone: ADMIN_TEL })).status, 410);
+  assert.strictEqual((await appel('POST', '/auth/connexion', { telephone: ADMIN_TEL, motDePasse: 'faux-mot-de-passe' })).status, 401);
+  const premier = await appel('POST', '/auth/connexion', { telephone: ADMIN_TEL, motDePasse: ADMIN_MDP });
+  assert.ok(premier.doitChangerMotDePasse);
+  assert.ok(!JSON.stringify(premier).includes('motDePasse"'), 'l\'empreinte ne doit jamais sortir');
+  const admin = await connexion(ADMIN_TEL);
   const moi = await appel('GET', '/auth/moi', null, admin);
   assert.strictEqual(moi.utilisateur.role, 'admin');
+  assert.strictEqual((await appel('GET', '/config')).authMode, 'motdepasse');
 
   // Équipe
   for (const [tel, prenom, lieu] of [['+33600000002', 'Awa', 'PARIS'], ['620000003', 'Ibrahima', 'KALOUM']]) {
-    const r = await appel('POST', '/utilisateurs/equipe', { telephone: tel, prenom, nom: 'Agent', role: 'agent', lieu }, admin);
+    const r = await appel('POST', '/utilisateurs/equipe', { telephone: tel, prenom, nom: 'Agent', role: 'agent', lieu, motDePasse: MDP }, admin);
     assert.strictEqual(r.status, 201, r.message);
   }
   const agentParis = await connexion('+33600000002');
@@ -147,8 +156,17 @@ test('parcours complet : réservation → dépôt → lot → guichet → remise
   const mesColis = await appel('GET', '/colis', null, client);
   const code = mesColis.colis.find(c => c.numeroSuivi === numero).codeRetrait;
   assert.match(code, /^\d{4}$/);
-  const dest = await connexion('+224621000111', 'Alpha', 'Barry');
-  const vueDest = await appel('GET', `/colis/${numero}`, null, dest);
+  // Un compte créé avec le numéro du destinataire, sans vérification, ne voit PAS le code
+  let dest = await connexion('+224621000111', 'Alpha', 'Barry');
+  assert.strictEqual((await appel('POST', '/auth/inscription', { telephone: '+224621000111', prenom: 'X', nom: 'Y', motDePasse: MDP })).status, 409);
+  let vueDest = await appel('GET', `/colis/${numero}`, null, dest);
+  assert.strictEqual(vueDest.colis.codeRetrait, undefined);
+  // L'agence vérifie son identité et lui donne un mot de passe : il voit le code
+  const reinit = await appel('POST', '/utilisateurs/client-mot-de-passe', { telephone: '621000111', motDePasse: 'nouveaumdp456' }, admin);
+  assert.strictEqual(reinit.status, 200, reinit.message);
+  assert.strictEqual((await appel('GET', '/auth/moi', null, dest)).status, 401, 'ancienne session fermée');
+  dest = (await appel('POST', '/auth/connexion', { telephone: '+224621000111', motDePasse: 'nouveaumdp456' })).token;
+  vueDest = await appel('GET', `/colis/${numero}`, null, dest);
   assert.strictEqual(vueDest.colis.codeRetrait, code);
   // L'intrus ne voit rien
   assert.strictEqual((await appel('GET', `/colis/${numero}`, null, intrus)).status, 404);
@@ -230,7 +248,7 @@ test('redistribution vers une autre agence, et envoi Guinée → France payé en
   const agences = [...cfg.agences, { code: 'LABE', nom: 'Agence Labé', pays: 'GN', ville: 'Labé', commune: 'Labé centre' }];
   const maj = await appel('PATCH', '/config/admin', { agences }, admin);
   assert.strictEqual(maj.status, 200, maj.message);
-  await appel('POST', '/utilisateurs/equipe', { telephone: '620000004', prenom: 'Mariama', nom: 'Labé', role: 'agent', lieu: 'LABE' }, admin);
+  await appel('POST', '/utilisateurs/equipe', { telephone: '620000004', prenom: 'Mariama', nom: 'Labé', role: 'agent', lieu: 'LABE', motDePasse: MDP }, admin);
   const agentParis = await connexion('+33600000002');
   const agentKaloum = await connexion('620000003');
   const agentLabe = await connexion('620000004');

@@ -789,7 +789,17 @@
         </form>
         <h3>Détail</h3>
         <div class="carte">${r.mouvements.map(m => `<div class="ligne-info"><span>${esc(heure(m.le))} · ${esc(m.numeroSuivi || '')} · ${esc(methodes[m.methode] || m.methode)}</span><span class="gras chiffres">${montant(m.montant, m.devise)}</span></div>`).join('')}</div>` : ''}
+        <h3>Mon compte</h3>
+        <div class="grille-2">
+          <button class="btn" type="button" data-mdp>Mot de passe</button>
+          <button class="btn" type="button" data-sortir>${ic('sortie', 'ic-sm')} Déconnexion</button>
+        </div>
       </div>`;
+    main.querySelector('[data-mdp]').addEventListener('click', () => K.changerMotDePasse());
+    main.querySelector('[data-sortir]').addEventListener('click', () => {
+      if (file.lire().length && !confirm('Des opérations ne sont pas encore envoyées. Elles resteront sur ce téléphone. Se déconnecter quand même ?')) return;
+      session.fermer(); stock.suppr('ctx'); CTX = null; location.hash = '#/'; router();
+    });
     main.querySelector('[data-cloture]')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);

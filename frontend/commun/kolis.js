@@ -172,8 +172,8 @@
     return { el: fond.querySelector('.modale'), fermer };
   }
 
-  // ── Connexion par SMS (code à 6 chiffres), réutilisée par les 3 apps ──
-  function vueConnexion(cible, { titre = 'Connexion', inscription = true, surSucces }) {
+  // ── Connexion par SMS (code à 6 chiffres) — utilisée seulement si authMode = 'sms' ──
+  function vueConnexionSms(cible, { titre = 'Connexion', inscription = true, surSucces }) {
     let etape = 'tel', telephone = '', nouvel = false;
     const dessiner = (erreur = '', debug = '') => {
       cible.innerHTML = `
@@ -232,6 +232,115 @@
     dessiner();
   }
 
+  // ── Connexion : par mot de passe (défaut) ou par SMS selon la config du serveur ──
+  function vueConnexion(cible, options) {
+    const mode = stock.lire('config')?.authMode || 'motdepasse';
+    if (mode === 'sms') return vueConnexionSms(cible, options);
+    return vueConnexionMdp(cible, options);
+  }
+
+  function vueConnexionMdp(cible, { titre = 'Connexion', inscription = true, surSucces }) {
+    let vue = 'connexion';
+    const champMdp = (nom, lib, auto) => `
+      <label class="champ">${lib}
+        <span class="ligne" style="--gap:6px">
+          <input class="saisie saisie-forte grandit" name="${nom}" type="password" autocomplete="${auto}" minlength="8" required>
+          <button type="button" class="btn btn-carre" style="width:52px;height:52px" data-voir="${nom}" aria-label="Afficher le mot de passe">${ic('loupe', 'ic-sm')}</button>
+        </span>
+      </label>`;
+    const dessiner = (erreur = '') => {
+      cible.innerHTML = vue === 'oubli' ? `
+        <div class="pile" style="--gap:16px">
+          <h1>Mot de passe oublié</h1>
+          <p>${inscription
+            ? 'Passez dans une agence avec une pièce d\'identité : l\'agent vous aidera à définir un nouveau mot de passe.'
+            : 'Demandez à l\'administrateur de vous définir un nouveau mot de passe.'}</p>
+          <button class="btn btn-plein" type="button" data-vue="connexion">Retour</button>
+        </div>` : `
+        <form class="pile" style="--gap:16px" novalidate>
+          <h1>${vue === 'inscription' ? 'Créer mon compte' : esc(titre)}</h1>
+          ${vue === 'inscription' ? `
+            <div class="grille-2">
+              <label class="champ">Prénom <input class="saisie" name="prenom" autocomplete="given-name" required></label>
+              <label class="champ">Nom <input class="saisie" name="nom" autocomplete="family-name" required></label>
+            </div>` : ''}
+          <label class="champ">Téléphone
+            <input class="saisie saisie-forte" name="telephone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+224 6XX XX XX XX ou 06 XX XX XX XX" required>
+          </label>
+          ${champMdp('motDePasse', vue === 'inscription' ? 'Mot de passe (8 caractères minimum)' : 'Mot de passe', vue === 'inscription' ? 'new-password' : 'current-password')}
+          ${vue === 'inscription' ? champMdp('confirmation', 'Confirmez le mot de passe', 'new-password') : ''}
+          ${erreur ? `<p class="bandeau bandeau-rouge" role="alert">${esc(erreur)}</p>` : ''}
+          <button class="btn btn-principal btn-grand btn-plein" type="submit">${vue === 'inscription' ? 'Créer mon compte' : 'Se connecter'}</button>
+          ${vue === 'connexion' ? `<button class="btn btn-lien" type="button" data-vue="oubli">Mot de passe oublié ?</button>` : ''}
+          ${inscription ? (vue === 'connexion'
+            ? `<button class="btn btn-plein" type="button" data-vue="inscription">Pas encore de compte ? Créer un compte</button>`
+            : `<button class="btn btn-lien" type="button" data-vue="connexion">J'ai déjà un compte</button>`) : ''}
+        </form>`;
+      cible.querySelectorAll('[data-vue]').forEach(b => b.addEventListener('click', () => { vue = b.dataset.vue; dessiner(); }));
+      cible.querySelectorAll('[data-voir]').forEach(b => b.addEventListener('click', () => {
+        const i = cible.querySelector(`[name="${b.dataset.voir}"]`); i.type = i.type === 'password' ? 'text' : 'password';
+      }));
+      const form = cible.querySelector('form');
+      if (!form) return;
+      form.querySelector('input').focus();
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = new FormData(form);
+        const btn = form.querySelector('[type=submit]'); btn.disabled = true;
+        try {
+          let r;
+          if (vue === 'inscription') {
+            if (String(f.get('motDePasse')).length < 8) throw new Error('Mot de passe : 8 caractères minimum.');
+            if (f.get('motDePasse') !== f.get('confirmation')) throw new Error('Les deux mots de passe ne sont pas identiques.');
+            r = await api.post('/auth/inscription', { telephone: normTel(f.get('telephone')), prenom: f.get('prenom'), nom: f.get('nom'), motDePasse: f.get('motDePasse') });
+          } else {
+            r = await api.post('/auth/connexion', { telephone: normTel(f.get('telephone')), motDePasse: f.get('motDePasse') });
+          }
+          session.ouvrir(r.token, r.utilisateur);
+          if (r.doitChangerMotDePasse) {
+            toast('Premier accès : choisissez votre propre mot de passe.');
+            await changerMotDePasse({ actuel: f.get('motDePasse'), obligatoire: true });
+          }
+          surSucces?.(r.utilisateur);
+        } catch (err) {
+          dessiner(err.message);
+        }
+      });
+    };
+    dessiner();
+  }
+
+  // ── Changer son mot de passe (fenêtre) ──
+  function changerMotDePasse({ actuel = '', obligatoire = false } = {}) {
+    return new Promise((fini) => {
+      const { el, fermer } = modale(`
+        <form class="pile" style="--gap:14px">
+          <div class="ligne entre"><h2>${obligatoire ? 'Choisissez votre mot de passe' : 'Changer mon mot de passe'}</h2>${obligatoire ? '' : `<button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button>`}</div>
+          ${actuel ? '' : '<label class="champ">Mot de passe actuel <input class="saisie" name="actuel" type="password" autocomplete="current-password" required></label>'}
+          <label class="champ">Nouveau mot de passe (8 caractères minimum) <input class="saisie" name="nouveau" type="password" autocomplete="new-password" minlength="8" required></label>
+          <label class="champ">Confirmez <input class="saisie" name="confirmation" type="password" autocomplete="new-password" required></label>
+          <p class="bandeau bandeau-rouge cache" data-erreur role="alert"></p>
+          <button class="btn btn-principal btn-grand">Enregistrer</button>
+        </form>`);
+      const form = el.querySelector('form');
+      const erreur = (m) => { const z = el.querySelector('[data-erreur]'); z.textContent = m; z.classList.remove('cache'); };
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = new FormData(form);
+        if (String(f.get('nouveau')).length < 8) return erreur('8 caractères minimum.');
+        if (f.get('nouveau') !== f.get('confirmation')) return erreur('Les deux mots de passe ne sont pas identiques.');
+        if (actuel && f.get('nouveau') === actuel) return erreur('Choisissez un mot de passe différent du mot de passe initial.');
+        try {
+          const r = await api.patch('/auth/mot-de-passe', { actuel: actuel || f.get('actuel'), nouveau: f.get('nouveau') });
+          stock.ecrire('jeton', r.token);
+          toast('Mot de passe modifié.', 'ok');
+          fermer(); fini(true);
+        } catch (err) { erreur(err.message); }
+      });
+      el.closest('.modale-fond').addEventListener('click', (e) => { if (e.target.classList.contains('modale-fond') || e.target.closest('[data-fermer]')) fini(false); });
+    });
+  }
+
   // ── Empreinte SHA-256 (vérification hors-ligne des codes de retrait) ──
   async function sha256(texte) {
     const tampon = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texte));
@@ -275,6 +384,6 @@
 
   window.K = {
     API_URL, api, session, stock, config, ErreurReseau,
-    esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, sha256, etiquette,
+    esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
   };
 })();

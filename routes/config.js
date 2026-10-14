@@ -13,6 +13,7 @@ router.get('/', ah(async (req, res) => {
     succes: true,
     app: APP_NOM,
     appCourt: APP_NOM_COURT,
+    authMode: require('../controllers/authController').modeAuth(),
     entreprise: ENTREPRISE,
     pays: PAYS,
     sens: SENS.map(s => ({ ...s, devise: c.tarifs?.[s.key]?.devise || PAYS[s.depart].devise })),

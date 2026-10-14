@@ -1,13 +1,32 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
-const { envoyerOtpCtrl, verifierOtpCtrl, moiCtrl } = require('../controllers/authController');
+const {
+  connexionCtrl, inscriptionCtrl, changerMotDePasseCtrl, envoyerOtpCtrl, verifierOtpCtrl, moiCtrl,
+} = require('../controllers/authController');
 const { auth } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
 
+// ── Connexion par mot de passe ──
+router.post('/connexion', [
+  body('telephone').trim().notEmpty().withMessage('Numéro de téléphone requis'),
+  body('motDePasse').notEmpty().withMessage('Mot de passe requis'),
+], valider, ah(connexionCtrl));
+
+router.post('/inscription', [
+  body('telephone').trim().notEmpty().withMessage('Numéro de téléphone requis'),
+  body('prenom').trim().notEmpty().withMessage('Prénom requis'),
+  body('nom').trim().notEmpty().withMessage('Nom requis'),
+  body('motDePasse').isLength({ min: 8, max: 100 }).withMessage('Mot de passe : 8 caractères minimum'),
+], valider, ah(inscriptionCtrl));
+
+router.patch('/mot-de-passe', auth, [
+  body('actuel').notEmpty().withMessage('Mot de passe actuel requis'),
+  body('nouveau').isLength({ min: 8, max: 100 }).withMessage('Nouveau mot de passe : 8 caractères minimum'),
+], valider, ah(changerMotDePasseCtrl));
+
+// ── Connexion par SMS (désactivée tant qu'aucun fournisseur SMS n'est branché) ──
 router.post('/envoyer-otp', [
   body('telephone').trim().notEmpty().withMessage('Numéro de téléphone requis'),
-  body('prenom').optional().trim(),
-  body('nom').optional().trim(),
 ], valider, ah(envoyerOtpCtrl));
 
 router.post('/verifier-otp', [
