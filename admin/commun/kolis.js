@@ -629,10 +629,68 @@
     } catch { img.alt = 'Photo indisponible'; }
   }
 
+  // ── Notifications push (comme sur Glow) ──
+  const base64VersOctets = (b64) => {
+    const p = '='.repeat((4 - (b64.length % 4)) % 4);
+    const brut = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...brut].map(c => c.charCodeAt(0)));
+  };
+  const notifications = {
+    possible: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
+    // iPhone : les notifications ne marchent que si l'app est ajoutée à l'écran d'accueil
+    iosHorsApp: () => /iPhone|iPad|iPod/.test(navigator.userAgent) && !(window.navigator.standalone || matchMedia('(display-mode: standalone)').matches),
+    async etat() {
+      if (notifications.iosHorsApp()) return 'ios';
+      if (!notifications.possible()) return 'impossible';
+      if (Notification.permission === 'denied') return 'refuse';
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = await reg?.pushManager.getSubscription();
+        return sub && Notification.permission === 'granted' ? 'actif' : 'inactif';
+      } catch { return 'inactif'; }
+    },
+    async activer() {
+      if (notifications.iosHorsApp()) throw new Error('Sur iPhone : touchez Partager puis « Sur l\'écran d\'accueil », ouvrez l\'app depuis l\'écran d\'accueil, puis activez les notifications.');
+      if (!notifications.possible()) throw new Error('Ce navigateur ne gère pas les notifications. Essayez Chrome ou Safari à jour.');
+      const { cle, actif } = await api.get('/push/cle');
+      if (!actif || !cle) throw new Error('Les notifications ne sont pas encore activées sur le serveur.');
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') throw new Error('Notifications refusées. Autorisez-les dans les réglages du navigateur (cadenas à gauche de l\'adresse).');
+      const reg = await navigator.serviceWorker.register('sw.js');
+      await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64VersOctets(cle) });
+      await api.post('/push/abonner', { abonnement: sub.toJSON(), app: APP === 'client' ? 'client' : APP });
+      return true;
+    },
+    async couper() {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = await reg?.pushManager.getSubscription();
+      if (sub) { try { await api.post('/push/desabonner', { endpoint: sub.endpoint }); } catch {} await sub.unsubscribe(); }
+    },
+    // Carte « Activer les notifications » à glisser dans une page ; se cache si déjà fait
+    async carte(zone, { texte = 'Soyez prévenu sur ce téléphone dès que quelque chose bouge.' } = {}) {
+      if (!zone || !session.connecte()) return;
+      const e = await notifications.etat();
+      if (e === 'actif' || e === 'impossible') { zone.innerHTML = ''; return; }
+      zone.innerHTML = `
+        <div class="carte pile carte-notifs" style="--gap:10px">
+          <div class="ligne" style="--gap:12px"><span class="pastille-notif">${ic('cloche')}</span><div class="grandit"><div class="gras">Notifications</div><div class="petit muet">${esc(texte)}</div></div></div>
+          ${e === 'refuse' ? '<p class="petit rouge">Notifications bloquées : autorisez-les dans les réglages du navigateur, puis réessayez.</p>' : ''}
+          ${e === 'ios' ? '<p class="petit">Sur iPhone : touchez <b>Partager</b> puis <b>« Sur l\'écran d\'accueil »</b>, et ouvrez l\'app depuis l\'écran d\'accueil.</p>' : `<button type="button" class="btn btn-principal btn-plein" data-activer-notifs>${ic('cloche', 'ic-sm')} Activer les notifications</button>`}
+        </div>`;
+      zone.querySelector('[data-activer-notifs]')?.addEventListener('click', async (ev) => {
+        ev.currentTarget.disabled = true;
+        try { await notifications.activer(); toast('Notifications activées sur cet appareil.', 'ok'); zone.innerHTML = ''; }
+        catch (err) { toast(err.message, 'erreur'); ev.currentTarget.disabled = false; }
+      });
+    },
+  };
+
   window.K = {
     API_URL, api, session, stock, config, ErreurReseau,
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
     positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse, choisirSurCarte, chargerLeaflet,
-    lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto,
+    lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto, notifications,
   };
 })();

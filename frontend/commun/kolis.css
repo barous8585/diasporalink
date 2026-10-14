@@ -37,8 +37,10 @@
   --bleu-doux: #E8EDF6;
   --r: 16px;
   --r-lg: 22px;
-  --police-titre: 'Bricolage Grotesque', 'Figtree', system-ui, sans-serif;
-  --police: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Même typographie que Glow : Inter pour le texte, Fraunces pour les titres */
+  --police-titre: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --police: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ease: cubic-bezier(.4, 0, .2, 1);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -48,9 +50,10 @@ body {
   font-family: var(--police); font-size: 16px; line-height: 1.4;
   -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3, .titre { font-family: var(--police-titre); letter-spacing: -0.4px; margin: 0; }
-h1 { font-size: 28px; font-weight: 800; line-height: 1.1; }
-h2 { font-size: 20px; font-weight: 700; }
+h1, h2, h3, .titre { font-family: var(--police-titre); letter-spacing: -0.01em; margin: 0; font-optical-sizing: auto; }
+h1 { font-size: 28px; font-weight: 700; line-height: 1.12; }
+h2 { font-size: 20px; font-weight: 600; }
+h3 { font-weight: 600; }
 h3 { font-size: 17px; font-weight: 700; }
 a { color: var(--vert); }
 p { margin: 0; }
@@ -88,9 +91,11 @@ p { margin: 0; }
   min-height: 48px; padding: 0 18px; border-radius: 14px; border: 1px solid transparent;
   font: inherit; font-weight: 700; font-size: 16px; cursor: pointer; text-decoration: none;
   background: var(--carte); color: var(--encre); border-color: var(--ligne-2);
-  transition: transform .05s ease, background .15s ease;
+  transition: transform .12s var(--ease), background .15s var(--ease), box-shadow .15s var(--ease), border-color .15s var(--ease), opacity .15s var(--ease);
+  -webkit-tap-highlight-color: transparent;
 }
-.btn:active { transform: scale(0.98); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: .55; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-principal { background: var(--marine); color: #fff; border-color: var(--marine); }
 .btn-principal:hover { background: var(--marine-clair); border-color: var(--marine-clair); }
@@ -182,8 +187,13 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
 @keyframes monte { from { opacity: 0; transform: translateY(8px); } }
 
 /* Chargement */
-.chargement { display: flex; justify-content: center; padding: 40px; }
-.chargement::after { content: ''; width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--ligne); border-top-color: var(--vert); animation: tourne .8s linear infinite; }
+/* Squelette qui scintille pendant le chargement (comme sur Glow) */
+.chargement { display: flex; flex-direction: column; gap: 12px; padding: 8px 0; }
+.chargement::before, .chargement::after { content: ''; display: block; border-radius: 16px;
+  background: linear-gradient(90deg, var(--creme-2) 25%, #E9EDF4 50%, var(--creme-2) 75%); background-size: 200% 100%; animation: shim 1.4s infinite; }
+.chargement::before { height: 92px; }
+.chargement::after { height: 220px; }
+@keyframes shim { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 @keyframes tourne { to { transform: rotate(360deg); } }
 .vide { text-align: center; color: var(--gris); padding: 32px 16px; }
 
@@ -259,3 +269,21 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
 .liens-legaux a { display: inline-block; padding: 10px 4px; }
 .case a { display: inline-block; padding: 4px 0; }
 a.tres-petit { display: inline-block; padding: 6px 0; }
+.etape.annulee .texte { opacity: .55; text-decoration: line-through; }
+
+
+/* ── Fluidité (comme sur Glow) ── */
+html { scroll-behavior: smooth; }
+body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+@keyframes pgIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+main.entree > * { animation: pgIn .28s var(--ease) both; }
+.modale-fond { animation: fondIn .18s var(--ease); }
+.modale { animation: pgIn .24s var(--ease); }
+@keyframes fondIn { from { opacity: 0; } }
+.choix, .tuile, .ligne-colis, .carte, a, .saisie { transition: background .15s var(--ease), border-color .15s var(--ease), box-shadow .15s var(--ease), transform .12s var(--ease), color .15s var(--ease); }
+.choix:active, .tuile:active, .ligne-colis:active { transform: scale(.985); }
+.saisie:focus { box-shadow: 0 0 0 3px rgba(4, 36, 79, .12); }
+.barre-nav a { transition: background .2s var(--ease), color .2s var(--ease), box-shadow .2s var(--ease); }
+.barre > span { transition: width .5s var(--ease); }
+.toast { animation: pgIn .22s var(--ease); }
+.pastille-notif { width: 44px; height: 44px; border-radius: 14px; background: var(--vert-doux); color: var(--marine); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }

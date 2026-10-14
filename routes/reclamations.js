@@ -78,6 +78,8 @@ router.post('/', [
   await r.save();
   colis.historique.push({ label: 'Réclamation ouverte', detail: `${r.numero} · ${MOTIFS.find(m => m.key === r.motif).label}`, le: new Date() });
   await colis.save();
+  const push = require('../utils/push');
+  push.sansAttendre(push.auxAdmins({ titre: 'Nouvelle réclamation', corps: `${r.numero} · ${r.numeroSuivi} : ${String(r.description || '').slice(0, 90)}`, chemin: `/#/reclamations/${r.numero}`, etiquette: r.numero }));
   res.status(201).json({ succes: true, reclamation: vueClient(r) });
 }));
 
@@ -112,6 +114,9 @@ router.post('/:numero/message', [body('texte').trim().isLength({ min: 1, max: 20
   const admin = req.user.role === ROLES.ADMIN;
   if (!r || (!admin && String(r.demandeur?.user) !== String(req.user._id))) return res.status(404).json({ succes: false, message: 'Réclamation introuvable.' });
   r.suivi.push({ auteur: admin ? 'tms' : 'client', nom: req.user.prenom, texte: req.body.texte, interne: admin && !!req.body.interne });
+  { const push = require('../utils/push');
+    if (!admin) push.sansAttendre(push.auxAdmins({ titre: `Réclamation ${r.numero}`, corps: `Le client a écrit : ${String(req.body.texte).slice(0, 100)}`, chemin: `/#/reclamations/${r.numero}`, etiquette: r.numero }));
+    else if (!req.body.interne && r.demandeur?.user) push.sansAttendre(push.aLUtilisateur(r.demandeur.user, { titre: `Réclamation ${r.numero}`, corps: `TMS vous a répondu : ${String(req.body.texte).slice(0, 100)}`, chemin: `/#/reclamation/${r.numero}` })); }
   if (admin && r.statut === 'ouverte') r.statut = 'en_cours';
   await r.save();
   if (admin && !req.body.interne && r.demandeur?.telephone) notifier(r.demandeur.telephone, `${APP_NOM_COURT} : réponse à votre réclamation ${r.numero}. Consultez-la dans « Mes colis ».`);

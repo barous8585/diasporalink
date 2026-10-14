@@ -11,6 +11,8 @@ const fichiers = [
   ['utils/tarif.js', 'commun/tarif.js'],
   ['shared/img/logo.png', 'commun/logo.png'],
   ['shared/img/embleme.png', 'commun/embleme.png'],
+  ['shared/img/badge-96.png', 'commun/badge-96.png'],
+  ['shared/sw-push.js', 'commun/sw-push.js'],
 ];
 
 for (const app of ['frontend', 'agent', 'admin']) {

@@ -75,6 +75,7 @@
       if (m) {
         document.querySelectorAll('[data-nav]').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === nav) || a.removeAttribute('aria-current'));
         document.querySelectorAll('[data-nav]').forEach(a => { if (a.dataset.nav === nav) a.setAttribute('aria-current', 'page'); });
+        main.classList.toggle('entree', !silencieux); // entrée en douceur, sauf rafraîchissement silencieux
         if (!silencieux) main.innerHTML = '<div class="chargement" aria-label="Chargement"></div>';
         try { await vue(...m.slice(1)); } catch (e) { if (!silencieux) main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
         if (!silencieux) { main.focus({ preventScroll: true }); window.scrollTo(0, 0); }
@@ -211,7 +212,8 @@
     const course = (k) => { const x = c[k]; if (!x || x.demande === false || x.statut === 'annulee') return null;
       return complet ? { ...x, quartier: x.adresse?.quartier || x.adresse?.commune, aPosition: !!x.adresse?.position?.lat, livreur: x.livreurNom } : x; };
     const ram = course('ramassage'), liv = course('livraison');
-    const historique = [...(c.historique || [])].reverse();
+    // Les erreurs de scan corrigées par l'agence ne concernent pas le client
+    const historique = [...(c.historique || [])].filter(h => !h.annule && h.label !== 'Étape annulée').reverse();
     const poids = complet ? (c.poidsReel || c.poidsEstime) : c.poids;
     const peutAutoriser = complet && !['reserve', 'remis', 'annule'].includes(c.statut);
     const estime = c.statut === 'reserve';
@@ -272,6 +274,7 @@
         </div>` : ''}
 
         ${carteCourses(c, ram, liv)}
+        <div data-notifs-suivi></div>
 
         ${c.statut === 'reserve' && !ram ? `
           <div class="carte pile">
@@ -314,6 +317,7 @@
     main.querySelector('[data-tiers]')?.addEventListener('click', () => autoriserTiers(c));
     main.querySelector('[data-livraison]')?.addEventListener('click', (e) => demanderLivraison(c, liv, e.currentTarget.dataset.livraison));
     if (complet && !['reserve', 'annule'].includes(c.statut) && !horsLigne) chargerFacturesEtReclamations(c);
+    if (complet && !['remis', 'annule'].includes(c.statut)) K.notifications.carte(main.querySelector('[data-notifs-suivi]'), { texte: 'Être prévenu dès que ce colis arrive et recevoir le code ici.' });
     main.querySelector('[data-payer]')?.addEventListener('click', () => payer(c, solde));
     main.querySelector('[data-annuler]')?.addEventListener('click', async () => {
       if (!confirm('Annuler cette réservation ?')) return;
@@ -813,9 +817,11 @@
           ${c.livraison.adresse?.position ? '' : `<p class="bandeau bandeau-ocre">${ic('gps', 'ic-sm')}<span>Il manque sa position : envoyez-lui le lien de suivi, il pourra l'ajouter lui-même.</span></p>`}` : `
           <p>3. ${esc(c.destinataire.nom)} reçoit un SMS avec le code de retrait dès que le colis est à <b>${esc(r.nom || 'son agence')}</b>${r.ville ? ` (${esc(r.ville)})` : ''}.</p>`}
         </div>
+        <div data-notifs></div>
         <a class="btn btn-principal btn-grand btn-plein" href="#/suivi/${encodeURIComponent(c.numeroSuivi)}">Voir le suivi</a>
         <a class="btn btn-plein" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Je t'envoie un colis. Numéro de suivi : ${c.numeroSuivi}`)}`)}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} Prévenir ${esc(c.destinataire.nom.split(' ')[0])} sur WhatsApp</a>
       </div>`;
+    K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Soyez prévenu à chaque étape de ce colis : départ, arrivée, code de retrait.' });
   }
 
   // ════════════════════════════════════════════════════════
@@ -904,11 +910,13 @@
         <p class="petit muet">${u.verifie
           ? 'Les colis envoyés à ce numéro apparaissent dans « Mes colis », avec leur code de retrait.'
           : 'Vos envois apparaissent dans « Mes colis ». Pour voir aussi les codes de retrait des colis qu\'on vous envoie, faites vérifier votre numéro en agence.'}</p>
+        <div data-notifs></div>
         <button class="btn btn-plein" data-mdp>Changer mon mot de passe</button>
         <button class="btn btn-plein" data-sortir>${ic('sortie', 'ic-sm')} Se déconnecter</button>
         ${mentions()}
       </div>`;
     main.querySelector('[data-mdp]').addEventListener('click', () => K.changerMotDePasse());
+    K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Arrivée de vos colis, code de retrait, livreur en route : prévenu tout de suite, même sans SMS.' });
     main.querySelector('[data-sortir]').addEventListener('click', () => {
       session.fermer(); stock.suppr('mes_colis'); location.hash = '#/';
     });
