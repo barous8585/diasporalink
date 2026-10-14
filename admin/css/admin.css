@@ -199,3 +199,19 @@ table.tableau { border-collapse: collapse; width: 100%; font-size: 14px; }
 .mini-stats .alerte { background: var(--rouge-doux); } .mini-stats .alerte b { color: var(--rouge); }
 .segments-compacts button { min-height: 38px; padding: 0 12px; font-size: 13px; }
 .infobulle { position: fixed; z-index: 100; display: none; pointer-events: none; background: var(--marine); color: #fff; font-size: 13px; padding: 7px 10px; border-radius: 9px; max-width: 320px; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+.bloc-ca { margin-top: 20px; }
+.ca-grille { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px 28px; padding: 0 20px 20px; }
+.ca-mois { grid-column: 1 / -1; }
+@media (max-width: 900px) { .ca-grille { grid-template-columns: 1fr; } }
+.ca-chiffres { display: flex; flex-direction: column; gap: 2px; }
+.ca-principal { background: var(--marine); color: #fff; border-radius: 16px; padding: 16px 18px; margin-bottom: 8px; display: flex; flex-direction: column; }
+.ca-principal span { font-size: 13px; color: #D5DEEE; font-weight: 600; }
+.ca-principal b { font-family: var(--police-titre); font-size: 34px; }
+.ca-principal .delta { align-self: flex-start; margin-top: 6px; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 8px; background: rgba(255,255,255,.16); color: #fff; }
+.ca-ligne { display: flex; justify-content: space-between; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--ligne); font-size: 14px; }
+.ca-ligne span { color: var(--gris); }
+.ca-ligne b { font-variant-numeric: tabular-nums; }
+.ca-ligne.alerte { background: var(--rouge-doux); border-radius: 10px; border: none; padding: 10px 10px; margin-top: 6px; }
+.ca-ligne.alerte span, .ca-ligne.alerte b { color: var(--rouge); }
+.sous-titre-tdb { font-family: var(--police); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--gris); margin-bottom: 10px; }
+.bh { grid-template-columns: 160px minmax(0, 1fr) auto; }

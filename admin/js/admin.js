@@ -124,7 +124,7 @@
   // Colonnes (empilées si plusieurs séries) en SVG, avec infobulle au survol
   function colonnes(donnees, series, { hauteur = 180, format = (v) => nf(v), etroit = false } = {}) {
     // Largeur de dessin proche de la largeur réelle : le texte des axes garde une taille lisible
-    const n = donnees.length, L = innerWidth < 760 || etroit ? 360 : 640, H = hauteur, bas = 22, haut = 8;
+    const n = donnees.length, L = innerWidth < 760 || etroit ? 360 : 640, H = hauteur, bas = 22, haut = 18;
     const total = (d) => series.reduce((a, s) => a + (d[s.cle] || 0), 0);
     const max = Math.max(1, ...donnees.map(total));
     const pas = Math.pow(10, Math.floor(Math.log10(max)));
@@ -149,6 +149,28 @@
       if (n <= 14 || i % Math.ceil(n / 8) === 0 || i === n - 1) svg += `<text x="${x + larg / 2}" y="${H - 6}" class="axe" text-anchor="middle">${new Date(d.jour).toLocaleDateString('fr-FR', { day: 'numeric', month: n > 31 ? 'short' : undefined })}</text>`;
     });
     return `<svg class="graphe" viewBox="0 0 ${L} ${H}" role="img" aria-label="Graphique">${svg}</svg>`;
+  }
+  // Colonnes groupées (2 séries côte à côte, même unité) : facturé et encaissé par mois
+  function colonnesGroupees(donnees, series, { cle = 'mois', format = (v) => nf(v) } = {}) {
+    const n = donnees.length, L = innerWidth < 760 ? 360 : 900, H = 200, bas = 22, haut = 18;
+    const max = Math.max(1, ...donnees.flatMap(d => series.map(s => d[s.cle] || 0)));
+    const pas = Math.pow(10, Math.floor(Math.log10(max)));
+    const ech = Math.ceil(max / pas) * pas;
+    const bande = L / n, larg = Math.max(3, Math.min(22, (bande * 0.7) / series.length - 2));
+    const y = (v) => H - bas - (Math.max(0, v) / ech) * (H - bas - haut);
+    let svg = [0, ech / 2, ech].map(g => `<line x1="0" x2="${L}" y1="${y(g)}" y2="${y(g)}" class="grille"/><text x="0" y="${y(g) - 3}" class="axe">${format(g)}</text>`).join('');
+    donnees.forEach((d, i) => {
+      const x0 = i * bande + (bande - (larg + 2) * series.length) / 2;
+      const libMois = new Date(`${d[cle]}-01`).toLocaleDateString('fr-FR', { month: 'short' });
+      series.forEach((s, k) => {
+        const v = d[s.cle] || 0; if (v <= 0) return;
+        const x = x0 + k * (larg + 2), y1 = y(v), h = H - bas - y1;
+        svg += `<path d="M${x},${y1 + h} V${y1 + 4} Q${x},${y1} ${x + 4},${y1} H${x + larg - 4} Q${x + larg},${y1} ${x + larg},${y1 + 4} V${y1 + h} Z" fill="${s.couleur}"/>`;
+      });
+      svg += `<rect x="${i * bande}" y="0" width="${bande}" height="${H - bas}" fill="transparent" data-tip="${esc(`${new Date(`${d[cle]}-01`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })} : ${series.map(s => `${s.lib} ${format(d[s.cle] || 0)}`).join(' · ')}`)}"/>`;
+      svg += `<text x="${i * bande + bande / 2}" y="${H - 6}" class="axe" text-anchor="middle">${libMois}</text>`;
+    });
+    return `<svg class="graphe" viewBox="0 0 ${L} ${H}" role="img" aria-label="Chiffre d'affaires par mois">${svg}</svg>`;
   }
   function barresH(items, { couleur = 'var(--marine)', format = (v) => nf(v) } = {}) {
     const max = Math.max(1, ...items.map(i => i.v));
@@ -207,6 +229,32 @@
         <div class="kpi c-vert"><div class="kpi-tete"><span class="kpi-ic">${ic('ok')}</span>Colis remis</div><div class="val">${nf(k.remis)}</div><div class="sous">aux destinataires</div>${delta(k.remis, k.remisPrec)}</div>
         <div class="kpi c-orange"><div class="kpi-tete"><span class="kpi-ic">${ic('liste')}</span>Panier moyen</div><div class="val">${eur(panier)}</div><div class="sous">par colis déposé</div></div>
       </div>
+
+      <section class="panneau bloc-ca">
+        <div class="panneau-tete teinte-or"><div><h2>Chiffre d'affaires</h2><p class="tres-petit muet">Facturé (factures moins avoirs, TTC) sur ${lib} · équivalent euros au taux de chaque colis</p></div><a class="btn btn-petit" href="#/factures">Factures</a></div>
+        <div class="ca-grille">
+          <div class="ca-chiffres">
+            <div class="ca-principal"><span>Chiffre d'affaires TTC</span><b>${eurC(t.ca.eur)}</b>${delta(t.ca.eur, t.ca.eurPrec)}</div>
+            <div class="ca-ligne"><span>Facturé en euros</span><b>${eur(t.ca.ttc.EUR)}</b></div>
+            <div class="ca-ligne"><span>Facturé en francs guinéens</span><b>${gnf(t.ca.ttc.GNF)}</b></div>
+            <div class="ca-ligne"><span>Hors taxes</span><b>${eur(t.ca.htEur)}</b></div>
+            <div class="ca-ligne"><span>TVA collectée</span><b>${eur(t.ca.tvaEur)}</b></div>
+            <div class="ca-ligne"><span>Avoirs (remboursements)</span><b>${t.ca.avoirsEur ? `− ${eur(t.ca.avoirsEur)}` : '0 €'}</b></div>
+            <div class="ca-ligne"><span>Factures émises</span><b>${nf(t.ca.nbFactures)}</b></div>
+            <div class="ca-ligne alerte"><span>Reste à encaisser (${nf(t.ca.creancesNb)} colis)</span><b>${eur(t.ca.creancesEur)}</b></div>
+          </div>
+          <div>
+            <h3 class="sous-titre-tdb">D'où vient le chiffre d'affaires</h3>
+            ${t.ca.parNature.length ? barresH(t.ca.parNature.map(x => ({ lib: ({ transport: 'Transport au kilo', articles: 'Articles à la pièce', assurance: 'Assurance', domicile: 'Ramassage et livraison', garde: 'Frais de garde', douane: 'Douane (débours)', autres: 'Autres' })[x.nature] || x.nature, v: x.eur })), { couleur: '#C8982B', format: (v) => eur(v) }) : '<p class="muet petit">Aucune facture sur la période.</p>'}
+            <h3 class="sous-titre-tdb" style="margin-top:16px">Par agence qui facture</h3>
+            ${t.ca.parAgence.length ? barresH(t.ca.parAgence.map(x => ({ lib: x.code === 'EN_LIGNE' ? 'Paiements en ligne' : nomLieu(x.code), v: x.eur })), { couleur: '#04244F', format: (v) => eur(v) }) : '<p class="muet petit">Aucune facture sur la période.</p>'}
+          </div>
+          <div class="ca-mois">
+            <div class="ligne entre" style="flex-wrap:wrap;gap:8px"><h3 class="sous-titre-tdb">12 derniers mois</h3><div class="legende"><span><i style="background:#04244F"></i>Facturé</span><span><i style="background:#C8982B"></i>Encaissé</span></div></div>
+            ${colonnesGroupees(t.ca.parMois, [{ cle: 'factureEur', lib: 'Facturé', couleur: '#04244F' }, { cle: 'encaisseEur', lib: 'Encaissé', couleur: '#C8982B' }], { format: (v) => (v >= 1000 ? `${nf(v / 1000, 1)} k€` : `${nf(v)} €`) })}
+          </div>
+        </div>
+      </section>
 
       <div class="grille-tdb">
         <section class="panneau large">

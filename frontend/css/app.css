@@ -97,3 +97,6 @@ main > .pile { --gap: 18px; }
 .fiche-ligne span:first-child { color: var(--gris); flex-shrink: 0; }
 .fiche-ligne span:last-child { text-align: right; font-weight: 600; }
 .bloc-code { border: 2px solid var(--or); }
+.moyens-envoi { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--ligne-2); display: flex; flex-direction: column; gap: 8px; }
+.puces-moyens { display: flex; flex-wrap: wrap; gap: 6px; }
+.puces-moyens span { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 8px; background: #fff; color: var(--marine); border: 1px solid var(--ligne); }
