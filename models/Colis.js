@@ -96,6 +96,16 @@ const colisSchema = new mongoose.Schema({
   },
 });
 
+// Les anciens colis DiasporaLink (avant TMS) n'ont pas d'expéditeur : on les ignore
+// partout (recherche, comptes, statistiques) sans les supprimer de la base.
+const FILTRE_ACTUELS = { expediteur: { $exists: true } };
+colisSchema.pre(/^(find|count)/, function () {
+  if (!this.getOptions().inclureAnciens) this.where(FILTRE_ACTUELS);
+});
+colisSchema.pre('aggregate', function () {
+  this.pipeline().unshift({ $match: FILTRE_ACTUELS });
+});
+
 colisSchema.index({ 'destinataire.telephone': 1 });
 colisSchema.index({ 'expediteur.telephone': 1 });
 

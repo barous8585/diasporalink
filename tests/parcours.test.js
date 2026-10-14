@@ -37,6 +37,8 @@ test.before(async () => {
   const mongoose = require('mongoose');
   await mongoose.connect(uri);
   await mongoose.connection.db.dropDatabase();
+  // Un ancien colis DiasporaLink (autre format) doit être ignoré sans rien casser
+  await mongoose.connection.db.collection('colis').insertOne({ numeroSuivi: 'DL-1000', statut: 'livre', nomDestinataire: 'Ancien', paysDestination: 'GN', tarif: { total: 10 } });
   await mongoose.disconnect();
   serveur = spawn('node', ['server.js'], {
     cwd: path.join(__dirname, '..'),
@@ -225,6 +227,11 @@ test('parcours complet : réservation → dépôt → lot → guichet → remise
   const clo = await appel('POST', '/caisse/cloturer', { especesComptees: { GNF: 520000 } }, agentKaloum);
   assert.strictEqual(clo.cloture.ecart.GNF, -5000);
   assert.strictEqual((await appel('GET', '/caisse/moi', null, agentKaloum)).mouvements.length, 0);
+
+  // Les anciens colis DiasporaLink n'apparaissent nulle part
+  assert.strictEqual((await appel('GET', '/colis/suivi/DL-1000')).status, 404);
+  const recherche = await appel('GET', '/admin/colis', null, admin);
+  assert.ok(recherche.colis.every(c => c.expediteur), 'aucun ancien colis dans la recherche');
 
   // Tableau de bord
   const stats = await appel('GET', '/admin/stats', null, admin);
