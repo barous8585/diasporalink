@@ -1,12 +1,12 @@
 /* App client — mise en page mobile d'abord */
 .aller-contenu { position: absolute; left: -999px; }
-.aller-contenu:focus { left: 12px; top: 12px; z-index: 999; background: var(--encre); color: #fff; padding: 10px 14px; border-radius: 10px; }
+.aller-contenu:focus { left: 12px; top: 12px; z-index: 999; background: var(--surface); color: var(--encre); padding: 10px 14px; border-radius: 10px; }
 
 .coque { max-width: 520px; margin: 0 auto; min-height: 100vh; padding-bottom: 110px; }
 .entete { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 8px; }
 .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--encre); }
 .logo .titre { font-size: 20px; font-weight: 800; }
-.logo-carre { width: 38px; height: 38px; border-radius: 11px; background: var(--vert); color: var(--fond); display: flex; align-items: center; justify-content: center; }
+.logo-carre { width: 38px; height: 38px; border-radius: 11px; background: var(--surface); color: var(--encre); display: flex; align-items: center; justify-content: center; }
 #reseau { margin: 4px 20px 0; }
 main { padding: 12px 20px 0; outline: none; }
 main:focus-visible { outline: none; }
@@ -15,11 +15,11 @@ main > .pile { --gap: 18px; }
 /* Barre de navigation du bas */
 .barre-nav {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: max(12px, env(safe-area-inset-bottom));
-  width: min(496px, calc(100% - 24px)); height: 72px; border-radius: 24px; background: var(--encre);
+  width: min(496px, calc(100% - 24px)); height: 72px; border-radius: 24px; background: var(--surface);
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; z-index: 50;
 }
-.barre-nav a { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #8F8B83; font-size: 12px; font-weight: 600; text-decoration: none; min-height: 56px; justify-content: center; }
-.barre-nav a[aria-current="page"] { color: var(--ocre); }
+.barre-nav a { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--gris); font-size: 12px; font-weight: 600; text-decoration: none; min-height: 56px; justify-content: center; }
+.barre-nav a[aria-current="page"] { color: var(--encre); font-weight: 800; background: var(--fond); border-radius: 16px; margin: 0 4px; }
 
 /* Recherche */
 .recherche { display: flex; gap: 8px; }
@@ -30,8 +30,8 @@ main > .pile { --gap: 18px; }
 /* Colis vedette */
 .vedette .etat { font-size: 24px; font-weight: 700; margin-top: 4px; }
 .progression { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.progression span { height: 6px; border-radius: 3px; background: rgba(245, 241, 232, 0.25); }
-.progression span.fait { background: var(--ocre); }
+.progression span { height: 6px; border-radius: 3px; background: rgba(43, 36, 24, 0.12); }
+.progression span.fait { background: var(--accent-fort); }
 .progression-lib { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; font-size: 12px; opacity: 0.9; }
 .encart-code { display: flex; align-items: center; justify-content: space-between; background: var(--fond); color: var(--encre); border-radius: 14px; padding: 12px 14px; }
 .encart-code .valeur { font-family: var(--police-titre); font-size: 26px; font-weight: 800; letter-spacing: 6px; }
@@ -47,11 +47,11 @@ main > .pile { --gap: 18px; }
 .pastille.pret { background: var(--vert-doux); color: var(--vert); }
 
 /* Prix */
-.prix-gnf { font-family: var(--police-titre); font-size: 38px; font-weight: 800; line-height: 1.05; color: var(--ocre); }
+.prix-gnf { font-family: var(--police-titre); font-size: 38px; font-weight: 800; line-height: 1.05; color: var(--encre); }
 .pas-a-pas { display: flex; align-items: center; justify-content: space-between; }
 .pas-a-pas .valeur { font-family: var(--police-titre); font-size: 40px; font-weight: 800; line-height: 1; text-align: center; }
 .pas-a-pas .btn { width: 56px; height: 56px; font-size: 28px; background: var(--fond); border: none; }
-.etape-num { width: 26px; height: 26px; border-radius: 13px; background: var(--vert); color: #fff; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.etape-num { width: 26px; height: 26px; border-radius: 13px; background: var(--surface); color: var(--encre); font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
 
 /* Scanner caméra */
 .scanner-video { width: 100%; border-radius: 18px; background: #000; aspect-ratio: 1; object-fit: cover; }

@@ -17,22 +17,22 @@ main > .pile { --gap: 16px; }
 
 .barre-nav {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: max(12px, env(safe-area-inset-bottom));
-  width: min(536px, calc(100% - 24px)); height: 72px; border-radius: 24px; background: var(--encre);
+  width: min(536px, calc(100% - 24px)); height: 72px; border-radius: 24px; background: var(--surface);
   display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: center; z-index: 50;
 }
-.barre-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; color: #8F8B83; font-size: 12px; font-weight: 600; text-decoration: none; }
-.barre-nav a[aria-current="page"] { color: var(--ocre); }
+.barre-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; color: var(--gris); font-size: 12px; font-weight: 600; text-decoration: none; }
+.barre-nav a[aria-current="page"] { color: var(--encre); font-weight: 800; background: var(--fond); border-radius: 16px; margin: 0 4px; }
 
 /* Zone caméra */
-.viseur { position: relative; border-radius: 22px; background: #1F1D18; overflow: hidden; aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; }
+.viseur { position: relative; border-radius: 22px; background: var(--surface-2); overflow: hidden; aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; }
 .viseur video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .viseur .cadre { position: relative; width: 58%; aspect-ratio: 1; pointer-events: none; }
-.viseur .cadre i { position: absolute; width: 40px; height: 40px; border: 5px solid var(--ocre); }
+.viseur .cadre i { position: absolute; width: 40px; height: 40px; border: 5px solid var(--accent-fort); }
 .viseur .cadre i:nth-child(1) { left: 0; top: 0; border-right: none; border-bottom: none; border-top-left-radius: 14px; }
 .viseur .cadre i:nth-child(2) { right: 0; top: 0; border-left: none; border-bottom: none; border-top-right-radius: 14px; }
 .viseur .cadre i:nth-child(3) { left: 0; bottom: 0; border-right: none; border-top: none; border-bottom-left-radius: 14px; }
 .viseur .cadre i:nth-child(4) { right: 0; bottom: 0; border-left: none; border-top: none; border-bottom-right-radius: 14px; }
-.viseur .consigne { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; color: #D6CFC0; font-size: 14px; }
+.viseur .consigne { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; color: var(--gris); font-size: 14px; }
 .viseur .btn { position: relative; }
 .viseur.flash { animation: flash .35s ease; }
 @keyframes flash { 0% { box-shadow: inset 0 0 0 0 var(--vert); } 50% { box-shadow: inset 0 0 0 8px #E3D8C3; } }
@@ -41,7 +41,7 @@ main > .pile { --gap: 16px; }
 
 .segments { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; background: var(--creme-2); padding: 4px; border-radius: 16px; }
 .segments button { min-height: 44px; padding: 0 4px; border-radius: 12px; border: none; background: transparent; color: var(--gris); font: inherit; font-size: 13px; line-height: 1.15; font-weight: 600; cursor: pointer; }
-.segments button[aria-pressed="true"] { background: var(--encre); color: var(--fond); font-weight: 700; }
+.segments button[aria-pressed="true"] { background: var(--surface); color: var(--encre); font-weight: 700; }
 
 /* Journal des scans */
 .scan { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: #fff; border: 1px solid var(--ligne); }

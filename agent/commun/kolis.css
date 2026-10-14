@@ -3,27 +3,30 @@
    Source : shared/kolis.css — copié dans chaque app par `npm run sync-apps`
    ───────────────────────────────────────────────────────────── */
 :root {
-  /* Charte : blanc et noir, beige comme seule couleur d'accent.
-     Le rouge est gardé uniquement pour les erreurs (lisibilité, sécurité).
-     Les noms « vert », « ocre », « bleu » sont historiques : ils pointent
-     désormais vers le noir et les beiges. */
+  /* Charte : blanc et beige. Le texte reste brun très foncé pour être lisible
+     en plein soleil ; le rouge est réservé aux erreurs.
+     Les noms « vert », « ocre », « bleu » sont historiques. */
   --fond: #FFFFFF;
   --carte: #FFFFFF;
-  --encre: #111111;
-  --gris: #5C5C5C;
-  --ligne: #E7E3DA;
-  --ligne-2: #D9D3C7;
-  --creme-2: #F4F0E8;
-  --vert: #111111;        /* couleur principale : noir */
+  --encre: #2B2418;       /* texte */
+  --gris: #6B6254;
+  --ligne: #E9E1D2;
+  --ligne-2: #DCCFB8;
+  --creme-2: #F5EFE4;
+  --surface: #F1E8D8;     /* grandes surfaces beige (cartes, barre, menu) */
+  --surface-2: #E6D9C2;   /* surface beige plus soutenue */
+  --accent: #D9C6A2;      /* boutons principaux, choix sélectionnés */
+  --accent-fort: #B0935F; /* traits, progressions, puces */
+  --vert: #2B2418;        /* texte / icônes d'état « OK » */
   --vert-fonce: #000000;
-  --vert-doux: #F1ECE2;   /* beige clair : états « OK » */
-  --ocre: #E3D8C3;        /* beige : accent */
-  --ocre-doux: #F6F1E7;   /* beige très clair : encarts */
-  --ocre-texte: #3D3528;
+  --vert-doux: #F1E8D8;
+  --ocre: #D9C6A2;
+  --ocre-doux: #F7F1E6;
+  --ocre-texte: #4A3D27;
   --rouge: #9A2A20;       /* erreurs uniquement */
   --rouge-doux: #F8E1DE;
-  --bleu: #111111;
-  --bleu-doux: #F4F0E8;
+  --bleu: #2B2418;
+  --bleu-doux: #F5EFE4;
   --r: 16px;
   --r-lg: 22px;
   --police-titre: 'Bricolage Grotesque', 'Figtree', system-ui, sans-serif;
@@ -65,8 +68,8 @@ p { margin: 0; }
 
 /* Cartes */
 .carte { background: var(--carte); border: 1px solid var(--ligne); border-radius: var(--r); padding: 16px; }
-.carte-vert { background: var(--vert); color: var(--fond); border-radius: var(--r-lg); padding: 20px; }
-.carte-noire { background: var(--encre); color: var(--fond); border-radius: var(--r-lg); padding: 20px; }
+.carte-vert { background: var(--surface); color: var(--encre); border-radius: var(--r-lg); padding: 20px; }
+.carte-noire { background: var(--surface); color: var(--encre); border-radius: var(--r-lg); padding: 20px; }
 .carte-ocre { background: var(--ocre-doux); color: var(--ocre-texte); border-radius: var(--r); padding: 16px; }
 
 /* Boutons — cibles tactiles ≥ 44 px */
@@ -79,9 +82,9 @@ p { margin: 0; }
 }
 .btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-principal { background: var(--vert); color: #fff; border-color: var(--vert); }
-.btn-principal:hover { background: var(--vert-fonce); }
-.btn-noir { background: var(--encre); color: var(--fond); border-color: var(--encre); }
+.btn-principal { background: var(--accent); color: var(--encre); border-color: var(--accent); }
+.btn-principal:hover { background: var(--surface-2); border-color: var(--accent-fort); }
+.btn-noir { background: var(--surface-2); color: var(--encre); border-color: var(--surface-2); }
 .btn-ocre { background: var(--ocre); color: var(--encre); border-color: var(--ocre); }
 .btn-danger { background: var(--rouge); color: #fff; border-color: var(--rouge); }
 .btn-lien { background: none; border: none; color: var(--vert); padding: 0 4px; min-height: 44px; }
@@ -97,9 +100,9 @@ p { margin: 0; }
   min-height: 56px; padding: 12px 14px; border-radius: 14px; border: 2px solid var(--ligne);
   background: var(--carte); color: var(--encre); font: inherit; text-align: left; cursor: pointer;
 }
-.choix[aria-pressed="true"] { border-color: var(--vert); background: var(--vert); color: #fff; }
+.choix[aria-pressed="true"] { border-color: var(--encre); background: var(--accent); color: var(--encre); }
 .choix.choix-ocre[aria-pressed="true"] { border-color: var(--encre); background: var(--ocre); color: var(--encre); }
-.choix.choix-noir[aria-pressed="true"] { border-color: var(--encre); background: var(--encre); color: var(--fond); }
+.choix.choix-noir[aria-pressed="true"] { border-color: var(--encre); background: var(--accent); color: var(--encre); }
 .choix .sous { font-size: 13px; opacity: 0.85; font-weight: 500; }
 .choix .nom { font-weight: 700; }
 
@@ -130,7 +133,7 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
 .b-depose, .b-charge { background: var(--bleu-doux); color: var(--bleu); }
 .b-en_transit, .b-arrive { background: var(--ocre-doux); color: var(--ocre-texte); }
 .b-pret { background: var(--vert-doux); color: var(--vert); }
-.b-remis { background: var(--encre); color: var(--fond); }
+.b-remis { background: var(--accent); color: var(--encre); }
 .b-annule, .b-erreur { background: var(--rouge-doux); color: var(--rouge); }
 .b-ok { background: var(--vert-doux); color: var(--vert); }
 
@@ -150,22 +153,22 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
 .frise { display: flex; flex-direction: column; }
 .frise .etape { display: flex; gap: 14px; }
 .frise .rail { display: flex; flex-direction: column; align-items: center; }
-.frise .point { width: 14px; height: 14px; margin: 3px; border-radius: 7px; background: var(--vert); flex-shrink: 0; }
+.frise .point { width: 14px; height: 14px; margin: 3px; border-radius: 7px; background: var(--accent-fort); flex-shrink: 0; }
 .frise .etape:first-child .point { width: 18px; height: 18px; margin: 1px; box-shadow: 0 0 0 5px var(--vert-doux); }
-.frise .trait { width: 2px; flex: 1; background: var(--vert); min-height: 22px; }
+.frise .trait { width: 2px; flex: 1; background: var(--accent); min-height: 22px; }
 .frise .etape:last-child .trait { display: none; }
 .frise .texte { padding-bottom: 16px; }
 .barre { height: 8px; border-radius: 4px; background: var(--creme-2); overflow: hidden; }
-.barre > span { display: block; height: 100%; background: var(--vert); border-radius: 4px; }
+.barre > span { display: block; height: 100%; background: var(--accent-fort); border-radius: 4px; }
 
 /* Notifications éphémères */
 #toast {
   position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); z-index: 1000;
   display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100% - 32px)); pointer-events: none;
 }
-.toast { background: var(--encre); color: var(--fond); padding: 14px 16px; border-radius: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.18); animation: monte .2s ease; }
-.toast.erreur { background: var(--rouge); color: #fff; }
-.toast.ok { background: var(--vert); color: #fff; }
+.toast { background: var(--surface-2); color: var(--encre); border: 1px solid var(--ligne-2); padding: 14px 16px; border-radius: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.18); animation: monte .2s ease; }
+.toast.erreur { background: var(--rouge); color: #fff; border-color: var(--rouge); }
+.toast.ok { background: var(--accent); color: var(--encre); }
 @keyframes monte { from { opacity: 0; transform: translateY(8px); } }
 
 /* Chargement */

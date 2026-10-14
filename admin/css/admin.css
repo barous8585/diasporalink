@@ -1,15 +1,15 @@
 /* Back-office — ordinateur d'abord, utilisable sur téléphone */
 .cadre-admin { display: flex; min-height: 100vh; }
-.menu { width: 240px; flex-shrink: 0; background: var(--encre); color: var(--fond); padding: 24px 16px; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; height: 100vh; }
-.logo-admin { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; color: var(--fond); text-decoration: none; }
+.menu { width: 240px; flex-shrink: 0; background: var(--surface); color: var(--encre); padding: 24px 16px; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; height: 100vh; }
+.logo-admin { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; color: var(--encre); text-decoration: none; }
 .logo-admin .titre { font-size: 18px; font-weight: 800; line-height: 1.15; }
 .logo-admin .logo-carre { width: 36px; height: 36px; border-radius: 10px; background: var(--ocre); color: var(--encre); display: flex; align-items: center; justify-content: center; }
-.menu nav a { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 12px; color: #D6CFC0; text-decoration: none; font-size: 15px; }
-.menu nav a:hover { background: #2A2822; }
+.menu nav a { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 12px; color: var(--gris); text-decoration: none; font-size: 15px; }
+.menu nav a:hover { background: var(--surface-2); }
 .menu nav a[aria-current="page"] { background: var(--fond); color: var(--encre); font-weight: 700; }
-.encart-taux { margin-top: auto; background: #24221C; border-radius: 14px; padding: 14px; font-size: 13px; color: #D6CFC0; line-height: 1.5; }
-.encart-taux b { color: var(--fond); }
-.sortir { background: transparent; color: #D6CFC0; border-color: #3A3830; margin-top: 8px; }
+.encart-taux { margin-top: auto; background: var(--surface-2); border-radius: 14px; padding: 14px; font-size: 13px; color: var(--gris); line-height: 1.5; }
+.encart-taux b { color: var(--encre); }
+.sortir { background: transparent; color: var(--gris); border-color: var(--ligne-2); margin-top: 8px; }
 
 main { flex: 1; min-width: 0; padding: 24px 32px 48px; outline: none; }
 main:focus-visible { outline: none; }
@@ -21,8 +21,8 @@ main:focus-visible { outline: none; }
 .kpi .lib { font-size: 13px; color: var(--gris); font-weight: 600; }
 .kpi .val { font-family: var(--police-titre); font-size: 30px; font-weight: 800; margin-top: 6px; line-height: 1.1; }
 .kpi .sous { font-size: 13px; color: var(--gris); margin-top: 2px; }
-.kpi.vert { background: var(--vert); border-color: var(--vert); color: var(--fond); }
-.kpi.vert .lib, .kpi.vert .sous { color: var(--fond); opacity: .9; }
+.kpi.vert { background: var(--surface); border-color: var(--vert); color: var(--encre); }
+.kpi.vert .lib, .kpi.vert .sous { color: var(--encre); opacity: .9; }
 .kpi.ocre { background: var(--ocre-doux); border-color: var(--ocre-doux); }
 .kpi .alerte { color: var(--rouge); font-weight: 700; }
 
@@ -42,11 +42,11 @@ table.tableau { border-collapse: collapse; width: 100%; font-size: 14px; }
 
 .puces { display: flex; gap: 8px; flex-wrap: wrap; }
 .puce { min-height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--ligne-2); background: #fff; color: var(--encre); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
-.puce[aria-pressed="true"], .puce[aria-current="page"] { background: var(--encre); color: var(--fond); border-color: var(--encre); font-weight: 700; }
+.puce[aria-pressed="true"], .puce[aria-current="page"] { background: var(--surface); color: var(--encre); border-color: var(--encre); font-weight: 700; }
 
-.barre-masse { margin: 0 20px 12px; background: var(--encre); color: var(--fond); border-radius: 14px; padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.barre-masse { margin: 0 20px 12px; background: var(--surface); color: var(--encre); border-radius: 14px; padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .barre-masse .btn { min-height: 40px; font-size: 14px; }
-.barre-masse .btn-contour { background: transparent; color: var(--fond); border-color: #4A473E; }
+.barre-masse .btn-contour { background: transparent; color: var(--encre); border-color: var(--ligne-2); }
 
 .alerte-ligne { display: flex; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: 14px; line-height: 1.4; }
 .alerte-ligne.rouge { background: var(--rouge-doux); }

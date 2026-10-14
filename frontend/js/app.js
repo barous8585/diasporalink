@@ -415,11 +415,11 @@
         </section>
 
         <div class="carte-noire pile" style="--gap:4px" aria-live="polite">
-          <div class="petit" style="color:#D6CFC0">Prix estimé</div>
+          <div class="petit" style="color: var(--gris)">Prix estimé</div>
           <div class="prix-gnf" data-prix-principal></div>
           <div data-prix-autre></div>
-          <div style="height:1px;background:#3A3830;margin:10px 0 6px"></div>
-          <div class="ligne tres-petit" style="color:#D6CFC0;align-items:flex-start">${ic('balance', 'ic-sm')}<span>Le prix final est fixé à la pesée en agence. Taux : 1 € = ${gnf(CONFIG.tauxEurGnf)}, bloqué sur votre reçu.</span></div>
+          <div style="height:1px;background: var(--ligne-2);margin:10px 0 6px"></div>
+          <div class="ligne tres-petit" style="color: var(--gris);align-items:flex-start">${ic('balance', 'ic-sm')}<span>Le prix final est fixé à la pesée en agence. Taux : 1 € = ${gnf(CONFIG.tauxEurGnf)}, bloqué sur votre reçu.</span></div>
         </div>
 
         <form class="pile" style="--gap:12px" data-form novalidate>
