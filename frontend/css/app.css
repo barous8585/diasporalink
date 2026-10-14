@@ -79,3 +79,21 @@ main > .pile { --gap: 18px; }
   .envoyer-grille > * { grid-column: 1; }
   .envoyer-grille > .colonne-prix { grid-column: 2; grid-row: 2 / span 6; position: sticky; top: 96px; }
 }
+.pastille.express { background: var(--marine); color: var(--or); }
+
+/* Page de suivi d'un colis */
+.suivi-trajet { display: flex; align-items: center; gap: 10px; }
+.suivi-trajet > div { display: flex; flex-direction: column; min-width: 0; }
+.suivi-trajet > div span { opacity: .8; }
+.suivi-trajet b { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suivi-trajet .trait { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; color: var(--or); }
+.suivi-trajet .trait::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px dashed rgba(255,255,255,.35); }
+.suivi-trajet .trait .ic { position: relative; background: var(--marine); padding: 0 6px; box-sizing: content-box; }
+.actions-rapides { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.actions-rapides a, .actions-rapides button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 68px; border-radius: 16px; border: 1px solid var(--ligne); background: #fff; color: var(--marine); text-decoration: none; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.actions-rapides a:first-child { background: var(--marine); color: #fff; border-color: var(--marine); }
+.fiche-ligne { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-top: 1px solid var(--ligne); font-size: 14px; }
+.fiche-ligne:first-of-type { border-top: 0; }
+.fiche-ligne span:first-child { color: var(--gris); flex-shrink: 0; }
+.fiche-ligne span:last-child { text-align: right; font-weight: 600; }
+.bloc-code { border: 2px solid var(--or); }

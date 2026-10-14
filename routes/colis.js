@@ -10,7 +10,7 @@ const { auth } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
 const { calculerTarif } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
-const { STATUTS, MODES, TYPES_COLIS, ROLES, SENS, CGV_VERSION } = require('../config/constants');
+const { STATUTS, MODES, TYPES_COLIS, ROLES, SENS, CGV_VERSION, libMode } = require('../config/constants');
 const { normTel, vuePublique, vueComplete, sensDepuisAgences, nettoyerArticles } = require('../services/colisService');
 const dom = require('../services/domicileService');
 
@@ -72,7 +72,7 @@ router.get('/:numero', auth, ah(async (req, res) => {
 
 // ── POST /api/colis ── réservation en ligne (le prix définitif est fixé à la pesée)
 router.post('/', auth, [
-  body('mode').isIn(Object.values(MODES)).withMessage('Choisissez avion ou bateau'),
+  body('mode').isIn(Object.values(MODES)).withMessage('Choisissez express, avion ou bateau'),
   body('typeColis').isIn(TYPES_COLIS.map(t => t.key)).withMessage('Type de colis invalide'),
   body('poidsEstime').isFloat({ min: 0.1, max: 2000 }).withMessage('Indiquez le poids, ou ajoutez au moins un article à la pièce'),
   body('articles').optional().isArray({ max: 40 }),
@@ -108,7 +108,7 @@ router.post('/', auth, [
   if (b.livraison?.demande) await dom.demanderCourse(colis, 'livraison', b.livraison);
   await colis.save();
   const push = require('../utils/push');
-  push.sansAttendre(push.aLAgence(colis.depot, { titre: 'Nouvelle réservation', corps: `${colis.expediteur.nom} : ${colis.numeroSuivi}, ${colis.poidsEstime} kg ${colis.mode === 'mer' ? 'bateau' : 'avion'}${colis.ramassage?.demande ? ', ramassage à domicile' : ', viendra déposer'}.`, chemin: '/#/jour' }));
+  push.sansAttendre(push.aLAgence(colis.depot, { titre: 'Nouvelle réservation', corps: `${colis.expediteur.nom} : ${colis.numeroSuivi}, ${colis.poidsEstime} kg ${libMode(colis.mode)}${colis.ramassage?.demande ? ', ramassage à domicile' : ', viendra déposer'}.`, chemin: '/#/jour' }));
   if (colis.ramassage?.demande) push.sansAttendre(push.aLAgence(colis.depot, { titre: 'Nouveau ramassage', corps: `${colis.expediteur.nom}${colis.ramassage.adresse?.quartier ? ` à ${colis.ramassage.adresse.quartier}` : ''}.`, chemin: '/#/courses' }, { roles: ['livreur'] }));
   res.status(201).json({ succes: true, colis: await vueComplete(colis) });
 }));

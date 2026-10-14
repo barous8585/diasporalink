@@ -394,13 +394,14 @@ test('ramassage et livraison à domicile, prix au kilomètre', async () => {
   assert.strictEqual(r.colis.ramassage.prix, 12); // 8 € + 1 €/km × 3,9 km → 12 €
   assert.strictEqual(r.colis.ramassage.devise, 'EUR');
   assert.strictEqual(r.colis.livraison.prix, undefined);
-  // Ramassage sans position refusé
   const sansPos = await appel('POST', '/colis', { cgvAcceptees: true,
     mode: 'air', typeColis: 'vetements', poidsEstime: 5, depot: 'PARIS', guichet: 'KALOUM',
     destinataire: { nom: 'X', telephone: '622111223' },
     ramassage: { demande: true, adresse: { quartier: 'Barbès', repere: 'x' } },
   }, client);
-  assert.strictEqual(sansPos.status, 400);
+  // Ramassage sans position : accepté (adresse à compléter, le livreur appellera), prix inconnu
+  assert.strictEqual(sansPos.status, 201, sansPos.message);
+  assert.ok(!sansPos.colis.ramassage.prix);
 
   let suivi = (await appel('GET', `/colis/suivi/${numero}`)).colis;
   assert.strictEqual(suivi.livraison.aPosition, false);
@@ -944,4 +945,82 @@ test('paiement en ligne : livraison payée d\'avance (mobile money vérifié), n
   assert.strictEqual((await appel('GET', `/paiements/a-payer/${numero}`)).solde.gnf, du.solde.gnf);
   // Carte : sans clés Stripe, le serveur le dit clairement
   assert.strictEqual((await appel('POST', '/paiements/creer-session', { numero, objet: 'solde' })).status, 503);
+});
+
+test('toutes les formules d\'envoi : 2 sens × express/avion/bateau × agence/domicile, adresses incomplètes, articles, options', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const client = await connexion('0655555555', 'Fanta', 'Camara');
+  const agentParis = await connexion('+33600000002');
+  const agentKaloum = await connexion('620000003');
+  const cfg = await appel('GET', '/config');
+  assert.deepStrictEqual(cfg.modes.map(m => m.key), ['express', 'air', 'mer']);
+  assert.strictEqual(cfg.tarifs['FR-GN'].express.prixKg, 20);
+
+  const combos = [];
+  for (const [depot, guichet] of [['PARIS', 'KALOUM'], ['KALOUM', 'PARIS']]) {
+    for (const mode of ['express', 'air', 'mer']) {
+      for (const formule of ['agence', 'ramassage_complet', 'ramassage_sans_position', 'livraison_vide', 'tout_domicile']) {
+        combos.push({ depot, guichet, mode, formule });
+      }
+    }
+  }
+  const resultats = [];
+  for (const [i, k] of combos.entries()) {
+    const corps = {
+      cgvAcceptees: true, mode: k.mode, typeColis: i % 3 === 0 ? 'fragile' : 'vetements', poidsEstime: 4 + (i % 5),
+      depot: k.depot, guichet: k.guichet, destinataire: { nom: `Test ${i}`, telephone: k.guichet === 'PARIS' ? `06110000${String(i).padStart(2, '0')}` : `6221100${String(i).padStart(2, '0')}` },
+      articles: i % 4 === 0 ? [{ cle: 'chaussures', quantite: 1 }] : undefined,
+      assurance: i % 6 === 0, valeurDeclaree: i % 6 === 0 ? 200 : 0, payeurArrivee: i % 7 === 0,
+    };
+    const posDepot = k.depot === 'PARIS' ? { lat: 48.9, lng: 2.35 } : { lat: 9.53, lng: -13.71 };
+    if (k.formule === 'ramassage_complet' || k.formule === 'tout_domicile') corps.ramassage = { demande: true, adresse: { quartier: 'Centre', repere: 'Porte bleue', position: posDepot } };
+    if (k.formule === 'ramassage_sans_position') corps.ramassage = { demande: true, adresse: {} };
+    if (k.formule === 'livraison_vide' || k.formule === 'tout_domicile') corps.livraison = { demande: true, adresse: {} };
+    const r = await appel('POST', '/colis', corps, client);
+    assert.strictEqual(r.status, 201, `${JSON.stringify(k)} : ${r.message}`);
+    resultats.push({ ...k, numero: r.colis.numeroSuivi, colis: r.colis });
+  }
+  assert.strictEqual(resultats.length, 30);
+  // Prix express > avion > bateau à poids égal (même sens)
+  const prixDe = (mode) => resultats.find(x => x.mode === mode && x.depot === 'PARIS' && x.formule === 'agence').colis.tarif;
+  assert.ok(prixDe('express').prixKg > prixDe('air').prixKg && prixDe('air').prixKg > prixDe('mer').prixKg);
+  // Adresse incomplète : course créée, prix inconnu, rien à payer d'avance tant qu'il manque la position
+  const sansPos = resultats.find(x => x.formule === 'ramassage_sans_position');
+  assert.strictEqual(sansPos.colis.ramassage.demande, true);
+  assert.ok(!sansPos.colis.ramassage.prix);
+  assert.strictEqual(sansPos.colis.domicileAPayerGnf, 0);
+  const complet = resultats.find(x => x.formule === 'ramassage_complet');
+  assert.ok(complet.colis.ramassage.prix > 0);
+  assert.ok(complet.colis.domicileAPayerGnf > 0);
+
+  // Dépôt au comptoir de chaque colis, puis chargement automatique : un lot par mode et par sens
+  for (const x of resultats) {
+    const ag = x.depot === 'PARIS' ? agentParis : agentKaloum;
+    const r = await appel('POST', '/agent/depot', { numeroSuivi: x.numero, poidsReel: x.colis.poidsEstime + 0.5, payeurArrivee: true }, ag);
+    assert.strictEqual(r.status, 201, `${x.numero} : ${r.message}`);
+    const s = await appel('POST', '/agent/scans', { scans: [{ opId: `f-${x.numero}`, numero: x.numero, action: 'auto' }] }, ag);
+    assert.ok(s.resultats[0].ok, `${x.numero} : ${s.resultats[0].erreur}`);
+    x.lot = s.resultats[0].lotCode;
+  }
+  const lots = [...new Set(resultats.map(x => x.lot))];
+  assert.strictEqual(lots.length, 6, `lots : ${lots.join(', ')}`);
+  assert.ok(lots.some(l => l.startsWith('EXP')) && lots.some(l => l.startsWith('AIR')) && lots.some(l => l.startsWith('MER')));
+
+  // Dépôt direct au comptoir (sans réservation), dans chaque mode, livraison sans adresse précise
+  for (const mode of ['express', 'air', 'mer']) {
+    const r = await appel('POST', '/agent/depot', {
+      cgvAcceptees: true, poidsReel: 2, mode, typeColis: 'mixte', guichet: 'KALOUM',
+      expediteur: { nom: 'Client Comptoir', telephone: '0699999999' }, destinataire: { nom: 'Dest Comptoir', telephone: '620999999' },
+      livraison: { demande: true, adresse: { quartier: 'Kaloum' } },
+      paiement: { montant: 1, devise: 'EUR', methode: 'especes' },
+    }, agentParis);
+    assert.strictEqual(r.status, 201, `${mode} : ${r.message}`);
+    assert.strictEqual(r.colis.mode, mode);
+    assert.strictEqual(r.colis.livraison.demande, true);
+  }
+  // Facture express : libellé « aérien express »
+  const exp = resultats.find(x => x.mode === 'express' && x.depot === 'PARIS' && x.formule === 'agence');
+  await appel('POST', `/factures/colis/${exp.numero}/emettre`, null, agentParis);
+  const fa = (await appel('GET', `/factures/colis/${exp.numero}`, null, client)).factures[0];
+  assert.match(fa.lignes[0].designation, /express/);
 });

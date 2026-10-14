@@ -78,7 +78,7 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
       if (!t) continue;
       tarifs[s.key] = tarifs[s.key] || { devise: PAYS[s.depart].devise, air: {}, mer: {} };
       if (['EUR', 'GNF'].includes(t.devise)) tarifs[s.key].devise = t.devise;
-      for (const mode of ['air', 'mer']) {
+      for (const mode of ['express', 'air', 'mer']) {
         if (!t[mode]) continue;
         const prix = nombre(t[mode].prixKg, 0.01);
         const min = nombre(t[mode].poidsMin, 0);
@@ -113,7 +113,7 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
       const prix = {};
       for (const s of SENS) {
         prix[s.key] = {};
-        for (const mode of ['air', 'mer']) {
+        for (const mode of ['express', 'air', 'mer']) {
           const v = nombre(a.prix?.[s.key]?.[mode]);
           if (v !== undefined) prix[s.key][mode] = v;
         }

@@ -27,12 +27,16 @@ const ENTREPRISE = {
 const MODES = {
   AIR: 'air',
   MER: 'mer',
+  EXPRESS: 'express',
 };
 
 const MODES_INFO = [
-  { key: 'air', label: 'Avion',  delai: '5 à 8 jours',     prefixeLot: 'AIR' },
-  { key: 'mer', label: 'Bateau', delai: '4 à 6 semaines',  prefixeLot: 'MER' },
+  { key: 'express', label: 'Express', delai: '2 à 3 jours',   prefixeLot: 'EXP', court: 'express' },
+  { key: 'air', label: 'Avion',  delai: '5 à 8 jours',     prefixeLot: 'AIR', court: 'avion' },
+  { key: 'mer', label: 'Bateau', delai: '4 à 6 semaines',  prefixeLot: 'MER', court: 'bateau' },
 ];
+
+const libMode = (mode) => (MODES_INFO.find(m => m.key === mode)?.court || 'avion');
 
 // ── TYPES DE COLIS (surcharge en % du transport) ──
 const TYPES_COLIS = [
@@ -60,8 +64,8 @@ const sensEntre = (paysDepart, paysArrivee) => SENS.find(s => s.depart === paysD
 const CONFIG_DEFAUT = {
   // Prix au kilo par sens, dans la devise du pays de départ
   tarifs: {
-    'FR-GN': { devise: 'EUR', air: { prixKg: 12, poidsMin: 1 }, mer: { prixKg: 4, poidsMin: 10 } },
-    'GN-FR': { devise: 'GNF', air: { prixKg: 120000, poidsMin: 1 }, mer: { prixKg: 40000, poidsMin: 10 } },
+    'FR-GN': { devise: 'EUR', express: { prixKg: 20, poidsMin: 1 }, air: { prixKg: 12, poidsMin: 1 }, mer: { prixKg: 4, poidsMin: 10 } },
+    'GN-FR': { devise: 'GNF', express: { prixKg: 200000, poidsMin: 1 }, air: { prixKg: 120000, poidsMin: 1 }, mer: { prixKg: 40000, poidsMin: 10 } },
   },
   surcharges: Object.fromEntries(TYPES_COLIS.map(t => [t.key, t.surcharge])),
   // Articles facturés à la pièce plutôt qu'au kilo. Prix par sens et par mode, dans la
@@ -210,6 +214,7 @@ module.exports = {
   APP_NOM_COURT,
   ENTREPRISE,
   MODES,
+  libMode,
   MODES_INFO,
   TYPES_COLIS,
   CONFIG_DEFAUT,

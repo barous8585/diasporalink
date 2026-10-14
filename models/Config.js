@@ -50,6 +50,10 @@ configSchema.statics.get = async function () {
   // Complète une config créée avant l'arrivée des agences / des deux sens
   if (!config.agences?.length) config.agences = CONFIG_DEFAUT.agences;
   if (!config.tarifs?.['FR-GN']) config.tarifs = CONFIG_DEFAUT.tarifs;
+  // Express ajouté après coup : valeurs de départ si l'admin ne l'a pas encore réglé
+  for (const k of Object.keys(CONFIG_DEFAUT.tarifs)) {
+    if (config.tarifs[k] && !config.tarifs[k].express) config.tarifs[k] = { ...config.tarifs[k], express: CONFIG_DEFAUT.tarifs[k].express };
+  }
   if (!config.domicile) config.domicile = CONFIG_DEFAUT.domicile;
   if (!Array.isArray(config.articles)) config.articles = CONFIG_DEFAUT.articles;
   config.facturation = { ...CONFIG_DEFAUT.facturation, ...(config.facturation || {}), tva: { ...CONFIG_DEFAUT.facturation.tva, ...(config.facturation?.tva || {}) } };
