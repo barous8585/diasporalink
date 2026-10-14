@@ -32,23 +32,59 @@
     [/^\/equipe$/, equipe, 'equipe'],
   ];
 
-  async function router() {
+  // ── Menu en tiroir (téléphone) ──
+  const menu = document.querySelector('[data-menu]');
+  const voile = document.querySelector('[data-voile]');
+  const boutonMenu = document.querySelector('[data-ouvrir-menu]');
+  const basculerMenu = (ouvrir) => {
+    menu.classList.toggle('ouvert', ouvrir); voile.classList.toggle('ouvert', ouvrir);
+    boutonMenu.setAttribute('aria-expanded', ouvrir);
+  };
+  boutonMenu.addEventListener('click', () => basculerMenu(!menu.classList.contains('ouvert')));
+  voile.addEventListener('click', () => basculerMenu(false));
+  menu.addEventListener('click', (e) => { if (e.target.closest('a, button')) basculerMenu(false); });
+
+  // ── Tableaux lisibles sur téléphone : chaque cellule reçoit le nom de sa colonne ──
+  function etiqueterTableaux(racine = main) {
+    racine.querySelectorAll('table.tableau').forEach(t => {
+      const libs = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
+      t.querySelectorAll('tbody tr').forEach(tr => [...tr.children].forEach((td, i) => { if (!td.hasAttribute('data-lib') && !td.hasAttribute('colspan')) td.setAttribute('data-lib', libs[i] || ''); }));
+    });
+  }
+  new MutationObserver(() => etiqueterTableaux()).observe(main, { childList: true, subtree: true });
+
+  // ── Rafraîchissement automatique des pages « vivantes » ──
+  // Toutes les 45 s si la page est visible et que personne n'est en train de saisir.
+  const VIVANTES = new Set(['bord', 'lots', 'courses', 'reclamations']);
+  let pageActuelle = null;
+  setInterval(() => {
+    if (document.hidden || !VIVANTES.has(pageActuelle) || document.querySelector('.modale-fond')) return;
+    const actif = document.activeElement;
+    if (actif && main.contains(actif) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
+    if (/^#\/(lots|reclamations)\/./.test(location.hash)) return; // fiche ouverte : on ne bouge pas
+    const y = window.scrollY;
+    router({ silencieux: true }).then(() => window.scrollTo(0, y));
+  }, 45000);
+
+  async function router({ silencieux = false } = {}) {
     if (!session.connecte()) return connexion();
     const u = session.utilisateur();
     if (u.role !== 'admin') {
-      document.querySelector('[data-menu]').classList.add('cache');
+      document.querySelector('[data-menu]').classList.add('cache'); document.body.classList.add('hors-session');
       main.innerHTML = `<div class="pile" style="max-width:420px"><h1>Accès réservé</h1><p class="muet">Ce compte n'est pas administrateur.</p><button class="btn" data-sortir2>Se déconnecter</button></div>`;
       main.querySelector('[data-sortir2]').onclick = () => { session.fermer(); router(); };
       return;
     }
-    document.querySelector('[data-menu]').classList.remove('cache');
+    document.querySelector('[data-menu]').classList.remove('cache'); document.body.classList.remove('hors-session');
     if (!router.pastille) { router.pastille = true; majPastilleRec(); }
     const chemin = location.hash.replace(/^#/, '').split('?')[0] || '/';
     for (const [re, vue, nav] of routes) {
       const m = chemin.match(re);
       if (!m) continue;
       document.querySelectorAll('[data-nav]').forEach(a => a.dataset.nav === nav ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
-      main.innerHTML = '<div class="chargement"></div>';
+      pageActuelle = nav;
+      document.querySelector('[data-titre-mobile]').textContent = document.querySelector(`[data-nav="${nav}"]`)?.textContent.replace(/\d+$/, '').trim() || 'Back-office';
+      if (!silencieux) main.innerHTML = '<div class="chargement"></div>';
       try { await vue(...m.slice(1)); }
       catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
       return;
@@ -57,7 +93,7 @@
   }
 
   function connexion() {
-    document.querySelector('[data-menu]').classList.add('cache');
+    document.querySelector('[data-menu]').classList.add('cache'); document.body.classList.add('hors-session');
     main.innerHTML = '<div style="max-width:420px;margin:40px auto" data-zone></div>';
     K.vueConnexion(main.querySelector('[data-zone]'), { titre: 'Back-office', surSucces: () => router() });
   }
@@ -481,8 +517,7 @@
     try {
       const { reclamations: tout } = await api.get('/reclamations');
       const l = tout.filter(x => ['ouverte', 'en_cours'].includes(x.statut));
-      const b = document.querySelector('[data-nb-rec]');
-      b.textContent = l.length; b.classList.toggle('cache', !l.length);
+      document.querySelectorAll('[data-nb-rec], [data-nb-rec-mobile]').forEach(b => { b.textContent = l.length; b.classList.toggle('cache', !l.length); });
     } catch {}
   }
 
@@ -679,9 +714,14 @@
         <label class="champ">Adresse <input class="saisie" name="adresse" value="${esc(a.adresse || '')}"></label>
         <label class="champ">Téléphone / WhatsApp <input class="saisie" name="telephone" value="${esc(a.telephone || '')}"></label>
         <label class="champ">Horaires <input class="saisie" name="horaires" value="${esc(a.horaires || '')}" placeholder="Lun–sam 9 h – 18 h"></label>
-        <label class="champ">Position GPS <span class="tres-petit muet">${a.position?.lat ? `${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)} · <a href="${esc(K.lienCarte(a.position))}" target="_blank" rel="noopener">voir</a>` : 'non renseignée : pas de courses à domicile'}</span>
-          <input class="saisie" name="lienPosition" placeholder="Lien Google Maps ou « 9.51, -13.71 »" autocomplete="off">
-          <input type="hidden" name="positionLat" value="${a.position?.lat ?? ''}"><input type="hidden" name="positionLng" value="${a.position?.lng ?? ''}"></label>
+        <div class="champ" style="grid-column:1/-1">Position GPS de l'agence
+          <span class="petit" data-etat-pos>${a.position?.lat ? `<span class="vert">${ic('ok', 'ic-sm')} ${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)}</span>` : '<span class="rouge">Non renseignée : pas de ramassage ni de livraison depuis cette agence</span>'}</span>
+          <span class="ligne" style="--gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn btn-petit" data-placer>${ic('lieu', 'ic-sm')} Placer sur la carte</button>
+            <button type="button" class="btn btn-petit" data-ici>${ic('gps', 'ic-sm')} Je suis à l'agence</button>
+            <input class="saisie" name="lienPosition" placeholder="ou coller un lien Google Maps" autocomplete="off" style="flex:1;min-width:200px;min-height:40px">
+          </span>
+          <input type="hidden" name="positionLat" value="${a.position?.lat ?? ''}"><input type="hidden" name="positionLng" value="${a.position?.lng ?? ''}"></div>
         <label class="case"><input type="checkbox" name="plateforme" ${a.plateforme ? 'checked' : ''}> Plateforme d'arrivée des lots</label>
         <label class="case"><input type="checkbox" name="actif" ${a.actif !== false ? 'checked' : ''}> Ouverte</label>
       </div>`;
@@ -760,6 +800,31 @@
       b.querySelector('[data-exemples]').textContent = `Exemples : 2 km → ${prix(2)} · 5 km → ${prix(5)} · 10 km → ${prix(10)} · 20 km → ${prix(20)}`;
     });
     form.addEventListener('input', majExemples);
+    // Position d'une agence : carte ou GPS du téléphone
+    const poserPosition = (bloc, p) => {
+      bloc.querySelector('[name=positionLat]').value = p.lat;
+      bloc.querySelector('[name=positionLng]').value = p.lng;
+      bloc.querySelector('[name=lienPosition]').value = '';
+      bloc.querySelector('[data-etat-pos]').innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span> <span class="muet">(pensez à enregistrer)</span>`;
+    };
+    form.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-placer], [data-ici]');
+      if (!b) return;
+      const bloc = b.closest('[data-agence]');
+      const lat = parseFloat(bloc.querySelector('[name=positionLat]').value), lng = parseFloat(bloc.querySelector('[name=positionLng]').value);
+      const pays = bloc.querySelector('[name=pays]').value;
+      try {
+        if (b.matches('[data-placer]')) {
+          const p = await K.choisirSurCarte({ position: lat ? { lat, lng } : null, pays, titre: `Où est ${bloc.querySelector('[name=nom]').value || 'l\'agence'} ?` });
+          if (p) poserPosition(bloc, p);
+        } else {
+          b.disabled = true;
+          const p = await K.gpsActuel();
+          poserPosition(bloc, p);
+          if (p.precision > 60) toast(`Position à ± ${p.precision} m : vérifiez-la avec « Placer sur la carte ».`);
+        }
+      } catch (err) { toast(err.message, 'erreur'); } finally { b.disabled = false; }
+    });
     majExemples();
     form.querySelector('[data-ajout]').addEventListener('click', () => {
       form.querySelector('[data-liste-agences]').insertAdjacentHTML('beforeend', agenceHtml({ pays: 'GN' }));

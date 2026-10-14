@@ -41,23 +41,50 @@ function positionDepuisTexte(texte) {
 }
 
 // Liens courts (maps.app.goo.gl, goo.gl/maps) : on suit les redirections côté serveur.
-const HOTES_COURTS = /^(maps\.app\.goo\.gl|goo\.gl|g\.co|maps\.google\.[a-z.]+|www\.google\.[a-z.]+|google\.[a-z.]+)$/i;
+// En Europe, Google peut renvoyer vers sa page de consentement (consent.google.com) :
+// on lit alors l'adresse d'origine dans « continue », et on envoie un cookie de consentement.
+const HOTES_GOOGLE = /^(maps\.app\.goo\.gl|goo\.gl|g\.co|consent\.google\.[a-z.]+|maps\.google\.[a-z.]+|www\.google\.[a-z.]+|google\.[a-z.]+)$/i;
+const ENTETES_GOOGLE = {
+  'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36',
+  'Accept-Language': 'fr-FR,fr;q=0.9',
+  Cookie: 'CONSENT=YES+cb.20240101-00-p0.fr+FX+000; SOCS=CAI',
+};
+// Coordonnées dans une page Google Maps (aperçu de carte, épingle, centre)
+function positionDansPage(html) {
+  const motifs = [
+    /center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)/,
+    /markers=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)/,
+    /@(-?\d+\.\d+),(-?\d+\.\d+)/,
+    /\[null,null,(-?\d{1,2}\.\d{3,}),(-?\d{1,3}\.\d{3,})\]/,
+  ];
+  for (const m of motifs) {
+    const r = html.match(m);
+    if (r) { const p = { lat: parseFloat(r[1]), lng: parseFloat(r[2]) }; if (pointValide(p)) return p; }
+  }
+  return null;
+}
 async function positionDepuisLien(texte) {
   const direct = positionDepuisTexte(texte);
   if (direct) return direct;
   const m = String(texte || '').match(/https?:\/\/[^\s]+/);
   if (!m) return null;
   let url = m[0];
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 6; i++) {
     let u;
     try { u = new URL(url); } catch { return null; }
-    if (!HOTES_COURTS.test(u.hostname)) return null; // on ne suit que les liens Google
-    const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(6000) }).catch(() => null);
+    if (!HOTES_GOOGLE.test(u.hostname)) return null; // on ne suit que les liens Google
+    if (/^consent\./i.test(u.hostname) && u.searchParams.get('continue')) {
+      url = u.searchParams.get('continue');
+      const p = positionDepuisTexte(url);
+      if (p) return p;
+      continue;
+    }
+    const res = await fetch(url, { redirect: 'manual', headers: ENTETES_GOOGLE, signal: AbortSignal.timeout(7000) }).catch(() => null);
     if (!res) return null;
     const suivant = res.headers.get('location');
     if (!suivant) {
-      const html = res.status === 200 ? (await res.text()).slice(0, 200000) : '';
-      return positionDepuisTexte(html.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)?.[0] || '') || null;
+      const html = res.status === 200 ? (await res.text()).slice(0, 400000) : '';
+      return positionDansPage(html);
     }
     url = new URL(suivant, url).toString();
     const p = positionDepuisTexte(url);

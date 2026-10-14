@@ -123,6 +123,15 @@
     return CTX;
   }
   setInterval(() => { if (navigator.onLine) rafraichirContexte().catch(() => {}); }, 120000);
+  // Écrans « liste » redessinés seuls toutes les 60 s (courses du livreur, colis prêts au guichet)
+  setInterval(async () => {
+    if (document.hidden || !navigator.onLine || document.querySelector('.modale-fond') || arreterCamera) return;
+    const onglet = location.hash.replace(/^#\/?/, '').split('/')[0];
+    const actif = document.activeElement;
+    if (actif && main.contains(actif) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
+    if (onglet === 'courses' && main.querySelector('[data-seg]')) { const y = window.scrollY; await vueCourses(); window.scrollTo(0, y); }
+    if (onglet === 'remise' && main.querySelector('[data-liste]')) { await rafraichirContexte().catch(() => {}); main.querySelector('[data-filtre]')?.dispatchEvent(new Event('input')); }
+  }, 60000);
 
   // ══════════════════════════════════════════════════════════
   //  NAVIGATION
@@ -190,6 +199,37 @@
     K.vueConnexion(main, {
       titre: 'Connexion agent', inscription: false,
       surSucces: async () => { await rafraichirContexte().catch(() => {}); location.hash = '#/'; router(); },
+    });
+  }
+
+  // Bouton « Ouvrir la caméra » d'un viseur : ouvrir / fermer, lampe torche, erreurs claires
+  function brancherCamera(viseur, surCode) {
+    const btn = viseur.querySelector('[data-camera]');
+    const remettre = () => {
+      viseur.querySelector('.actions-viseur')?.remove();
+      btn.classList.remove('cache');
+    };
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        arreterCamera = await Scanner.demarrer(viseur, surCode);
+        btn.classList.add('cache');
+        const barre = document.createElement('div');
+        barre.className = 'actions-viseur';
+        barre.innerHTML = `${arreterCamera.lampe ? `<button type="button" class="btn btn-petit" data-lampe aria-pressed="false">${ic('lampe', 'ic-sm')} Lampe</button>` : ''}<button type="button" class="btn btn-ocre btn-petit" data-fermer-camera>${ic('fermer', 'ic-sm')} Fermer</button>`;
+        viseur.appendChild(barre);
+        const stop = arreterCamera;
+        barre.querySelector('[data-fermer-camera]').addEventListener('click', async () => { await stop(); if (arreterCamera === stop) arreterCamera = null; remettre(); });
+        barre.querySelector('[data-lampe]')?.addEventListener('click', (e) => {
+          const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+          e.currentTarget.setAttribute('aria-pressed', on); stop.lampe(on);
+        });
+        // Caméra coupée de l'extérieur (appli en arrière-plan) : on remet le bouton
+        const obs = new MutationObserver(() => { if (!viseur.classList.contains('actif')) { obs.disconnect(); remettre(); } });
+        obs.observe(viseur, { attributes: true, attributeFilter: ['class'] });
+      } catch (err) {
+        toast(err.message || 'Caméra indisponible. Tapez le numéro.', 'erreur');
+      } finally { btn.disabled = false; }
     });
   }
 
@@ -322,16 +362,7 @@
       if (champ.value.trim()) enregistrer(champ.value);
       champ.value = ''; champ.focus();
     });
-    $('[data-camera]').addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      if (arreterCamera) { await arreterCamera(); arreterCamera = null; btn.innerHTML = `${ic('scan')} Ouvrir la caméra`; return; }
-      try {
-        btn.disabled = true;
-        arreterCamera = await Scanner.demarrer(viseur, enregistrer);
-        btn.innerHTML = `${ic('fermer')} Fermer`; btn.style.cssText = 'position:absolute;top:10px;right:10px';
-      } catch (err) { toast(err.message || 'Caméra indisponible. Tapez le numéro.', 'erreur'); }
-      finally { btn.disabled = false; }
-    });
+    brancherCamera(viseur, enregistrer);
     // Quand on quitte l'onglet, on arrête d'écouter
     window.addEventListener('hashchange', () => document.removeEventListener('journal-maj', ecoute), { once: true });
   }
@@ -651,7 +682,7 @@
         </div>
         <div class="ligne entre"><h3>Colis prêts ici</h3><span class="petit muet">${(CTX?.colisPrets || []).length}</span></div>
         <input class="saisie" data-filtre placeholder="Filtrer par nom ou téléphone" aria-label="Filtrer">
-        <div class="pile" style="--gap:8px" data-liste></div>
+        <div class="pile grille-cartes" style="--gap:8px" data-liste></div>
       </div>`;
     const liste = main.querySelector('[data-liste]');
     const dessiner = (f = '') => {
@@ -667,10 +698,7 @@
     dessiner();
     main.querySelector('[data-filtre]').addEventListener('input', (e) => dessiner(e.target.value));
     main.querySelector('[data-cherche]').addEventListener('submit', (e) => { e.preventDefault(); const n = e.target.numero.value.trim(); if (n) ouvrirRemise(Scanner.extraireNumero(n)); });
-    main.querySelector('[data-camera]').addEventListener('click', async () => {
-      try { arreterCamera = await Scanner.demarrer(main.querySelector('[data-viseur]'), (n) => { Scanner.bip(true); ouvrirRemise(n); }); }
-      catch (err) { toast(err.message || 'Caméra indisponible.', 'erreur'); }
-    });
+    brancherCamera(main.querySelector('[data-viseur]'), (n) => { Scanner.bip(true); ouvrirRemise(n); });
   }
 
   async function ouvrirRemise(numero) {
@@ -943,7 +971,7 @@
           <button type="button" data-seg="libres" aria-pressed="${onglet === 'libres'}">À prendre (${libres.length})</button>
         </div>
         ${CTX?.majLe && !navigator.onLine ? `<p class="bandeau bandeau-ocre">${ic('horsligne', 'ic-sm')} Hors ligne : liste du ${esc(date(CTX.majLe))}.</p>` : ''}
-        <div class="pile" style="--gap:12px">${liste.length ? liste.map(carteCourse).join('') : `<p class="vide petit">${onglet === 'miennes' ? 'Aucune course pour vous. Regardez « À prendre ».' : 'Aucune course en attente.'}</p>`}</div>
+        <div class="pile grille-cartes" style="--gap:12px">${liste.length ? liste.map(carteCourse).join('') : `<p class="vide petit">${onglet === 'miennes' ? 'Aucune course pour vous. Regardez « À prendre ».' : 'Aucune course en attente.'}</p>`}</div>
       </div>`;
     main.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { stock.ecrire('onglet_courses', b.dataset.seg); vueCourses(); }));
     main.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => actionCourse(b.dataset.act, toutes.find(c => c.numeroSuivi === b.dataset.num && c.type === b.dataset.type), b)));

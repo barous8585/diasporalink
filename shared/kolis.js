@@ -353,7 +353,7 @@
 
   // ── Étiquettes (QR code, 10 × 15 cm, une par carton) ──
   const etiquette = {
-    lib: 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
+    lib: 'commun/vendor/qrcode-generator.min.js',
     async qr(texte) {
       if (!window.qrcode) {
         await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = this.lib; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
@@ -410,13 +410,98 @@
     if (!/https?:\/\//.test(texte)) return null;
     try { return (await api.get('/config/position?lien=' + encodeURIComponent(texte))).position; } catch (e) { if (e.reseau) throw e; return null; }
   }
-  function gpsActuel() {
+  function gpsActuel({ delai = 15000 } = {}) {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
     return new Promise((ok, ko) => {
-      if (!navigator.geolocation) return ko(new Error('Votre téléphone ne donne pas sa position. Collez plutôt un lien de localisation.'));
+      if (!window.isSecureContext) return ko(new Error('La position ne marche que sur une adresse sécurisée (https).'));
+      if (!navigator.geolocation) return ko(new Error('Cet appareil ne donne pas sa position. Placez l\'épingle sur la carte.'));
+      // Le navigateur attend sans fin si la demande d'autorisation reste sans réponse : on coupe nous-mêmes
+      let fini = false;
+      const garde = setTimeout(() => { if (!fini) { ko(new Error('Pas de réponse du GPS. Acceptez la demande de localisation, ou placez l\'épingle sur la carte.')); } }, delai + 5000);
+      const fin = (f) => (x) => { if (fini) return; fini = true; clearTimeout(garde); f(x); };
+      ok = fin(ok); ko = fin(ko);
       navigator.geolocation.getCurrentPosition(
         (p) => ok({ lat: Math.round(p.coords.latitude * 1e6) / 1e6, lng: Math.round(p.coords.longitude * 1e6) / 1e6, precision: Math.round(p.coords.accuracy) }),
-        (e) => ko(new Error(e.code === 1 ? 'Position refusée. Autorisez la localisation, ou collez un lien de localisation.' : 'Position introuvable. Sortez à découvert ou collez un lien de localisation.')),
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+        (e) => ko(new Error(e.code === 1
+          ? (ios ? 'Position refusée. Réglages → Confidentialité → Service de localisation → Safari → « Lorsque l\'app est active », puis réessayez. Ou placez l\'épingle sur la carte.'
+                 : 'Position refusée. Touchez le cadenas à gauche de l\'adresse → Autorisations → Position → Autoriser. Ou placez l\'épingle sur la carte.')
+          : 'Position introuvable : activez la localisation du téléphone (GPS), ou placez l\'épingle sur la carte.')),
+        { enableHighAccuracy: true, timeout: delai, maximumAge: 30000 });
+    });
+  }
+
+  // ── Carte : placer une épingle (Leaflet + OpenStreetMap, hébergés avec l'app) ──
+  const CENTRES = { GN: { lat: 9.5370, lng: -13.6773, zoom: 12 }, FR: { lat: 48.8566, lng: 2.3522, zoom: 11 } };
+  let leaflet;
+  function chargerLeaflet() {
+    if (window.L) return Promise.resolve();
+    leaflet = leaflet || new Promise((ok, ko) => {
+      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'commun/vendor/leaflet.css'; document.head.appendChild(l);
+      const sc = document.createElement('script'); sc.src = 'commun/vendor/leaflet.js'; sc.onload = ok;
+      sc.onerror = () => { leaflet = null; ko(new Error('Carte indisponible sans réseau.')); };
+      document.head.appendChild(sc);
+    });
+    return leaflet;
+  }
+  /**
+   * Ouvre une carte plein écran : on déplace la carte, l'épingle reste au centre.
+   * Renvoie { lat, lng } ou null si on ferme.
+   */
+  async function choisirSurCarte({ position, centre, pays, titre = 'Placez l\'épingle' } = {}) {
+    await chargerLeaflet();
+    return new Promise((resoudre) => {
+      const fond = document.createElement('div');
+      fond.className = 'modale-fond modale-carte';
+      fond.innerHTML = `
+        <div class="modale" role="dialog" aria-modal="true" aria-label="${esc(titre)}">
+          <div class="ligne entre"><h2>${esc(titre)}</h2><button type="button" class="btn btn-rond" data-annuler aria-label="Fermer">${ic('fermer')}</button></div>
+          <form class="ligne" style="--gap:6px" data-cherche-lieu>
+            <input class="saisie grandit" name="q" placeholder="Chercher un quartier, une rue…" autocomplete="off">
+            <button class="btn btn-carre" aria-label="Chercher">${ic('loupe')}</button>
+          </form>
+          <div class="carte-zone"><div data-carte></div><div class="epingle" aria-hidden="true">${ic('lieu', 'ic-lg')}</div></div>
+          <p class="tres-petit muet centre" data-aide>Déplacez la carte avec le doigt : l'épingle doit être sur l'entrée exacte.</p>
+          <div class="grille-2">
+            <button type="button" class="btn btn-plein" data-gps>${ic('gps', 'ic-sm')} Ma position</button>
+            <button type="button" class="btn btn-principal btn-plein" data-valider>${ic('ok', 'ic-sm')} Valider cet endroit</button>
+          </div>
+        </div>`;
+      document.body.appendChild(fond);
+      const depart = position?.lat ? position : centre?.lat ? centre : CENTRES[pays] || CENTRES.GN;
+      const carte = window.L.map(fond.querySelector('[data-carte]'), { zoomControl: true, attributionControl: true })
+        .setView([depart.lat, depart.lng], position?.lat ? 17 : centre?.lat ? 14 : depart.zoom || 12);
+      carte.attributionControl.setPrefix(false);
+      window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(carte);
+      setTimeout(() => carte.invalidateSize(), 60);
+      const aide = fond.querySelector('[data-aide]');
+      const fermer = (val) => { carte.remove(); fond.remove(); resoudre(val); };
+      fond.querySelector('[data-annuler]').addEventListener('click', () => fermer(null));
+      fond.querySelector('[data-valider]').addEventListener('click', () => {
+        const c = carte.getCenter();
+        fermer({ lat: Math.round(c.lat * 1e6) / 1e6, lng: Math.round(c.lng * 1e6) / 1e6 });
+      });
+      fond.querySelector('[data-gps]').addEventListener('click', async (e) => {
+        const b = e.currentTarget; b.disabled = true; aide.textContent = 'Recherche de votre position…';
+        try {
+          const p = await gpsActuel();
+          carte.setView([p.lat, p.lng], 18);
+          aide.textContent = p.precision > 100 ? `Position approximative (± ${p.precision} m) : ajustez l'épingle à la main.` : 'Vérifiez que l\'épingle est bien sur l\'entrée, puis validez.';
+        } catch (err) { aide.textContent = err.message; }
+        b.disabled = false;
+      });
+      fond.querySelector('[data-cherche-lieu]').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const q = e.target.q.value.trim(); if (!q) return;
+        aide.textContent = 'Recherche…';
+        try {
+          const ville = pays === 'FR' ? 'France' : 'Guinée';
+          const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=fr&countrycodes=gn,fr&q=${encodeURIComponent(`${q}, ${ville}`)}`);
+          const [lieu] = await r.json();
+          if (!lieu) { aide.textContent = 'Lieu introuvable : déplacez la carte à la main.'; return; }
+          carte.setView([parseFloat(lieu.lat), parseFloat(lieu.lon)], 16);
+          aide.textContent = 'Affinez : mettez l\'épingle sur l\'entrée exacte.';
+        } catch { aide.textContent = 'Recherche impossible sans réseau.'; }
+      });
     });
   }
   const lienCarte = (p) => p?.lat ? `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}` : '';
@@ -437,7 +522,10 @@
         <label class="champ">Téléphone sur place <span class="tres-petit muet">(si différent)</span><input class="saisie" name="${n('telephone')}" type="tel" inputmode="tel" value="${esc(valeur.telephone || '')}"></label>
         <div class="carte pile position-gps" style="--gap:8px;padding:12px">
           <div class="gras petit">${ic('gps', 'ic-sm')} Position exacte${positionFacultative ? ' <span class="muet">(peut être envoyée plus tard)</span>' : ''}</div>
-          ${maPosition ? `<button type="button" class="btn btn-plein" data-ma-position>${ic('gps', 'ic-sm')} Je suis sur place : prendre ma position</button>` : ''}
+          <div class="grille-2" style="--gap:8px">
+            ${maPosition ? `<button type="button" class="btn btn-plein" data-ma-position>${ic('gps', 'ic-sm')} Je suis sur place</button>` : ''}
+            <button type="button" class="btn btn-plein" data-sur-carte>${ic('lieu', 'ic-sm')} Choisir sur la carte</button>
+          </div>
           <label class="champ tres-petit">${maPosition ? 'ou c' : 'C'}ollez le lien de localisation (WhatsApp, Google Maps)
             <input class="saisie" data-lien-position placeholder="https://maps.app.goo.gl/… ou 9.5412, -13.6773" inputmode="url">
           </label>
@@ -459,16 +547,28 @@
       if (message) etat.innerHTML = `<span class="${type === 'erreur' ? 'rouge' : 'muet'}">${esc(message)}</span>`;
       else if (!position) etat.innerHTML = '';
       else if (course && !course.ok) etat.innerHTML = `<span class="rouge">${esc(course.message)}</span>`;
-      else etat.innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} Position reçue</span>${course ? ` · ${esc(course.distanceKm.toLocaleString('fr-FR'))} km de ${esc(ag.nom)} · <b>${esc(montant(course.prix, course.devise))}</b>` : ''} · <a href="${esc(lienCarte(position))}" target="_blank" rel="noopener">voir</a>`;
+      else etat.innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} Position reçue</span>${course ? ` · ${esc(course.distanceKm.toLocaleString('fr-FR'))} km de ${esc(ag.nom)} · <b>${esc(montant(course.prix, course.devise))}</b>` : ''} · <button type="button" class="btn-lien" data-ajuster>voir / ajuster</button>`;
       if (!silencieux) surChange?.();
     };
     bloc.querySelector('[data-ma-position]')?.addEventListener('click', async (e) => {
       const b = e.currentTarget; b.disabled = true;
       majEtat('Recherche de votre position…');
-      try { position = await gpsActuel(); majEtat(); }
-      catch (err) { majEtat(err.message, 'erreur'); }
+      try {
+        position = await gpsActuel(); majEtat();
+        // GPS imprécis (intérieur, vieux téléphone) : on propose d'ajuster sur la carte
+        if (position.precision > 100) etat.insertAdjacentHTML('beforeend', `<br><span class="rouge">Position approximative (± ${position.precision} m).</span> <button type="button" class="btn-lien" data-ajuster>Ajuster sur la carte</button>`);
+      } catch (err) { majEtat(err.message, 'erreur'); }
       b.disabled = false;
     });
+    const ouvrirCarte = async () => {
+      try {
+        const ag = agence?.();
+        const p = await choisirSurCarte({ position, centre: ag?.position, pays: ag?.pays, titre: 'Où exactement ?' });
+        if (p) { position = p; majEtat(); }
+      } catch (err) { majEtat(err.message, 'erreur'); }
+    };
+    bloc.querySelector('[data-sur-carte]').addEventListener('click', ouvrirCarte);
+    etat.addEventListener('click', (e) => { if (e.target.closest('[data-ajuster]')) ouvrirCarte(); });
     const lien = bloc.querySelector('[data-lien-position]');
     let minuteur;
     lien.addEventListener('input', () => {
@@ -532,7 +632,7 @@
   window.K = {
     API_URL, api, session, stock, config, ErreurReseau,
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
-    positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse,
+    positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse, choisirSurCarte, chargerLeaflet,
     lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto,
   };
 })();
