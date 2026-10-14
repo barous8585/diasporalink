@@ -153,7 +153,7 @@ const STATUTS = {
 };
 
 const STATUTS_LABELS = {
-  reserve:      'Réservé — à déposer',
+  reserve:      'Réservé, à déposer',
   depose:       'Déposé en agence',
   charge:       'Chargé, en attente de départ',
   en_transit:   'En route',

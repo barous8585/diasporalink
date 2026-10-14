@@ -1023,4 +1023,14 @@ test('toutes les formules d\'envoi : 2 sens × express/avion/bateau × agence/do
   await appel('POST', `/factures/colis/${exp.numero}/emettre`, null, agentParis);
   const fa = (await appel('GET', `/factures/colis/${exp.numero}`, null, client)).factures[0];
   assert.match(fa.lignes[0].designation, /express/);
+
+  // Tableau de bord : tout est compté
+  const tdb = await appel('GET', '/admin/tableau?jours=30', null, admin);
+  assert.strictEqual(tdb.status, 200, tdb.message);
+  assert.ok(tdb.kpi.deposes >= 33, `déposés ${tdb.kpi.deposes}`);
+  assert.strictEqual(tdb.parJour.length, 30);
+  assert.ok(tdb.lignes.filter(l => l.mode === 'express').reduce((a, l) => a + l.nb, 0) >= 10);
+  assert.ok(tdb.agences.find(a => a.code === 'PARIS').deposes > 0);
+  assert.ok(tdb.clients.length > 0);
+  assert.strictEqual((await appel('GET', '/admin/tableau', null, client)).status, 403);
 });

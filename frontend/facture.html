@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#04244F">
-  <title>Facture — Talib Multi Services</title>
+  <title>Facture · Talib Multi Services</title>
   <link rel="stylesheet" href="commun/vendor/polices.css">
   <link rel="stylesheet" href="commun/kolis.css">
   <style>
@@ -73,7 +73,7 @@
       const m = (n) => montant(n, f.devise);
       const pct = (t) => `${(Math.round(t * 1000) / 10).toLocaleString('fr-FR')} %`;
       const s = f.emetteur || {};
-      document.title = `${avoir ? 'Avoir' : 'Facture'} ${f.numero} — ${s.marque || 'TMS'}`;
+      document.title = `${avoir ? 'Avoir' : 'Facture'} ${f.numero} · ${s.marque || 'TMS'}`;
       const ETAT = { payee: 'Acquittée', partielle: `Reste à payer : ${m(f.reste)}`, a_payer: `À payer : ${m(f.reste)}` };
 
       zone.innerHTML = `

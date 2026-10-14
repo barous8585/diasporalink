@@ -281,7 +281,7 @@
         <div data-notifs></div>
         <div class="pile grille-cartes" style="--gap:12px">
           ${taches.length ? taches.map(t => `
-            <div class="carte tache ${t.urgent ? 'urgent' : ''} ${t.info ? 'info' : ''}">
+            <div class="carte tache t-${esc(t.onglet || 'info')} ${t.urgent ? 'urgent' : ''} ${t.info ? 'info' : ''}">
               <div class="ligne" style="--gap:12px;align-items:flex-start">
                 <span class="nb-tache">${esc(t.nb)}</span>
                 <div class="grandit"><div class="gras">${esc(t.titre)}</div><div class="petit muet">${esc(t.aide || '')}</div></div>
@@ -525,7 +525,7 @@
     const devisePaie = () => CONFIG.pays[paysDepart()]?.devise || 'EUR'; // on paie dans la devise du pays de dépôt
     const optionsRetrait = () => {
       const parVille = {};
-      CONFIG.agences.filter(a => a.pays === paysDest()).forEach(a => { (parVille[a.ville || '—'] = parVille[a.ville || '—'] || []).push(a); });
+      CONFIG.agences.filter(a => a.pays === paysDest()).forEach(a => { (parVille[a.ville || 'Autres'] = parVille[a.ville || 'Autres'] || []).push(a); });
       return Object.entries(parVille).map(([v, l]) => `<optgroup label="${esc(v)}">${l.map(a => `<option value="${esc(a.code)}" ${a.code === etat.guichet ? 'selected' : ''}>${esc(a.nom)}${a.commune ? ` (${esc(a.commune)})` : ''}</option>`).join('')}</optgroup>`).join('');
     };
     main.innerHTML = `
@@ -580,8 +580,8 @@
         <label class="champ ${etat.assurance ? '' : 'cache'}" data-valeur><span data-lib-valeur>Valeur déclarée</span> <input class="saisie" name="valeurDeclaree" type="number" inputmode="decimal" min="0" value="${r.valeurDeclaree || ''}"></label>
 
         <div class="carte-noire pile" style="--gap:6px" aria-live="polite">
-          <div class="recap-prix"><span style="color: var(--gris)">Prix à payer</span><span class="valeur" data-prix>—</span></div>
-          <div class="recap-prix"><span style="color: var(--gris)">soit</span><span class="gras" data-prix-autre>—</span></div>
+          <div class="recap-prix"><span style="color: var(--gris)">Prix à payer</span><span class="valeur" data-prix>0</span></div>
+          <div class="recap-prix"><span style="color: var(--gris)">soit</span><span class="gras" data-prix-autre>0</span></div>
           <div class="tres-petit" style="color: var(--gris)" data-detail></div>
         </div>
 
@@ -696,7 +696,7 @@
         l.querySelector('.compteur .gras').textContent = q;
         l.querySelector('[data-art-moins]').disabled = !q;
       });
-      if (!(poids > 0)) { $('[data-repartition]').textContent = ''; $('[data-prix]').textContent = '—'; $('[data-prix-autre]').textContent = '—'; $('[data-detail]').textContent = 'Pesez le colis.'; tarif = null; return; }
+      if (!(poids > 0)) { $('[data-repartition]').textContent = ''; $('[data-prix]').textContent = 'À peser'; $('[data-prix-autre]').textContent = ''; $('[data-detail]').textContent = 'Pesez le colis.'; tarif = null; return; }
       tarif = KolisTarif.calculerTarif(CONFIG.regles, { sens: sens(), mode: etat.mode, poidsKg: poids, typeColis: etat.typeColis, valeurDeclaree: form.valeurDeclaree.value, assurance: form.assurance.checked, articles: articlesChoisis() });
       $('[data-repartition]').innerHTML = tarif.articles.length
         ? `${kg(tarif.poidsFacture)} au kilo · ${kg(tarif.poidsArticles)} comptés dans les articles${poids < tarif.poidsArticles ? ' <b style="color:var(--rouge)">(la balance indique moins que les articles : vérifiez)</b>' : ''}` : '';
@@ -1325,7 +1325,7 @@
             ${c.tiersAutorise?.nom ? `<div class="ligne-info"><span>Autorisé</span><span>${esc(c.tiersAutorise.nom)}</span></div>` : ''}
             <div class="ligne-info"><span>Guichet</span><span>${esc(c.guichetInfo?.nom || c.guichet)}</span></div>
             <div class="ligne-info"><span>Poids</span><span>${kg(c.poidsReel || c.poidsEstime)} · ${c.nbCartons} carton(s)</span></div>
-            <div class="ligne-info"><span>Lot</span><span>${esc(c.lotCode || '—')}</span></div>
+            <div class="ligne-info"><span>Lot</span><span>${esc(c.lotCode || 'Pas encore')}</span></div>
             <div class="ligne-info"><span>Sens</span><span>${esc(CONFIG.sens.find(x => x.key === (c.sens || 'FR-GN'))?.label || '')}</span></div>
             <div class="ligne-info"><span>Transport</span><span>${eur(c.tarif?.totalEur)} (${gnf(c.tarif?.totalGnf)})</span></div>
             <div class="ligne-info"><span>Douane</span><span>${deviseDouane === 'EUR' ? eur((c.fraisDouaneGnf || 0) / taux) : gnf(c.fraisDouaneGnf)}</span></div>

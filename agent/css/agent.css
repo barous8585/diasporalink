@@ -105,3 +105,21 @@ main > .pile { --gap: 16px; }
 .viseur .btn-photo-etiquette { position: absolute; top: calc(50% + 44px); z-index: 1; cursor: pointer; background: #fff; color: var(--marine); border-color: #fff; }
 .viseur .btn-photo-etiquette.btn-ocre { background: var(--or); border-color: var(--or); }
 .viseur.actif .btn-photo-etiquette { display: none; }
+
+/* Accueil : une couleur par type de tâche */
+.tache.t-depot { background: var(--or-clair); border-color: transparent; }
+.tache.t-depot .nb-tache { background: var(--or); color: var(--marine); }
+.tache.t-depot .btn-principal { background: var(--marine); }
+.tache.t-scanner { background: var(--bleu-vif-doux); border-color: transparent; }
+.tache.t-scanner .nb-tache { background: var(--bleu-vif); }
+.tache.t-scanner .btn-principal { background: var(--bleu-vif); border-color: var(--bleu-vif); }
+.tache.t-remise { background: var(--vert-ok-doux); border-color: transparent; }
+.tache.t-remise .nb-tache { background: var(--vert-ok); }
+.tache.t-remise .btn-principal { background: var(--vert-ok); border-color: var(--vert-ok); }
+.tache.t-caisse { background: var(--violet-doux); border-color: transparent; }
+.tache.t-caisse .nb-tache { background: var(--violet); }
+.tache.t-caisse .btn-principal { background: var(--violet); border-color: var(--violet); }
+.tache.t-courses { background: var(--orange-doux); border-color: transparent; }
+.tache.t-courses .nb-tache { background: var(--orange); }
+.guide { background: #fff; }
+.guide summary { color: var(--marine); }
