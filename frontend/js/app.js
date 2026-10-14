@@ -26,6 +26,21 @@
   const deviseDe = (pays) => CONFIG?.pays?.[pays]?.devise || 'GNF';
   const double = (gnfMt, eurMt, devise) => devise === 'EUR' ? `${eur(eurMt)} (${gnf(gnfMt)})` : `${gnf(gnfMt)} (${eur(eurMt)})`;
   const prixColis = (t) => t ? double(t.totalGnf, t.totalEur, t.devise || 'EUR') : '';
+  // Monnaie « locale » pour la personne qui regarde : celle de son pays dans ce sens
+  // (expéditeur : pays de départ, € pour France → Guinée, GNF pour Guinée → France ;
+  // destinataire : pays d'arrivée). L'autre monnaie suit entre parenthèses.
+  const estDestinataireDe = (c) => { const u = session.utilisateur(); return !!(u && c?.destinataire?.telephone === u.telephone && c?.expediteur?.telephone !== u.telephone); };
+  const paysVue = (c) => { const [d, a] = String(c?.sens || 'FR-GN').split('-'); return estDestinataireDe(c) ? a : d; };
+  const deviseVue = (c) => deviseDe(paysVue(c));
+  const tauxDe = (c) => c?.tarif?.taux || CONFIG?.tauxEurGnf || 10000;
+  // Montant connu en GNF (et en € si fourni) affiché dans la monnaie locale d'abord
+  const montantVue = (c, gnfMt, eurMt) => double(gnfMt, eurMt ?? Math.round((gnfMt / tauxDe(c)) * 100) / 100, deviseVue(c));
+  // Prix d'une course (dans la monnaie du pays de la course) affiché dans la monnaie locale d'abord
+  const prixCourseVue = (c, x) => {
+    if (!x?.prix) return '';
+    const g = x.prixGnf || (x.devise === 'GNF' ? x.prix : Math.round(x.prix * tauxDe(c)));
+    return montantVue(c, g, x.devise === 'EUR' ? x.prix : undefined);
+  };
   const lienWhatsApp = (tel, texte = '') => `https://wa.me/${String(tel || '').replace(/[^\d]/g, '')}${texte ? `?text=${encodeURIComponent(texte)}` : ''}`;
 
   function bandeauReseau(majLe) {
@@ -160,7 +175,7 @@
         <div class="progression-lib" aria-hidden="true">${ETAPES.map(e => `<span>${e.lib}</span>`).join('')}</div>
         <div class="encart-code">
           ${c.codeRetrait ? `<div><div class="tres-petit muet">Code de retrait</div><div class="valeur">${esc(c.codeRetrait)}</div></div>`
-                          : `<div class="petit">${c.statut === 'reserve' ? `Prix estimé : <b>${prixColis(c.tarif)}</b>` : c.solde?.soldeGnf > 0 ? `Reste à payer : <b>${double(c.solde.soldeGnf, c.solde.soldeEur, deviseDe(paysArrivee(c)))}</b>` : 'Tout est payé'}</div>`}
+                          : `<div class="petit">${c.statut === 'reserve' ? `Prix estimé : <b>${prixColis(c.tarif)}</b>` : c.solde?.soldeGnf > 0 ? `Reste à payer : <b>${montantVue(c, c.solde.soldeGnf, c.solde.soldeEur)}</b>` : 'Tout est payé'}</div>`}
           <a class="btn btn-noir" href="#/suivi/${encodeURIComponent(c.numeroSuivi)}">Détails ${ic('suivant', 'ic-sm')}</a>
         </div>
       </div>`;
@@ -221,7 +236,7 @@
     const estime = c.statut === 'reserve';
     const mag = solde.magasinage;
     // On paie dans la devise du pays d'arrivée (sauf l'estimation, montrée dans la devise du sens)
-    const devisePaiement = estime ? (CONFIG?.tarifs?.[c.sens || 'FR-GN']?.devise || 'EUR') : deviseDe(paysArrivee(c));
+    const devisePaiement = deviseVue(c);
     const principal = (g2, e2) => devisePaiement === 'EUR' ? eur(e2) : gnf(g2);
     const secondaire = (g2, e2) => devisePaiement === 'EUR' ? gnf(g2) : eur(e2);
     const fraisJour = paysArrivee(c) === 'FR' ? eur(CONFIG?.magasinage?.fraisJourEur) : gnf(CONFIG?.magasinage?.fraisJourGnf);
@@ -481,13 +496,13 @@
       if ((x.payeGnf || 0) >= x.prixGnf) return `<p class="petit" style="color:var(--vert);font-weight:600">${ic('ok', 'ic-sm')} Payée</p>`;
       if (enVerif) return `<p class="bandeau bandeau-ocre">${ic('horloge', 'ic-sm')}<span>Paiement en cours de vérification.</span></p>`;
       if (['remis', 'annule'].includes(c.statut)) return '';
-      return `<div class="a-payer"><span><b>À payer : ${esc(montant(x.prix, x.devise))}</b><br><span class="tres-petit">La course est programmée dès le paiement.</span></span><button class="btn btn-principal btn-petit" data-payer-domicile>Payer</button></div>`;
+      return `<div class="a-payer"><span><b>À payer : ${esc(prixCourseVue(c, x))}</b><br><span class="tres-petit">La course est programmée dès le paiement.</span></span><button class="btn btn-principal btn-petit" data-payer-domicile>Payer</button></div>`;
     };
     if (ram) {
       blocs.push(`
         <div class="carte pile" style="--gap:6px">
           <div class="ligne entre"><h3>${ic('moto', 'ic-sm')} Ramassage à domicile</h3><span class="badge">${esc(ram.statut === 'faite' ? 'Ramassé' : LIB_COURSE[ram.statut] || '')}</span></div>
-          <p class="petit">${esc(ram.quartier || '')}${ram.prix ? ` · ${esc(montant(ram.prix, ram.devise))}` : ''}${ram.livreur ? ` · ${esc(ram.livreur)}` : ''}</p>
+          <p class="petit">${esc(ram.quartier || '')}${ram.prix ? ` · ${esc(prixCourseVue(c, ram))}` : ''}${ram.livreur ? ` · ${esc(ram.livreur)}` : ''}</p>
           ${etatPaiement(ram)}
           ${ram.statut !== 'faite' ? '<p class="tres-petit muet">Le livreur vous appelle avant de passer. Le colis sera pesé à l\'agence.</p>' : ''}
         </div>`);
@@ -497,7 +512,7 @@
       blocs.push(`
         <div class="carte pile" style="--gap:8px">
           <div class="ligne entre"><h3>${ic('moto', 'ic-sm')} Livraison à domicile</h3>${c.statut === 'remis' ? '<span class="badge">Livré</span>' : liv.statut === 'en_route' ? '<span class="badge">En route</span>' : ''}</div>
-          <p class="petit">${esc(liv.quartier || '')}${liv.prix ? ` · ${esc(montant(liv.prix, liv.devise))} (${esc(String(liv.distanceKm).replace('.', ','))} km)` : ''}${liv.livreur ? ` · ${esc(liv.livreur)}` : ''}</p>
+          <p class="petit">${esc(liv.quartier || '')}${liv.prix ? ` · ${esc(prixCourseVue(c, liv))}, ${esc(String(liv.distanceKm).replace('.', ','))} km` : ''}${liv.livreur ? ` · ${esc(liv.livreur)}` : ''}</p>
           ${etatPaiement(liv)}
           ${!liv.aPosition && ouvert ? `
             <p class="bandeau bandeau-ocre">${ic('gps', 'ic-sm')}<span>Il manque la position exacte du destinataire pour calculer le prix et lui livrer le colis.</span></p>
@@ -626,9 +641,8 @@
       </div>`;
     };
     const blocs = [...new Set(pays)].map(groupe).filter(Boolean);
-    // Montant affiché en grand dans la devise du premier moyen proposé
-    const premier = [...new Set(pays)].flatMap(p => r.moyens[p] || [])[0];
-    const enGnfD = premier ? premier.devise === 'GNF' : paysPayeur === 'GN';
+    // Montant affiché en grand dans la monnaie locale de la personne qui paie
+    const enGnfD = deviseDe(paysPayeur) === 'GNF';
     const { el, fermer } = modale(`
       <div class="pile" style="--gap:16px" data-etape-paiement>
         <div class="ligne entre"><h2>${choix === 'domicile' ? 'Payer la livraison' : 'Payer le colis'}</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
@@ -776,6 +790,7 @@
           <div data-prix-autre></div>
           <div class="petit" data-prix-detail style="color: var(--gris)"></div>
           <div class="petit" data-prix-domicile style="color: var(--gris)"></div>
+          <div data-moyens-envoi></div>
           <div style="height:1px;background: var(--ligne-2);margin:10px 0 6px"></div>
           <div class="ligne tres-petit" style="color: var(--gris);align-items:flex-start">${ic('balance', 'ic-sm')}<span>Le prix final est fixé à la pesée en agence. Taux : 1 € = ${gnf(CONFIG.tauxEurGnf)}, bloqué sur votre reçu.</span></div>
         </div>
@@ -832,12 +847,27 @@
       const zone = $('[data-prix-domicile]');
       if (!zone) return;
       const lignes = [];
-      const ligne = (lib, c, defaut) => lignes.push(`+ ${lib} : ${c?.ok ? `<b>${esc(K.montant(c.prix, c.devise))}</b> (${esc(c.distanceKm.toLocaleString('fr-FR'))} km)` : esc(defaut)}`);
+      // Prix des courses dans la monnaie du pays de départ d'abord (celle de l'expéditeur)
+      const local = (x) => double(x.prixGnf, Math.round((x.prixGnf / CONFIG.tauxEurGnf) * 100) / 100, CONFIG.tarifs[etat.sens]?.devise || 'EUR');
+      const ligne = (lib, c, defaut) => lignes.push(`+ ${lib} : ${c?.ok ? `<b>${esc(local(c))}</b>, ${esc(c.distanceKm.toLocaleString('fr-FR'))} km` : esc(defaut)}`);
       if (etat.depart === 'domicile') ligne('ramassage', adrRam.course(), 'selon la distance, dès que la position est connue');
       if (etat.arrivee === 'domicile') ligne('livraison', adrLiv.course(), 'selon la distance, dès que la position est connue');
       if (lignes.length) lignes.push('<span class="tres-petit">À payer en ligne juste après la réservation · non remboursable si vous annulez</span>');
       zone.innerHTML = lignes.join('<br>');
     }
+    // Moyens de paiement selon le pays de la personne qui paie (expéditeur, ou destinataire à l'arrivée)
+    const AU_COMPTOIR = { FR: ['Espèces', 'Carte bancaire', 'Virement'], GN: ['Espèces', 'Orange Money', 'MTN MoMo'] };
+    const majMoyens = () => {
+      const zone = $('[data-moyens-envoi]');
+      if (!zone) return;
+      const [pd, pa] = etat.sens.split('-');
+      const pays = $('[name=payeurArrivee]')?.checked ? pa : pd;
+      const enLigne = (CONFIG.moyensPaiement?.[pays] || []).map(m => m.label);
+      zone.innerHTML = `<div class="moyens-envoi">
+        <div class="tres-petit gras">Paiement ${pays === pd ? `en ${nomPays(pd)}` : `par le destinataire en ${nomPays(pa)}`} · en ${deviseDe(pays) === 'EUR' ? 'euros' : 'francs guinéens'}</div>
+        <div class="puces-moyens">${[...new Set([...enLigne.map(l => `${l} en ligne`), ...AU_COMPTOIR[pays].map(l => `${l} à l'agence`)])].map(l => `<span>${esc(l)}</span>`).join('')}</div>
+      </div>`;
+    };
     const majDomicile = () => {
       const indispoRam = dispoDomicile($('[name=depot]').value);
       const indispoLiv = dispoDomicile($('[name=guichet]').value);
@@ -914,6 +944,7 @@
         : !choisis.length && etat.poids < m.poidsMin ? `${montant(m.prixKg, devise)} le kilo<br>minimum facturé : ${m.poidsMin} kg` : `${montant(m.prixKg, devise)} le kilo`;
       $('[data-prix-principal]').textContent = devise === 'EUR' ? eur(t.totalEur) : gnf(t.totalGnf);
       $('[data-prix-autre]').textContent = `soit ${devise === 'EUR' ? gnf(t.totalGnf) : eur(t.totalEur)}`;
+      majMoyens();
       const detail = [];
       if (t.transport) detail.push(`${nombreFr(t.poidsFacture)} kg au kilo : ${montant(t.transport + t.surcharge, devise)}`);
       t.articles.forEach(l => detail.push(`${l.quantite} × ${l.label.toLowerCase()} : ${montant(l.montant, devise)}`));
@@ -948,6 +979,7 @@
     main.querySelectorAll('[data-depart]').forEach(b => b.addEventListener('click', () => { etat.depart = b.dataset.depart; maj(); }));
     main.querySelectorAll('[data-arrivee]').forEach(b => b.addEventListener('click', () => { etat.arrivee = b.dataset.arrivee; maj(); }));
     $('[name=depot]').addEventListener('change', maj);
+    $('[name=payeurArrivee]').addEventListener('change', majMoyens);
     $('[name=guichet]').addEventListener('change', maj);
     maj();
 
@@ -1004,20 +1036,20 @@
         ${c.domicileAPayerGnf > 0 ? `
         <div class="carte-ocre pile" style="--gap:8px">
           <h3>${c.ramassage?.demande && c.livraison?.demande && c.livraison?.prix ? 'Payez le ramassage et la livraison' : c.ramassage?.demande ? 'Payez le ramassage' : 'Payez la livraison'}</h3>
-          <div class="titre" style="font-size:26px;font-weight:800">${[c.ramassage, c.livraison].filter(x => x?.demande && x.prix).map(x => esc(montant(x.prix, x.devise))).join(' + ')}</div>
+          <div class="titre" style="font-size:26px;font-weight:800">${esc(montantVue(c, c.domicileAPayerGnf))}</div>
           <p class="petit">La course est programmée dès le paiement reçu. Elle n'est pas remboursée si vous l'annulez ensuite.</p>
           <button class="btn btn-noir btn-grand btn-plein" data-payer-domicile>Payer maintenant</button>
         </div>` : ''}
         <div class="carte pile">
           <h3>Et maintenant ?</h3>
           ${c.ramassage?.demande ? `
-          <p>1. Un livreur vous appelle puis passe chercher le colis${c.ramassage.prix ? ` (${esc(montant(c.ramassage.prix, c.ramassage.devise))})` : ''}.</p>
+          <p>1. Un livreur vous appelle puis passe chercher le colis${c.ramassage.prix ? ` (${esc(prixCourseVue(c, c.ramassage))})` : ''}.</p>
           <p>2. Il est pesé à <b>${esc(d.nom || 'l\'agence')}</b> : vous recevez le prix final et votre reçu.</p>` : `
           <p>1. Apportez le colis à <b>${esc(d.nom || 'l\'agence')}</b>${d.adresse ? `, ${esc(d.adresse)}` : ''}.</p>
           ${d.horaires ? `<p class="petit muet">${esc(d.horaires)}</p>` : ''}
           <p>2. Il sera pesé, vous payez et recevez votre reçu.</p>`}
           ${c.livraison?.demande ? `
-          <p>3. À l'arrivée, un livreur l'apporte à ${esc(c.destinataire.nom)}${c.livraison.prix ? ` (${esc(montant(c.livraison.prix, c.livraison.devise))})` : ''}, qui donne son code de retrait.</p>
+          <p>3. À l'arrivée, un livreur l'apporte à ${esc(c.destinataire.nom)}${c.livraison.prix ? ` (${esc(prixCourseVue(c, c.livraison))})` : ''}, qui donne son code de retrait.</p>
           ${c.livraison.adresse?.position ? '' : `<p class="bandeau bandeau-ocre">${ic('gps', 'ic-sm')}<span>Il manque sa position : envoyez-lui le lien de suivi, il pourra l'ajouter lui-même.</span></p>`}` : `
           <p>3. ${esc(c.destinataire.nom)} reçoit un SMS avec le code de retrait dès que le colis est à <b>${esc(r.nom || 'son agence')}</b>${r.ville ? ` (${esc(r.ville)})` : ''}.</p>`}
         </div>
@@ -1040,7 +1072,7 @@
   function prochaineAction(c, u) {
     const g = c.guichetInfo || agence(c.guichet) || {};
     const dep = agence(c.depot) || {};
-    const deviseArr = deviseDe(paysArrivee(c));
+    const deviseArr = deviseVue(c);
     const recu = u && c.destinataire?.telephone === u.telephone && c.expediteur?.telephone !== u.telephone;
     const enVerif = (c.declarations || []).some(d => d.statut === 'a_verifier');
     const livDem = c.livraison?.demande && c.livraison.statut !== 'annulee';

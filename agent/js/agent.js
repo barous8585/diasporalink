@@ -228,10 +228,35 @@
       viseur.querySelector('.actions-viseur')?.remove();
       btn.classList.remove('cache');
     };
+    // Aide pas à pas quand la caméra est bloquée : comment autoriser, puis réessayer
+    const aideAutorisation = (message) => {
+      const { el, fermer } = modale(`
+        <div class="pile" style="--gap:14px">
+          <div class="ligne entre"><h2>Autoriser la caméra</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+          ${message ? `<p class="bandeau bandeau-ocre petit">${esc(message.split('. ')[0].replace(/\.$/, ''))}.</p>` : ''}
+          <ol class="etapes-autorisation">${Scanner.etapesAutorisation().map(e => `<li>${esc(e)}</li>`).join('')}</ol>
+          <button type="button" class="btn btn-principal btn-grand" data-reessayer>${ic('scan', 'ic-sm')} Réessayer la caméra</button>
+          <button type="button" class="btn btn-plein" data-photo-aide>${ic('scan', 'ic-sm')} Photographier l'étiquette à la place</button>
+        </div>`);
+      el.querySelector('[data-reessayer]').addEventListener('click', () => { fermer(); btn.click(); });
+      el.querySelector('[data-photo-aide]').addEventListener('click', () => { fermer(); photo.querySelector('input').click(); });
+    };
     btn.addEventListener('click', async () => {
       btn.disabled = true;
+      // Bloquée d'avance pour ce site : on explique tout de suite comment débloquer
+      const etat = await Scanner.etatPermission();
+      if (etat === 'denied') { btn.disabled = false; aideAutorisation('La caméra est bloquée pour ce site.'); return; }
+      // Première fois : Chrome / Safari va afficher sa fenêtre d'autorisation
+      let indice = null;
+      if (etat !== 'granted') {
+        indice = document.createElement('div');
+        indice.className = 'indice-autorisation';
+        indice.innerHTML = `${ic('alerte', 'ic-sm')}<span>Touchez <b>« Autoriser »</b> dans la fenêtre ${Scanner.IOS ? 'de Safari' : 'de Chrome'} pour utiliser la caméra.</span>`;
+        viseur.appendChild(indice);
+      }
       try {
         arreterCamera = await Scanner.demarrer(viseur, surCode);
+        indice?.remove();
         btn.classList.add('cache');
         const barre = document.createElement('div');
         barre.className = 'actions-viseur';
@@ -247,8 +272,10 @@
         const obs = new MutationObserver(() => { if (!viseur.classList.contains('actif')) { obs.disconnect(); remettre(); } });
         obs.observe(viseur, { attributes: true, attributeFilter: ['class'] });
       } catch (err) {
-        toast(err.message || 'Caméra indisponible. Utilisez « Photo de l\'étiquette » ou tapez le numéro.', 'erreur', { duree: 9000 });
+        indice?.remove();
         photo.classList.add('btn-ocre');
+        if (err.code === 'sans_camera') toast(err.message, 'erreur', { duree: 9000 });
+        else aideAutorisation(err.message);
       } finally { btn.disabled = false; }
     });
   }

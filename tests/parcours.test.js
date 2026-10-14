@@ -1032,5 +1032,9 @@ test('toutes les formules d\'envoi : 2 sens × express/avion/bateau × agence/do
   assert.ok(tdb.lignes.filter(l => l.mode === 'express').reduce((a, l) => a + l.nb, 0) >= 10);
   assert.ok(tdb.agences.find(a => a.code === 'PARIS').deposes > 0);
   assert.ok(tdb.clients.length > 0);
+  assert.ok(tdb.ca.eur > 0 && tdb.ca.nbFactures > 0, 'chiffre d\'affaires facturé');
+  assert.strictEqual(tdb.ca.parMois.length, 12);
+  assert.ok(tdb.ca.parNature.some(n => n.nature === 'transport'));
+  assert.ok(tdb.ca.creancesEur > 0, 'reste à encaisser (paiement à l\'arrivée)');
   assert.strictEqual((await appel('GET', '/admin/tableau', null, client)).status, 403);
 });

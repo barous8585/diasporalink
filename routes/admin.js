@@ -34,7 +34,8 @@ router.get('/tableau', ah(async (req, res) => {
   const dans = (d, a, b) => d && new Date(d) >= a && new Date(d) < b;
   const cleJour = (d) => new Date(d).toISOString().slice(0, 10);
 
-  const colis = await Colis.find({ $or: [{ updatedAt: { $gte: debutPrec } }, { statut: { $nin: [STATUTS.REMIS, STATUTS.ANNULE] } }] })
+  const debutLecture = new Date(Math.min(debutPrec, new Date(maintenant.getFullYear(), maintenant.getMonth() - 11, 1)));
+  const colis = await Colis.find({ $or: [{ updatedAt: { $gte: debutLecture } }, { statut: { $nin: [STATUTS.REMIS, STATUTS.ANNULE] } }] })
     .select('numeroSuivi statut sens mode depot guichet expediteur destinataire poidsReel poidsEstime tarif paiements historique createdAt ramassage livraison arriveGuichetLe fraisDouaneGnf avoirsGnf declarations')
     .lean();
 
@@ -51,7 +52,13 @@ router.get('/tableau', ah(async (req, res) => {
   const clients = {};
   const delais = { express: [], air: [], mer: [] };
   const bloques = [];
-  let impayesGuichet = 0, impayesGuichetGnf = 0, domicileCaEur = 0, coursesFaites = 0;
+  let impayesGuichet = 0, impayesGuichetGnf = 0, domicileCaEur = 0, coursesFaites = 0, creancesEur = 0, creancesNb = 0;
+  // 12 derniers mois : encaissé (paiements) et facturé (factures)
+  const mois = [];
+  const cleMois = (d) => { d = new Date(d); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  for (let k = 11; k >= 0; k--) mois.push(cleMois(new Date(maintenant.getFullYear(), maintenant.getMonth() - k, 1)));
+  const parMois = Object.fromEntries(mois.map(m => [m, { factureEur: 0, encaisseEur: 0 }]));
+  const debut12 = new Date(maintenant.getFullYear(), maintenant.getMonth() - 11, 1);
   const seuilGarde = config.magasinage?.joursGratuits ?? 10;
 
   for (const c of colis) {
@@ -87,8 +94,15 @@ router.get('/tableau', ah(async (req, res) => {
         const ag = agences[p.lieu]; if (ag) ag.encaisse[p.devise] = (ag.encaisse[p.devise] || 0) + p.montant;
         if (p.objet === 'domicile') domicileCaEur += e;
       } else if (dans(p.le, debutPrec, debut)) kpi.encaisseEurPrec += e;
+      const m = p.le && cleMois(p.le);
+      if (parMois[m]) parMois[m].encaisseEur += e;
     }
     for (const t of ['ramassage', 'livraison']) if (dans(c[t]?.faiteLe, debut, maintenant)) coursesFaites++;
+    // Ce que les clients doivent encore (colis pesés, pas terminés)
+    if (![STATUTS.REMIS, STATUTS.ANNULE].includes(c.statut) && !c.tarif?.estime) {
+      const sd = calculerSolde(c, config);
+      if (sd.soldeGnf > 0) { creancesNb++; creancesEur += sd.soldeGnf / taux; }
+    }
     // État actuel
     if ([STATUTS.PRET, STATUTS.EN_LIVRAISON].includes(c.statut)) {
       const ag = agences[c.guichet];
@@ -101,6 +115,29 @@ router.get('/tableau', ah(async (req, res) => {
     const immobile = (maintenant - new Date(dernier)) / 86400000;
     const limite = { reserve: 14, depose: 5, charge: 7, en_transit: c.mode === 'mer' ? 50 : c.mode === 'express' ? 4 : 10, arrive: 5, acheminement: 4, en_livraison: 2 }[c.statut];
     if (limite && immobile > limite) bloques.push({ numeroSuivi: c.numeroSuivi, statut: c.statut, mode: c.mode, jours: Math.floor(immobile), expediteur: c.expediteur?.nom, lieu: c.statut === 'reserve' || c.statut === 'depose' || c.statut === 'charge' ? c.depot : c.guichet });
+  }
+
+  // Chiffre d'affaires facturé : factures moins avoirs, par devise, par nature et par agence
+  const Facture = require('../models/Facture');
+  const factures = await Facture.find({ date: { $gte: new Date(Math.min(debutPrec, debut12)) } }).select('type date devise taux totalTTC totalHT totalTVA lignes agence').lean();
+  const NATURE = (cle) => (String(cle).startsWith('article:') ? 'articles' : ({ transport: 'transport', supplement: 'transport', arrondi: 'transport', assurance: 'assurance', ramassage: 'domicile', livraison: 'domicile', garde: 'garde', douane: 'douane', remboursement: 'avoirs' })[cle] || 'autres');
+  const ca = { ttc: { EUR: 0, GNF: 0 }, eur: 0, eurPrec: 0, htEur: 0, tvaEur: 0, avoirsEur: 0, nbFactures: 0, parNature: {}, parAgence: {} };
+  for (const f of factures) {
+    const signe = f.type === 'avoir' ? -1 : 1;
+    const e = enEur(f.totalTTC || 0, f.devise, f.taux) * signe;
+    const m = cleMois(f.date);
+    if (parMois[m]) parMois[m].factureEur += e;
+    if (dans(f.date, debut, maintenant)) {
+      ca.ttc[f.devise] = (ca.ttc[f.devise] || 0) + (f.totalTTC || 0) * signe;
+      ca.eur += e; ca.htEur += enEur(f.totalHT || 0, f.devise, f.taux) * signe; ca.tvaEur += enEur(f.totalTVA || 0, f.devise, f.taux) * signe;
+      if (f.type === 'avoir') ca.avoirsEur += -e; else ca.nbFactures++;
+      for (const l of f.lignes || []) {
+        const n = NATURE(l.cle);
+        ca.parNature[n] = (ca.parNature[n] || 0) + enEur(l.montantTTC || 0, f.devise, f.taux) * (f.type === 'avoir' ? -1 : 1);
+      }
+      const code = f.agence?.code || 'EN_LIGNE';
+      ca.parAgence[code] = (ca.parAgence[code] || 0) + e;
+    } else if (dans(f.date, debutPrec, debut)) ca.eurPrec += e;
   }
 
   const parStatut = await Colis.aggregate([{ $group: { _id: '$statut', nb: { $sum: 1 } } }]);
@@ -119,6 +156,14 @@ router.get('/tableau', ah(async (req, res) => {
   res.json({
     succes: true, jours, taux: tauxDuJour, tauxMisAJourLe: config.tauxMisAJourLe,
     kpi: Object.fromEntries(Object.entries(kpi).map(([k, v]) => [k, r2(v)])),
+    ca: {
+      ttc: { EUR: r2(ca.ttc.EUR || 0), GNF: Math.round(ca.ttc.GNF || 0) }, eur: r2(ca.eur), eurPrec: r2(ca.eurPrec), htEur: r2(ca.htEur), tvaEur: r2(ca.tvaEur),
+      avoirsEur: r2(ca.avoirsEur), nbFactures: ca.nbFactures,
+      parNature: Object.entries(ca.parNature).filter(([n]) => n !== 'avoirs').map(([n, v]) => ({ nature: n, eur: r2(v) })).sort((a, b) => b.eur - a.eur),
+      parAgence: Object.entries(ca.parAgence).map(([code, v]) => ({ code, eur: r2(v) })).sort((a, b) => b.eur - a.eur),
+      creancesEur: r2(creancesEur), creancesNb,
+      parMois: mois.map(m => ({ mois: m, factureEur: r2(parMois[m].factureEur), encaisseEur: r2(parMois[m].encaisseEur) })),
+    },
     encaisse: { EUR: r2(encaisse.EUR || 0), GNF: Math.round(encaisse.GNF || 0) },
     parMethode: Object.entries(parMethode).map(([k, v]) => ({ methode: k, eur: r2(v) })).sort((a, b) => b.eur - a.eur),
     parJour: serieJours.map(j => ({ jour: j, ...parJour[j], encaisseEur: r2(parJour[j].encaisseEur) })),

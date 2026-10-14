@@ -67,6 +67,18 @@
     }
   }
 
+  // État de l'autorisation caméra pour ce site : 'granted', 'prompt', 'denied' ou 'inconnu'
+  async function etatPermission() {
+    try { return (await navigator.permissions.query({ name: 'camera' })).state; } catch { return 'inconnu'; }
+  }
+  // Étapes pour autoriser la caméra, selon le téléphone
+  function etapesAutorisation() {
+    if (DANS_APPLI) return [`Touchez le menu ⋮ en haut à droite`, `Choisissez « Ouvrir dans ${IOS ? 'Safari' : 'Chrome'} »`, 'Reconnectez-vous puis rouvrez la caméra'];
+    if (IOS) return ['Ouvrez l\'app Réglages de l\'iPhone', 'Descendez jusqu\'à Safari, puis Caméra', 'Choisissez « Autoriser », revenez ici et réessayez'];
+    if (ANDROID) return ['Touchez le cadenas (ou ⓘ) à gauche de l\'adresse du site', 'Autorisations → Caméra → « Autoriser »', 'Si rien ne change : Paramètres du téléphone → Applications → Chrome → Autorisations → Appareil photo → « Autoriser »', 'Vérifiez aussi que l\'interrupteur « Accès à la caméra » des réglages rapides est activé'];
+    return ['Cliquez sur l\'icône caméra ou le cadenas dans la barre d\'adresse', 'Autorisez la caméra pour ce site', 'Rechargez la page'];
+  }
+
   async function ouvrirCamera() {
     if (!window.isSecureContext) throw new Error('La caméra ne marche que sur une adresse sécurisée (https).');
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -218,5 +230,5 @@
     return arreter;
   }
 
-  window.Scanner = { demarrer, lirePhoto, bip, extraireNumero, messageErreur };
+  window.Scanner = { demarrer, lirePhoto, bip, extraireNumero, messageErreur, etatPermission, etapesAutorisation, IOS, ANDROID };
 })();
