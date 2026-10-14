@@ -82,6 +82,7 @@ app.use('/api/config',       require('./routes/config'));
 app.use('/api/colis',        require('./routes/colis'));
 app.use('/api/paiements',    require('./routes/paiements'));
 app.use('/api/agent',        require('./routes/agent'));
+app.use('/api/livreur',      require('./routes/livreur'));
 app.use('/api/lots',         require('./routes/lots'));
 app.use('/api/caisse',       require('./routes/caisse'));
 app.use('/api/admin',        require('./routes/admin'));

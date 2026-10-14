@@ -147,10 +147,67 @@ router.patch('/colis/:numero', ah(async (req, res) => {
     if (!nouvelle) return res.status(400).json({ succes: false, message: 'Agence inconnue.' });
     if (nouvelle.pays !== svc.paysArriveeDe(colis.sens)) return res.status(400).json({ succes: false, message: 'L\'agence de retrait doit rester dans le pays de destination.' });
     colis.guichet = b.guichet;
+    if (colis.livraison?.demande && colis.livraison.statut !== 'annulee' && colis.livraison.agence !== b.guichet) {
+      if (colis.statut === STATUTS.EN_LIVRAISON) return res.status(409).json({ succes: false, message: 'Le colis est en cours de livraison.' });
+      colis.livraison.livreur = undefined; colis.livraison.livreurNom = undefined; colis.livraison.statut = 'a_planifier';
+      await require('../services/domicileService').demanderCourse(colis, 'livraison', { demande: true, adresse: colis.livraison.adresse, jour: colis.livraison.jour, moment: colis.livraison.moment });
+    }
   }
   if (b.notesAdmin !== undefined) colis.notesAdmin = b.notesAdmin;
   if (b.fraisDouaneGnf !== undefined) colis.fraisDouaneGnf = Math.max(0, Math.round(parseFloat(b.fraisDouaneGnf) || 0));
   colis.historique.push({ label: 'Modifié par l\'administration', agent: req.user._id, le: new Date() });
+  await colis.save();
+  res.json({ succes: true, colis: await svc.vueComplete(colis) });
+}));
+
+// ── Courses à domicile ──────────────────────────────────────
+const dom = require('../services/domicileService');
+const User = require('../models/User');
+
+// GET /api/admin/courses?agence= ── courses ouvertes + livreurs pour l'assignation
+router.get('/courses', ah(async (req, res) => {
+  const [courses, livreurs] = await Promise.all([
+    dom.coursesOuvertes({ agence: req.query.agence || undefined }),
+    User.find({ role: ROLES.LIVREUR, actif: true }).select('prenom nom telephone lieu').lean(),
+  ]);
+  // Courses terminées récemment, avec l'écart GPS (contrôle)
+  const il7j = new Date(Date.now() - 7 * 86400000);
+  const config = await Config.get();
+  const faites = [];
+  for (const type of dom.COURSES) {
+    const liste = await Colis.find({ [`${type}.statut`]: 'faite', [`${type}.faiteLe`]: { $gte: il7j } }).sort({ [`${type}.faiteLe`]: -1 }).limit(100);
+    for (const c of liste) faites.push(await dom.vueCourse(c, type, config));
+  }
+  faites.sort((a, b) => new Date(b.faiteLe) - new Date(a.faiteLe));
+  res.json({ succes: true, courses, livreurs, faites });
+}));
+
+// POST /api/admin/courses/assigner ── { numero, type, livreur: id | null }
+router.post('/courses/assigner', [
+  body('numero').trim().notEmpty(),
+  body('type').isIn(dom.COURSES),
+], valider, ah(async (req, res) => {
+  let livreur = null;
+  if (req.body.livreur) {
+    livreur = await User.findOne({ _id: req.body.livreur, role: ROLES.LIVREUR, actif: true });
+    if (!livreur) return res.status(404).json({ succes: false, message: 'Livreur introuvable.' });
+  }
+  const colis = await dom.assigner(req.body.numero, req.body.type, livreur, { par: req.user });
+  res.json({ succes: true, course: await dom.vueCourse(colis, req.body.type, await Config.get()) });
+}));
+
+// POST /api/admin/courses/adresse ── { numero, type, demande, adresse: {…, lien}, jour, moment }
+router.post('/courses/adresse', [
+  body('numero').trim().notEmpty(),
+  body('type').isIn(dom.COURSES),
+], valider, ah(async (req, res) => {
+  const colis = await Colis.findOne({ numeroSuivi: req.body.numero.trim().toUpperCase() });
+  if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
+  if ([STATUTS.REMIS, STATUTS.ANNULE].includes(colis.statut)) return res.status(409).json({ succes: false, message: 'Colis terminé.' });
+  if (req.body.type === 'ramassage' && colis.statut !== STATUTS.RESERVE) return res.status(409).json({ succes: false, message: 'Colis déjà déposé.' });
+  await dom.demanderCourse(colis, req.body.type, req.body.demande === false ? { demande: false } : { ...req.body, demande: true });
+  colis.markModified(req.body.type);
+  colis.historique.push({ label: 'Course modifiée par l\'administration', agent: req.user._id, le: new Date() });
   await colis.save();
   res.json({ succes: true, colis: await svc.vueComplete(colis) });
 }));

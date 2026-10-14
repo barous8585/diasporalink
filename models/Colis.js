@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const Compteur = require('./Compteur');
 const {
-  STATUTS, STATUTS_LABELS, TYPES_COLIS, MODES, METHODES_PAIEMENT, DEVISES, SENS,
+  STATUTS, STATUTS_LABELS, TYPES_COLIS, MODES, METHODES_PAIEMENT, DEVISES, SENS, STATUTS_COURSE,
 } = require('../config/constants');
 
 const personneSchema = new mongoose.Schema({
@@ -29,6 +29,37 @@ const evenementSchema = new mongoose.Schema({
   lieu:   { type: String },
   agent:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   le:     { type: Date, default: Date.now },
+}, { _id: false });
+
+// Course à domicile : ramassage chez l'expéditeur ou livraison chez le destinataire
+const pointSchema = new mongoose.Schema({ lat: Number, lng: Number, precision: Number, le: Date }, { _id: false });
+const courseSchema = new mongoose.Schema({
+  demande:  { type: Boolean, default: false },
+  statut:   { type: String, enum: Object.values(STATUTS_COURSE), default: STATUTS_COURSE.A_PLANIFIER },
+  agence:   { type: String },                 // agence d'où part le livreur
+  adresse: {
+    nom:       String,                        // personne à voir sur place
+    telephone: String,
+    ville:     String,
+    commune:   String,
+    quartier:  String,
+    repere:    String,                        // « derrière la mosquée de… », étage, portail bleu
+    position:  pointSchema,
+  },
+  jour:     { type: Date },                   // jour souhaité
+  moment:   { type: String },                 // matin | apres_midi | soir
+  distanceKm: Number,
+  prix:     Number,                           // dans la devise du pays de la course
+  devise:   String,
+  prixGnf:  Number,                           // compté dans le solde du colis
+  livreur:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  livreurNom: String,
+  assigneeLe: Date,
+  faiteLe:  Date,
+  // Position du téléphone du livreur au moment où il valide, et écart avec l'adresse
+  positionLivreur: pointSchema,
+  ecartM:   Number,
+  echecs:   [{ le: Date, motif: String, livreur: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, _id: false }],
 }, { _id: false });
 
 const colisSchema = new mongoose.Schema({
@@ -67,6 +98,10 @@ const colisSchema = new mongoose.Schema({
   },
   fraisDouaneGnf: { type: Number, default: 0 },
   payeurArrivee:  { type: Boolean, default: false }, // le destinataire paie à Conakry
+
+  // Courses à domicile (facultatives)
+  ramassage: { type: courseSchema, default: undefined },
+  livraison: { type: courseSchema, default: undefined },
   paiements:      [paiementSchema],
 
   // Statut
@@ -81,6 +116,7 @@ const colisSchema = new mongoose.Schema({
     le:           Date,
     agent:        { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     retirePar:    { type: String, enum: ['destinataire', 'tiers'] },
+    aDomicile:    Boolean,                // remis par un livreur chez le destinataire
     nomRetrait:   String,
     pieceVerifiee:Boolean,
     signature:    String, // image PNG en data URL
@@ -107,6 +143,8 @@ colisSchema.pre('aggregate', function () {
 });
 
 colisSchema.index({ 'destinataire.telephone': 1 });
+colisSchema.index({ 'ramassage.demande': 1, 'ramassage.statut': 1 });
+colisSchema.index({ 'livraison.demande': 1, 'livraison.statut': 1 });
 colisSchema.index({ 'expediteur.telephone': 1 });
 
 colisSchema.virtual('statutLabel').get(function () {

@@ -96,7 +96,7 @@ router.post('/remise', [
   body('numero').trim().notEmpty(),
   body('code').trim().isLength({ min: 4, max: 4 }).withMessage('Code à 4 chiffres'),
 ], valider, ah(async (req, res) => {
-  const resultat = await svc.avecOperation(req.body.opId, req.user, 'remise', () => svc.remettre(req.user, req.body));
+  const resultat = await svc.avecOperation(req.body.opId, req.user, 'remise', () => svc.remettre(req.user, { ...req.body, aDomicile: false }));
   res.json({ succes: true, ...resultat });
 }));
 

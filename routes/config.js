@@ -3,7 +3,7 @@ const Config = require('../models/Config');
 const { auth, role } = require('../middleware/auth');
 const { ah } = require('../utils/http');
 const {
-  APP_NOM, APP_NOM_COURT, ENTREPRISE, MODES_INFO, TYPES_COLIS, METHODES_PAIEMENT, STATUTS_LABELS, ROLES, PAYS, SENS,
+  APP_NOM, APP_NOM_COURT, ENTREPRISE, MODES_INFO, TYPES_COLIS, METHODES_PAIEMENT, STATUTS_LABELS, ROLES, PAYS, SENS, MOMENTS,
 } = require('../config/constants');
 
 // ── GET /api/config ── données publiques pour les 3 apps
@@ -24,15 +24,28 @@ router.get('/', ah(async (req, res) => {
     tauxEurGnf: c.tauxEurGnf,
     tauxMisAJourLe: c.tauxMisAJourLe,
     magasinage: c.magasinage,
+    domicile: c.domicile,
+    moments: MOMENTS,
     agences: (c.agences || []).filter(a => a.actif !== false),
     methodesPaiement: METHODES_PAIEMENT,
     statuts: STATUTS_LABELS,
     // Même forme que la config serveur : utilisée par KolisTarif côté navigateur
     regles: {
       tarifs: c.tarifs, surcharges: c.surcharges, tauxAssurance: c.tauxAssurance,
-      tauxEurGnf: c.tauxEurGnf, magasinage: c.magasinage,
+      tauxEurGnf: c.tauxEurGnf, magasinage: c.magasinage, domicile: c.domicile,
     },
   });
+}));
+
+// ── GET /api/config/position?lien= ── coordonnées d'un lien Google Maps / WhatsApp
+// (les liens courts maps.app.goo.gl doivent être suivis côté serveur)
+const rateLimit = require('express-rate-limit');
+const positionLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { succes: false, message: 'Trop de demandes, patientez une minute.' } });
+router.get('/position', positionLimiter, ah(async (req, res) => {
+  const lien = String(req.query.lien || '').slice(0, 2000);
+  const position = await require('../services/domicileService').positionDepuisLien(lien);
+  if (!position) return res.status(422).json({ succes: false, message: 'Position non reconnue dans ce lien.' });
+  res.json({ succes: true, position });
 }));
 
 // ── GET /api/config/admin ── config complète (agences fermées comprises)
@@ -92,7 +105,36 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
     if (f !== undefined) doc.magasinage.fraisJourGnf = Math.round(f);
     if (fe !== undefined) doc.magasinage.fraisJourEur = fe;
   }
+  if (b.domicile && typeof b.domicile === 'object') {
+    const dom = JSON.parse(JSON.stringify(actuel.domicile || {}));
+    const maj = nombre(b.domicile.majoration, 1);
+    if (maj !== undefined && maj <= 3) dom.majoration = maj;
+    for (const p of Object.keys(PAYS)) {
+      const t = b.domicile[p];
+      if (!t) continue;
+      dom[p] = dom[p] || {};
+      if (typeof t.actif === 'boolean') dom[p].actif = t.actif;
+      for (const k of ['base', 'parKm', 'plafond', 'rayonMaxKm']) {
+        const v = nombre(t[k]);
+        if (v !== undefined) dom[p][k] = v;
+      }
+    }
+    doc.domicile = dom;
+    doc.markModified('domicile');
+  }
   if (Array.isArray(b.agences)) {
+    const { positionDepuisLien } = require('../services/domicileService');
+    for (const a of b.agences) {
+      // Position : { lat, lng } ou lien Google Maps collé par l'admin
+      if (a.lienPosition && String(a.lienPosition).trim()) {
+        const pos = await positionDepuisLien(a.lienPosition);
+        if (!pos) return res.status(400).json({ succes: false, message: `Position de l'agence ${a.nom || a.code} non reconnue. Collez un lien Google Maps ou « latitude, longitude ».` });
+        a.position = pos;
+      }
+      const lat = parseFloat(a.position?.lat), lng = parseFloat(a.position?.lng);
+      a.position = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : undefined;
+      delete a.lienPosition;
+    }
     const agences = b.agences
       .map(a => ({ ...a, code: String(a.code || '').toUpperCase().trim(), plateforme: !!a.plateforme, actif: a.actif !== false }))
       .filter(a => codeValide(a.code) && a.nom && PAYS[a.pays]);

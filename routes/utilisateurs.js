@@ -30,7 +30,7 @@ router.post('/equipe', auth, role(ROLES.ADMIN), [
   body('telephone').trim().notEmpty().withMessage('Téléphone requis'),
   body('prenom').trim().notEmpty().withMessage('Prénom requis'),
   body('nom').trim().notEmpty().withMessage('Nom requis'),
-  body('role').isIn([ROLES.AGENT, ROLES.ADMIN]).withMessage('Rôle invalide'),
+  body('role').isIn([ROLES.AGENT, ROLES.LIVREUR, ROLES.ADMIN]).withMessage('Rôle invalide'),
   body('lieu').trim().notEmpty().withMessage('Lieu de travail requis'),
   body('motDePasse').optional({ values: 'falsy' }).isLength({ min: 8, max: 100 }).withMessage('Mot de passe : 8 caractères minimum'),
 ], valider, ah(async (req, res) => {
@@ -60,7 +60,7 @@ router.patch('/equipe/:id', auth, role(ROLES.ADMIN), ah(async (req, res) => {
     if (!(await Config.lieu(req.body.lieu))) return res.status(400).json({ succes: false, message: 'Lieu inconnu.' });
     user.lieu = req.body.lieu;
   }
-  if (req.body.role && [ROLES.AGENT, ROLES.ADMIN, ROLES.CLIENT].includes(req.body.role)) user.role = req.body.role;
+  if (req.body.role && [ROLES.AGENT, ROLES.LIVREUR, ROLES.ADMIN, ROLES.CLIENT].includes(req.body.role)) user.role = req.body.role;
   if (typeof req.body.actif === 'boolean') {
     user.actif = req.body.actif;
     if (!user.actif) user.jetonVersion = (user.jetonVersion || 0) + 1; // coupe ses sessions ouvertes
