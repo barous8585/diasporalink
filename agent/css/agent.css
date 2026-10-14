@@ -101,3 +101,7 @@ main > .pile { --gap: 16px; }
 .dernier-scan .avant { color: var(--gris); border-top: 1px solid rgba(0,0,0,.08); padding-top: 6px; }
 .scan.info .ico { background: var(--vert-doux); color: var(--marine); }
 .scan > .tres-petit.muet { white-space: nowrap; }
+
+.viseur .btn-photo-etiquette { position: absolute; top: calc(50% + 44px); z-index: 1; cursor: pointer; background: #fff; color: var(--marine); border-color: #fff; }
+.viseur .btn-photo-etiquette.btn-ocre { background: var(--or); border-color: var(--or); }
+.viseur.actif .btn-photo-etiquette { display: none; }

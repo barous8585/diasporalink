@@ -6,8 +6,8 @@ self.addEventListener('push', (event) => {
   try { d = event.data ? event.data.json() : {}; } catch { d = { corps: event.data && event.data.text() }; }
   event.waitUntil(self.registration.showNotification(d.titre || 'TMS', {
     body: d.corps || '',
-    icon: 'icons/icon-192.png',
-    badge: 'commun/badge-96.png',
+    icon: 'commun/notif-256.png',     // logo TMS en grand
+    badge: 'commun/badge-96.png',     // silhouette du camion dans la barre d'état (Android)
     data: { url: d.url || './' },
     tag: d.etiquette || `tms-${Date.now()}`,
     renotify: true,

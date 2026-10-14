@@ -12,6 +12,8 @@ const fichiers = [
   ['shared/img/logo.png', 'commun/logo.png'],
   ['shared/img/embleme.png', 'commun/embleme.png'],
   ['shared/img/badge-96.png', 'commun/badge-96.png'],
+  ['shared/img/notif-256.png', 'commun/notif-256.png'],
+  ['shared/img/apple-touch-icon.png', 'apple-touch-icon.png'],
   ['shared/sw-push.js', 'commun/sw-push.js'],
 ];
 

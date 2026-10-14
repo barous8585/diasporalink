@@ -210,6 +210,20 @@
   // Bouton « Ouvrir la caméra » d'un viseur : ouvrir / fermer, lampe torche, erreurs claires
   function brancherCamera(viseur, surCode) {
     const btn = viseur.querySelector('[data-camera]');
+    // Solution de secours qui marche sur tous les téléphones : photographier l'étiquette
+    // avec l'appareil photo, puis lire le QR code de la photo.
+    const photo = document.createElement('label');
+    photo.className = 'btn btn-petit btn-photo-etiquette';
+    photo.innerHTML = `${ic('scan', 'ic-sm')} <span>Photo de l'étiquette</span><input type="file" accept="image/*" capture="environment" hidden>`;
+    viseur.appendChild(photo);
+    photo.querySelector('input').addEventListener('change', async (e) => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      const lib = photo.querySelector('span'); lib.textContent = 'Lecture du QR code…';
+      try { surCode(await Scanner.lirePhoto(f)); }
+      catch (err) { Scanner.bip(false); toast(err.message, 'erreur'); }
+      finally { lib.textContent = 'Photo de l\'étiquette'; }
+    });
     const remettre = () => {
       viseur.querySelector('.actions-viseur')?.remove();
       btn.classList.remove('cache');
@@ -233,7 +247,8 @@
         const obs = new MutationObserver(() => { if (!viseur.classList.contains('actif')) { obs.disconnect(); remettre(); } });
         obs.observe(viseur, { attributes: true, attributeFilter: ['class'] });
       } catch (err) {
-        toast(err.message || 'Caméra indisponible. Tapez le numéro.', 'erreur');
+        toast(err.message || 'Caméra indisponible. Utilisez « Photo de l\'étiquette » ou tapez le numéro.', 'erreur', { duree: 9000 });
+        photo.classList.add('btn-ocre');
       } finally { btn.disabled = false; }
     });
   }

@@ -152,14 +152,16 @@
   const ic = (nom, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${TRACES[nom] || ''}</svg>`;
 
   // ── Toasts ──
-  function toast(message, type = '') {
+  function toast(message, type = '', { duree } = {}) {
     let zone = document.getElementById('toast');
     if (!zone) { zone = document.createElement('div'); zone.id = 'toast'; zone.setAttribute('role', 'status'); zone.setAttribute('aria-live', 'polite'); document.body.appendChild(zone); }
     const t = document.createElement('div');
     t.className = `toast ${type}`;
     t.textContent = message;
     zone.appendChild(t);
-    setTimeout(() => t.remove(), type === 'erreur' ? 5000 : 3000);
+    // Touché : disparaît tout de suite ; les longs messages restent plus longtemps
+    t.addEventListener('click', () => t.remove());
+    setTimeout(() => t.remove(), duree || (type === 'erreur' ? Math.max(5000, message.length * 60) : 3000));
   }
 
   // ── Modale simple ──

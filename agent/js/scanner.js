@@ -40,31 +40,44 @@
   }
 
   // Messages compréhensibles quand la caméra ne s'ouvre pas
+  const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const ANDROID = /Android/.test(navigator.userAgent);
+  // Navigateur intégré à une appli (Facebook, Instagram, TikTok, Snapchat…) : souvent sans caméra
+  const DANS_APPLI = /FBAN|FBAV|Instagram|TikTok|Snapchat|Line\/|; wv\)/.test(navigator.userAgent);
   function messageErreur(e) {
-    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const astuce = ' Utilisez « Photo de l\'étiquette » en attendant.';
+    if (DANS_APPLI) return `Ce navigateur intégré bloque la caméra. Ouvrez la page dans ${IOS ? 'Safari' : 'Chrome'} (menu ⋮ → « Ouvrir dans le navigateur »).${astuce}`;
     switch (e?.name) {
       case 'NotAllowedError':
       case 'SecurityError':
-        return ios
-          ? 'Caméra refusée. Ouvrez Réglages → Safari → Caméra → Autoriser, puis rechargez la page.'
-          : 'Caméra refusée. Touchez le cadenas à gauche de l\'adresse → Autorisations → Caméra → Autoriser, puis réessayez.';
+        return IOS
+          ? `Caméra refusée. Réglages → Safari → Caméra → « Autoriser », puis rechargez la page.${astuce}`
+          : `Caméra refusée. Touchez le cadenas à gauche de l'adresse → Autorisations → Caméra → Autoriser. Vérifiez aussi Paramètres du téléphone → Applications → Chrome → Autorisations → Appareil photo.${astuce}`;
       case 'NotFoundError':
       case 'OverconstrainedError':
-        return 'Aucune caméra trouvée sur cet appareil. Tapez le numéro ou utilisez une douchette.';
+        return ANDROID
+          ? `Le téléphone ne donne pas la caméra au navigateur. Vérifiez : 1) Paramètres → Applications → Chrome → Autorisations → Appareil photo : Autoriser ; 2) l'interrupteur « Accès à la caméra » des réglages rapides est activé.${astuce}`
+          : IOS ? `La caméra n'est pas accessible. Réglages → Safari → Caméra → « Autoriser », et vérifiez Réglages → Temps d'écran → Restrictions.${astuce}`
+          : `Aucune caméra trouvée sur cet appareil.${astuce}`;
       case 'NotReadableError':
       case 'AbortError':
-        return 'La caméra est déjà utilisée par une autre application. Fermez-la et réessayez.';
+        return `La caméra est utilisée par une autre application (appel vidéo, appareil photo…). Fermez-la et réessayez.${astuce}`;
       default:
-        return e?.message || 'Caméra indisponible. Tapez le numéro.';
+        return `${e?.message || 'Caméra indisponible.'}${astuce}`;
     }
   }
 
   async function ouvrirCamera() {
     if (!window.isSecureContext) throw new Error('La caméra ne marche que sur une adresse sécurisée (https).');
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Ce navigateur ne donne pas accès à la caméra. Essayez Chrome ou Safari à jour.');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      const err = new Error(DANS_APPLI ? messageErreur({}) : `Ce navigateur ne donne pas accès à la caméra en direct. Utilisez « Photo de l'étiquette », ou ouvrez la page dans ${IOS ? 'Safari' : 'Chrome'}.`);
+      err.code = 'sans_camera'; throw err;
+    }
+    // Du plus précis au plus simple : certains téléphones refusent une demande trop détaillée
     const essais = [
-      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
-      { video: true, audio: false }, // ordinateur : n'importe quelle webcam
+      { video: { facingMode: { ideal: 'environment' } }, audio: false },
+      { video: { facingMode: 'environment' }, audio: false },
+      { video: true, audio: false },
     ];
     let derniere;
     for (const c of essais) {
@@ -73,7 +86,20 @@
         if (e.name === 'NotAllowedError' || e.name === 'SecurityError') break;
       }
     }
-    throw new Error(messageErreur(derniere));
+    // Dernier recours : demander chaque caméra par son identifiant (caméra arrière d'abord)
+    if (derniere?.name !== 'NotAllowedError' && navigator.mediaDevices.enumerateDevices) {
+      try {
+        const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+        cams.sort((a, b) => (/back|rear|arri|environment|0$/i.test(b.label) ? 1 : 0) - (/back|rear|arri|environment|0$/i.test(a.label) ? 1 : 0));
+        for (const cam of cams) {
+          try { return await navigator.mediaDevices.getUserMedia({ video: cam.deviceId ? { deviceId: { exact: cam.deviceId } } : true, audio: false }); } catch (e) { derniere = e; }
+        }
+      } catch {}
+    }
+    const err = new Error(messageErreur(derniere));
+    err.code = derniere?.name || 'inconnue';
+    console.warn('Caméra :', derniere?.name, derniere?.message);
+    throw err;
   }
 
   async function creerDecodeur() {
@@ -99,6 +125,46 @@
       const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
       return window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' })?.data || null;
     };
+  }
+
+  /**
+   * Lit le QR code d'une photo prise avec l'appareil photo du téléphone
+   * (marche partout, même quand la caméra en direct est bloquée).
+   * Renvoie le numéro, ou lève une erreur si aucun code n'est lisible.
+   */
+  async function lirePhoto(fichier) {
+    let source;
+    try { source = await createImageBitmap(fichier, { imageOrientation: 'from-image' }); }
+    catch {
+      source = await new Promise((ok, ko) => {
+        const img = new Image(); const url = URL.createObjectURL(fichier);
+        img.onload = () => { URL.revokeObjectURL(url); ok(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('Photo illisible.')); };
+        img.src = url;
+      });
+    }
+    const W = source.width, H = source.height;
+    if ('BarcodeDetector' in window) {
+      try {
+        const d = new window.BarcodeDetector({ formats: ['qr_code', 'code_128', 'code_39'] });
+        const r = await d.detect(source);
+        if (r[0]?.rawValue) return extraireNumero(r[0].rawValue);
+      } catch {}
+    }
+    await chargerScript(JSQR);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    // Plusieurs tailles et un recadrage au centre : une photo de téléphone est grande et le QR petit
+    const zones = [[0, 0, W, H, 1200], [0, 0, W, H, 800], [W * 0.2, H * 0.2, W * 0.6, H * 0.6, 1000], [0, 0, W, H, 1800]];
+    for (const [x, y, w, h, max] of zones) {
+      const r = Math.min(1, max / Math.max(w, h));
+      canvas.width = Math.round(w * r); canvas.height = Math.round(h * r);
+      ctx.drawImage(source, x, y, w, h, 0, 0, canvas.width, canvas.height);
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+      if (code?.data) return extraireNumero(code.data);
+    }
+    throw new Error('QR code non lu sur la photo. Reprenez-la de plus près, bien à plat et nette, ou tapez le numéro.');
   }
 
   /**
@@ -152,5 +218,5 @@
     return arreter;
   }
 
-  window.Scanner = { demarrer, bip, extraireNumero, messageErreur };
+  window.Scanner = { demarrer, lirePhoto, bip, extraireNumero, messageErreur };
 })();
