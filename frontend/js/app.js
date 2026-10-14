@@ -707,7 +707,7 @@
     const brouillonAdr = stock.lire('brouillon_adresses') || {};
     const optionsAgences = (pays) => {
       const parVille = {};
-      agencesDe(pays).forEach(a => { (parVille[a.ville || '—'] = parVille[a.ville || '—'] || []).push(a); });
+      agencesDe(pays).forEach(a => { (parVille[a.ville || 'Autres'] = parVille[a.ville || 'Autres'] || []).push(a); });
       return Object.entries(parVille).map(([ville, liste]) => `<optgroup label="${esc(ville)}">${liste.map(a => `<option value="${esc(a.code)}">${esc(a.nom)}${a.commune ? ` (${esc(a.commune)})` : ''}</option>`).join('')}</optgroup>`).join('');
     };
 
@@ -1254,7 +1254,7 @@
       return;
     }
     document.querySelectorAll('[data-nom-app]').forEach(el => { el.textContent = CONFIG.app; });
-    document.title = `${CONFIG.app} — Suivi de colis`;
+    document.title = `${CONFIG.app} · Suivi de colis`;
     // Lien de suivi reçu par SMS : /?suivi=TMS-…
     const q = new URLSearchParams(location.search).get('suivi');
     if (q) { history.replaceState(null, '', location.pathname + `#/suivi/${encodeURIComponent(q)}`); }

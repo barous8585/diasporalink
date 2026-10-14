@@ -18,6 +18,124 @@ router.use(auth, role(ROLES.ADMIN));
 
 const echapperRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// ── GET /api/admin/tableau?jours=30 ── tout ce qu'il faut pour piloter l'entreprise
+// Calculé en JavaScript sur les colis de la période (portable, assez rapide pour quelques
+// dizaines de milliers de colis).
+router.get('/tableau', ah(async (req, res) => {
+  const config = await Config.get();
+  const jours = Math.min(Math.max(parseInt(req.query.jours, 10) || 30, 1), 366);
+  const maintenant = new Date();
+  const debut = new Date(maintenant.getTime() - jours * 86400000);
+  const debutPrec = new Date(debut.getTime() - jours * 86400000);
+  const tauxDuJour = config.tauxEurGnf || 10000;
+  const enEur = (m, d, taux) => (d === 'EUR' ? m : m / (taux || tauxDuJour));
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const premier = (c, statut) => (c.historique || []).find(h => h.statut === statut && !h.annule)?.le;
+  const dans = (d, a, b) => d && new Date(d) >= a && new Date(d) < b;
+  const cleJour = (d) => new Date(d).toISOString().slice(0, 10);
+
+  const colis = await Colis.find({ $or: [{ updatedAt: { $gte: debutPrec } }, { statut: { $nin: [STATUTS.REMIS, STATUTS.ANNULE] } }] })
+    .select('numeroSuivi statut sens mode depot guichet expediteur destinataire poidsReel poidsEstime tarif paiements historique createdAt ramassage livraison arriveGuichetLe fraisDouaneGnf avoirsGnf declarations')
+    .lean();
+
+  // Jours de la période (graphiques)
+  const serieJours = [];
+  for (let k = jours - 1; k >= 0; k--) serieJours.push(cleJour(new Date(maintenant.getTime() - k * 86400000)));
+  const parJour = Object.fromEntries(serieJours.map(j => [j, { express: 0, air: 0, mer: 0, encaisseEur: 0 }]));
+
+  const kpi = { deposes: 0, deposesPrec: 0, kg: 0, kgPrec: 0, caEur: 0, caEurPrec: 0, encaisseEur: 0, encaisseEurPrec: 0, remis: 0, remisPrec: 0, reservations: 0, reservationsPrec: 0 };
+  const encaisse = { EUR: 0, GNF: 0 };
+  const parMethode = {};
+  const agences = Object.fromEntries((config.agences || []).map(a => [a.code, { code: a.code, nom: a.nom, pays: a.pays, deposes: 0, kg: 0, caEur: 0, encaisse: { EUR: 0, GNF: 0 }, aRetirer: 0, impayes: 0, impayesGnf: 0, gardeLongue: 0 }]));
+  const lignes = {}; // sens|mode
+  const clients = {};
+  const delais = { express: [], air: [], mer: [] };
+  const bloques = [];
+  let impayesGuichet = 0, impayesGuichetGnf = 0, domicileCaEur = 0, coursesFaites = 0;
+  const seuilGarde = config.magasinage?.joursGratuits ?? 10;
+
+  for (const c of colis) {
+    const taux = c.tarif?.taux || tauxDuJour;
+    const dDepot = premier(c, STATUTS.DEPOSE);
+    const prix = c.tarif && !c.tarif.estime ? (c.tarif.totalEur || 0) : 0;
+    if (dans(c.createdAt, debut, maintenant)) kpi.reservations++;
+    else if (dans(c.createdAt, debutPrec, debut)) kpi.reservationsPrec++;
+    if (dans(dDepot, debut, maintenant)) {
+      kpi.deposes++; kpi.kg += c.poidsReel || 0; kpi.caEur += prix;
+      const j = cleJour(dDepot); if (parJour[j]) parJour[j][c.mode] = (parJour[j][c.mode] || 0) + 1;
+      const ag = agences[c.depot]; if (ag) { ag.deposes++; ag.kg += c.poidsReel || 0; ag.caEur += prix; }
+      const k = `${c.sens || 'FR-GN'}|${c.mode}`;
+      lignes[k] = lignes[k] || { sens: c.sens || 'FR-GN', mode: c.mode, nb: 0, kg: 0, caEur: 0 };
+      lignes[k].nb++; lignes[k].kg += c.poidsReel || 0; lignes[k].caEur += prix;
+      const tel = c.expediteur?.telephone || '?';
+      clients[tel] = clients[tel] || { nom: c.expediteur?.nom, telephone: tel, nb: 0, kg: 0, caEur: 0 };
+      clients[tel].nb++; clients[tel].kg += c.poidsReel || 0; clients[tel].caEur += prix;
+    } else if (dans(dDepot, debutPrec, debut)) { kpi.deposesPrec++; kpi.kgPrec += c.poidsReel || 0; kpi.caEurPrec += prix; }
+    const dRemis = premier(c, STATUTS.REMIS);
+    if (dans(dRemis, debut, maintenant)) kpi.remis++; else if (dans(dRemis, debutPrec, debut)) kpi.remisPrec++;
+    // Délai dépôt → disponible à l'agence de retrait
+    const dPret = premier(c, STATUTS.PRET);
+    if (dDepot && dPret && dans(dPret, debut, maintenant) && delais[c.mode]) delais[c.mode].push((new Date(dPret) - new Date(dDepot)) / 86400000);
+    // Encaissements
+    for (const p of c.paiements || []) {
+      const e = enEur(p.montant, p.devise, taux);
+      if (dans(p.le, debut, maintenant)) {
+        kpi.encaisseEur += e; encaisse[p.devise] = (encaisse[p.devise] || 0) + p.montant;
+        const m = p.lieu === 'EN_LIGNE' ? `${p.methode}_en_ligne` : p.methode;
+        parMethode[m] = (parMethode[m] || 0) + e;
+        const j = cleJour(p.le); if (parJour[j]) parJour[j].encaisseEur += e;
+        const ag = agences[p.lieu]; if (ag) ag.encaisse[p.devise] = (ag.encaisse[p.devise] || 0) + p.montant;
+        if (p.objet === 'domicile') domicileCaEur += e;
+      } else if (dans(p.le, debutPrec, debut)) kpi.encaisseEurPrec += e;
+    }
+    for (const t of ['ramassage', 'livraison']) if (dans(c[t]?.faiteLe, debut, maintenant)) coursesFaites++;
+    // État actuel
+    if ([STATUTS.PRET, STATUTS.EN_LIVRAISON].includes(c.statut)) {
+      const ag = agences[c.guichet];
+      const solde = calculerSolde(c, config);
+      if (ag) { ag.aRetirer++; if (solde.magasinage.jours > seuilGarde) ag.gardeLongue++; }
+      if (solde.soldeGnf > 0) { impayesGuichet++; impayesGuichetGnf += solde.soldeGnf; if (ag) { ag.impayes++; ag.impayesGnf += solde.soldeGnf; } }
+    }
+    // Colis qui n'avancent plus
+    const dernier = [...(c.historique || [])].reverse().find(h => h.statut && !h.annule)?.le || c.createdAt;
+    const immobile = (maintenant - new Date(dernier)) / 86400000;
+    const limite = { reserve: 14, depose: 5, charge: 7, en_transit: c.mode === 'mer' ? 50 : c.mode === 'express' ? 4 : 10, arrive: 5, acheminement: 4, en_livraison: 2 }[c.statut];
+    if (limite && immobile > limite) bloques.push({ numeroSuivi: c.numeroSuivi, statut: c.statut, mode: c.mode, jours: Math.floor(immobile), expediteur: c.expediteur?.nom, lieu: c.statut === 'reserve' || c.statut === 'depose' || c.statut === 'charge' ? c.depot : c.guichet });
+  }
+
+  const parStatut = await Colis.aggregate([{ $group: { _id: '$statut', nb: { $sum: 1 } } }]);
+  const moy = (l) => (l.length ? Math.round((l.reduce((a, b) => a + b, 0) / l.length) * 10) / 10 : null);
+  const Reclamation = require('../models/Reclamation');
+  const [reclamationsOuvertes, lots, caissesEnRetard] = await Promise.all([
+    Reclamation.countDocuments({ statut: { $in: ['ouverte', 'en_cours'] } }),
+    Lot.find({ statut: { $in: [STATUTS_LOT.PREPARATION, STATUTS_LOT.PARTI, STATUTS_LOT.ARRIVE] } }).sort({ createdAt: -1 }).limit(12).lean(),
+    Mouvement.distinct('agent', { cloture: null, le: { $lt: new Date(new Date().setHours(0, 0, 0, 0)) } }),
+  ]);
+  const nbLot = await Promise.all(lots.map(l => Promise.all([Colis.countDocuments({ lot: l._id }), Colis.countDocuments({ lot: l._id, statut: { $nin: [STATUTS.CHARGE, STATUTS.EN_TRANSIT] } })])));
+  const coursesOuvertes = colis.reduce((n, c) => n + ['ramassage', 'livraison'].filter(t => c[t]?.demande && ['a_planifier', 'assignee', 'en_route'].includes(c[t].statut)).length, 0);
+  const coursesSansLivreur = colis.reduce((n, c) => n + ['ramassage', 'livraison'].filter(t => c[t]?.demande && c[t].statut === 'a_planifier').length, 0);
+  const aVerifier = colis.reduce((n, c) => n + (c.declarations || []).filter(d => d.statut === 'a_verifier').length, 0);
+
+  res.json({
+    succes: true, jours, taux: tauxDuJour, tauxMisAJourLe: config.tauxMisAJourLe,
+    kpi: Object.fromEntries(Object.entries(kpi).map(([k, v]) => [k, r2(v)])),
+    encaisse: { EUR: r2(encaisse.EUR || 0), GNF: Math.round(encaisse.GNF || 0) },
+    parMethode: Object.entries(parMethode).map(([k, v]) => ({ methode: k, eur: r2(v) })).sort((a, b) => b.eur - a.eur),
+    parJour: serieJours.map(j => ({ jour: j, ...parJour[j], encaisseEur: r2(parJour[j].encaisseEur) })),
+    pipeline: Object.fromEntries(parStatut.map(x => [x._id, x.nb])),
+    agences: Object.values(agences).map(a => ({ ...a, kg: r2(a.kg), caEur: r2(a.caEur) })),
+    lignes: Object.values(lignes).map(l => ({ ...l, kg: r2(l.kg), caEur: r2(l.caEur) })).sort((a, b) => b.caEur - a.caEur),
+    clients: Object.values(clients).sort((a, b) => b.caEur - a.caEur || b.nb - a.nb).slice(0, 8).map(x => ({ ...x, kg: r2(x.kg), caEur: r2(x.caEur) })),
+    delais: Object.fromEntries(Object.entries(delais).map(([m, l]) => [m, { moyenne: moy(l), nb: l.length }])),
+    bloques: bloques.sort((a, b) => b.jours - a.jours).slice(0, 15),
+    nbBloques: bloques.length,
+    guichets: { impayes: impayesGuichet, impayesGnf: impayesGuichetGnf },
+    domicile: { ouvertes: coursesOuvertes, sansLivreur: coursesSansLivreur, faites: coursesFaites, encaisseEur: r2(domicileCaEur) },
+    aFaire: { reclamations: reclamationsOuvertes, paiementsAVerifier: aVerifier, caissesEnRetard: caissesEnRetard.length },
+    lots: lots.map((l, i) => ({ code: l.code, sens: l.sens, mode: l.mode, statut: l.statut, reference: l.reference, dateArriveePrevue: l.dateArriveePrevue, nb: nbLot[i][0], recus: nbLot[i][1] })),
+  });
+}));
+
 // ── GET /api/admin/stats
 router.get('/stats', ah(async (req, res) => {
   const config = await Config.get();

@@ -124,7 +124,7 @@ const creerSession = async (req, res) => {
       price_data: {
         currency: 'eur',
         unit_amount: centimes,
-        product_data: { name: objet === 'domicile' ? `${APP_NOM} — livraison à domicile, colis ${colis.numeroSuivi}` : `${APP_NOM} — colis ${colis.numeroSuivi}` },
+        product_data: { name: objet === 'domicile' ? `${APP_NOM} · livraison à domicile, colis ${colis.numeroSuivi}` : `${APP_NOM} · colis ${colis.numeroSuivi}` },
       },
       quantity: 1,
     }],

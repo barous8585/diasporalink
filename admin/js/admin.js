@@ -7,11 +7,11 @@
   let CONFIG = null;
   const LIB_STATUT_LOT = { preparation: 'En préparation', parti: 'Parti', arrive: 'Arrivé', cloture: 'Clôturé' };
   const badge = (statut, lib) => `<span class="badge b-${esc(statut)}">${esc(lib || CONFIG?.statuts?.[statut] || statut)}</span>`;
-  const nomLieu = (code) => (CONFIG?.agences || []).find(l => l.code === code)?.nom || code || '—';
+  const nomLieu = (code) => (CONFIG?.agences || []).find(l => l.code === code)?.nom || code || 'Aucune';
   const libSens = (sens) => CONFIG?.sens?.find(x => x.key === (sens || 'FR-GN'))?.label || '';
   const optionsAgences = (pays, choisi) => {
     const parVille = {};
-    (CONFIG?.agences || []).filter(a => !pays || a.pays === pays).forEach(a => { const k = `${CONFIG.pays[a.pays]?.nom} · ${a.ville || '—'}`; (parVille[k] = parVille[k] || []).push(a); });
+    (CONFIG?.agences || []).filter(a => !pays || a.pays === pays).forEach(a => { const k = `${CONFIG.pays[a.pays]?.nom} · ${a.ville || 'Autres'}`; (parVille[k] = parVille[k] || []).push(a); });
     return Object.entries(parVille).map(([v, l]) => `<optgroup label="${esc(v)}">${l.map(a => `<option value="${esc(a.code)}" ${a.code === choisi ? 'selected' : ''}>${esc(a.nom)}</option>`).join('')}</optgroup>`).join('');
   };
 
@@ -107,48 +107,197 @@
   // ══════════════════════════════════════════════════════════
   //  TABLEAU DE BORD
   // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════
+  //  TABLEAU DE BORD : toute l'entreprise d'un coup d'œil
+  // ══════════════════════════════════════════════════════════
+  const COULEUR_MODE = { express: '#eb6834', air: '#2a78d6', mer: '#1baf7a' };   // palette validée (ordre fixe)
+  const LIB_MODE = { express: 'Express', air: 'Avion', mer: 'Bateau' };
+  const LIB_METHODE = { especes: 'Espèces', carte: 'Carte au comptoir', virement: 'Virement', orange_money: 'Orange Money', mtn_momo: 'MTN MoMo', carte_en_ligne: 'Carte en ligne', orange_money_en_ligne: 'Orange Money en ligne', mtn_momo_en_ligne: 'MTN MoMo en ligne' };
+  const nf = (n, d = 0) => Number(n || 0).toLocaleString('fr-FR', { maximumFractionDigits: d });
+  const eurC = (n) => (Math.abs(n) >= 10000 ? `${nf(n / 1000, 1)} k€` : eur(n));
+  const delta = (v, p) => {
+    if (!p && !v) return '<span class="delta neutre">stable</span>';
+    if (!p) return '<span class="delta haut">nouveau</span>';
+    const d = Math.round(((v - p) / p) * 100);
+    return `<span class="delta ${d > 0 ? 'haut' : d < 0 ? 'bas' : 'neutre'}">${d > 0 ? '▲' : d < 0 ? '▼' : '='} ${Math.abs(d)} %</span>`;
+  };
+  // Colonnes (empilées si plusieurs séries) en SVG, avec infobulle au survol
+  function colonnes(donnees, series, { hauteur = 180, format = (v) => nf(v), etroit = false } = {}) {
+    // Largeur de dessin proche de la largeur réelle : le texte des axes garde une taille lisible
+    const n = donnees.length, L = innerWidth < 760 || etroit ? 360 : 640, H = hauteur, bas = 22, haut = 8;
+    const total = (d) => series.reduce((a, s) => a + (d[s.cle] || 0), 0);
+    const max = Math.max(1, ...donnees.map(total));
+    const pas = Math.pow(10, Math.floor(Math.log10(max)));
+    const ech = Math.ceil(max / pas) * pas;
+    const bande = L / n, larg = Math.max(3, Math.min(24, bande * 0.62));
+    const y = (v) => H - bas - (v / ech) * (H - bas - haut);
+    const graduations = [0, ech / 2, ech];
+    let svg = graduations.map(g => `<line x1="0" x2="${L}" y1="${y(g)}" y2="${y(g)}" class="grille"/><text x="0" y="${y(g) - 3}" class="axe">${format(g)}</text>`).join('');
+    donnees.forEach((d, i) => {
+      const x = i * bande + (bande - larg) / 2;
+      let cumul = 0;
+      const tip = `${new Date(d.jour).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} : ${series.map(s => `${s.lib} ${format(d[s.cle] || 0)}`).join(' · ')}`;
+      series.forEach((s, k) => {
+        const v = d[s.cle] || 0; if (!v) return;
+        const y1 = y(cumul + v), y0 = y(cumul);
+        const h = Math.max(1, y0 - y1 - (cumul > 0 ? 2 : 0));
+        const dernier = series.slice(k + 1).every(t => !(d[t.cle] > 0));
+        svg += `<path d="${dernier ? `M${x},${y1 + h} V${y1 + 4} Q${x},${y1} ${x + 4},${y1} H${x + larg - 4} Q${x + larg},${y1} ${x + larg},${y1 + 4} V${y1 + h} Z` : `M${x},${y1} h${larg} v${h} h${-larg} Z`}" fill="${s.couleur}"/>`;
+        cumul += v;
+      });
+      svg += `<rect x="${i * bande}" y="0" width="${bande}" height="${H - bas}" fill="transparent" data-tip="${esc(tip)}"/>`;
+      if (n <= 14 || i % Math.ceil(n / 8) === 0 || i === n - 1) svg += `<text x="${x + larg / 2}" y="${H - 6}" class="axe" text-anchor="middle">${new Date(d.jour).toLocaleDateString('fr-FR', { day: 'numeric', month: n > 31 ? 'short' : undefined })}</text>`;
+    });
+    return `<svg class="graphe" viewBox="0 0 ${L} ${H}" role="img" aria-label="Graphique">${svg}</svg>`;
+  }
+  function barresH(items, { couleur = 'var(--marine)', format = (v) => nf(v) } = {}) {
+    const max = Math.max(1, ...items.map(i => i.v));
+    return `<div class="barres-h">${items.map(i => `
+      <div class="bh" data-tip="${esc(`${i.lib} : ${format(i.v)}`)}">
+        <span class="bh-lib">${i.pastille ? `<i style="background:${i.pastille}"></i>` : ''}${esc(i.lib)}</span>
+        <span class="bh-piste"><span style="width:${Math.max(i.v ? 2 : 0, (i.v / max) * 100)}%;background:${i.couleur || couleur}"></span></span>
+        <span class="bh-val">${format(i.v)}</span>
+      </div>`).join('')}</div>`;
+  }
+  function brancherInfobulles(zone) {
+    let tip = document.querySelector('.infobulle');
+    if (!tip) { tip = document.createElement('div'); tip.className = 'infobulle'; document.body.appendChild(tip); }
+    zone.querySelectorAll('[data-tip]').forEach(el => {
+      el.addEventListener('mousemove', (e) => { tip.textContent = el.dataset.tip; tip.style.display = 'block'; tip.style.left = `${Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8)}px`; tip.style.top = `${e.clientY + 14}px`; });
+      el.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+    });
+  }
+
   async function tableauDeBord() {
-    const [s, lotsR] = await Promise.all([api.get('/admin/stats'), api.get('/lots')]);
-    const c = s.compteurs;
-    const enCours = lotsR.lots.filter(l => l.statut !== 'cloture').slice(0, 6);
+    const jours = stock.lire('tdb_jours') || 30;
+    const t = await api.get(`/admin/tableau?jours=${jours}`);
+    const k = t.kpi;
+    const lib = jours === 365 ? '12 mois' : `${jours} jours`;
+    const panier = k.deposes ? k.caEur / k.deposes : 0;
+    const p = t.pipeline;
+    const aFaire = [
+      [t.aFaire.paiementsAVerifier, 'paiement(s) mobile money à vérifier', '#/caisses', 'billet', 'or'],
+      [t.aFaire.reclamations, 'réclamation(s) à traiter', '#/reclamations', 'alerte', 'rouge'],
+      [t.domicile.sansLivreur, 'course(s) à domicile sans livreur', '#/courses', 'moto', 'bleu'],
+      [t.guichets.impayes, `colis prêt(s) avec un reste à payer (${gnf(t.guichets.impayesGnf)})`, '#/colis?statut=pret', 'prix', 'or'],
+      [t.nbBloques, 'colis qui n\'avancent plus', '#bloques', 'horloge', 'rouge'],
+      [t.aFaire.caissesEnRetard, 'caisse(s) pas clôturée(s) hier', '#/caisses', 'billet', 'violet'],
+    ].filter(x => x[0] > 0);
+    const ageTaux = t.tauxMisAJourLe ? Math.floor((Date.now() - new Date(t.tauxMisAJourLe)) / 86400000) : null;
+    if (ageTaux !== null && ageTaux > 7) aFaire.push([ageTaux, `jours sans mise à jour du taux (1 € = ${gnf(t.taux)})`, '#/reglages', 'prix', 'violet']);
+    const etapes = [['reserve', 'Réservés'], ['depose', 'Déposés'], ['charge', 'Chargés'], ['en_transit', 'En route'], ['arrive', 'Arrivés'], ['acheminement', 'Vers l\'agence'], ['pret', 'Prêts au retrait'], ['en_livraison', 'En livraison']];
+    const enCours = etapes.reduce((a, [s]) => a + (p[s] || 0), 0);
+
     main.innerHTML = `
-      <div class="entete-page"><h1>Tableau de bord</h1>
-        <div class="ligne" style="--gap:8px"><a class="btn" href="#/lots">${ic('lot', 'ic-sm')} Lots</a><a class="btn btn-principal" href="#/colis">${ic('loupe', 'ic-sm')} Chercher un colis</a></div></div>
-      <div class="kpis">
-        <a class="kpi" href="#/colis?statut=reserve"><div class="lib">Réservés en ligne</div><div class="val">${c.reserves}</div><div class="sous">à déposer</div></a>
-        <a class="kpi" href="#/lots"><div class="lib">Au dépôt</div><div class="val">${c.auDepot}</div><div class="sous">déposés ou chargés</div></a>
-        <a class="kpi" href="#/lots"><div class="lib">En route</div><div class="val">${c.enRoute}</div><div class="sous">${s.lotsEnCours.partis} lot(s) parti(s)</div></a>
-        <a class="kpi" href="#/colis?statut=pret"><div class="lib">En agence de retrait</div><div class="val">${c.auxGuichets}</div><div class="sous ${c.anciensGuichet ? 'alerte' : ''}">${c.anciensGuichet} depuis plus de ${CONFIG.magasinage.joursGratuits} j</div></a>
-        <div class="kpi vert"><div class="lib">Encaissé aujourd'hui</div><div class="val" style="font-size:22px">${gnf(s.encaisseJour.GNF)}</div><div class="sous">+ ${eur(s.encaisseJour.EUR)}</div></div>
-        <a class="kpi ocre" href="#/colis?statut=pret"><div class="lib">Impayés au guichet</div><div class="val">${c.impayes}</div><div class="sous">colis avec un reste à payer</div></a>
+      <div class="entete-page"><div><h1>Tableau de bord</h1><p class="petit muet" style="margin-top:4px">${esc(date(new Date(), false))} · ${enCours} colis en cours · ${(CONFIG.agences || []).length} agences</p></div>
+        <div class="ligne" style="--gap:8px;flex-wrap:wrap">
+          <div class="segments segments-compacts" role="group" aria-label="Période">${[[7, '7 j'], [30, '30 j'], [90, '90 j'], [365, '12 mois']].map(([v, l]) => `<button type="button" data-jours="${v}" aria-pressed="${v === jours}">${l}</button>`).join('')}</div>
+          <button class="btn btn-principal btn-petit" data-nouveau-lot>${ic('plus', 'ic-sm')} Nouveau lot</button>
+        </div></div>
+
+      <section class="a-faire-bandeau">
+        ${aFaire.length ? aFaire.map(([n, txt, lien, icone, ton]) => `<a class="puce-alerte ${ton}" href="${lien}">${ic(icone, 'ic-sm')}<b>${nf(n)}</b> ${esc(txt)}</a>`).join('') : `<span class="puce-alerte vert">${ic('ok', 'ic-sm')} Tout est à jour</span>`}
+      </section>
+
+      <div class="kpis kpis-couleur">
+        <div class="kpi c-marine"><div class="kpi-tete"><span class="kpi-ic">${ic('billet')}</span>Encaissé · ${lib}</div><div class="val">${eurC(k.encaisseEur)}</div><div class="sous">${eur(t.encaisse.EUR)} + ${gnf(t.encaisse.GNF)}</div>${delta(k.encaisseEur, k.encaisseEurPrec)}</div>
+        <div class="kpi c-or"><div class="kpi-tete"><span class="kpi-ic">${ic('prix')}</span>Chiffre d'affaires transport</div><div class="val">${eurC(k.caEur)}</div><div class="sous">colis pesés sur ${lib}</div>${delta(k.caEur, k.caEurPrec)}</div>
+        <div class="kpi c-bleu"><div class="kpi-tete"><span class="kpi-ic">${ic('colis')}</span>Colis déposés</div><div class="val">${nf(k.deposes)}</div><div class="sous">${nf(k.reservations)} réservations en ligne</div>${delta(k.deposes, k.deposesPrec)}</div>
+        <div class="kpi c-violet"><div class="kpi-tete"><span class="kpi-ic">${ic('balance')}</span>Kilos transportés</div><div class="val">${nf(k.kg)} kg</div><div class="sous">${k.deposes ? `${nf(k.kg / k.deposes, 1)} kg par colis` : 'aucun colis'}</div>${delta(k.kg, k.kgPrec)}</div>
+        <div class="kpi c-vert"><div class="kpi-tete"><span class="kpi-ic">${ic('ok')}</span>Colis remis</div><div class="val">${nf(k.remis)}</div><div class="sous">aux destinataires</div>${delta(k.remis, k.remisPrec)}</div>
+        <div class="kpi c-orange"><div class="kpi-tete"><span class="kpi-ic">${ic('liste')}</span>Panier moyen</div><div class="val">${eur(panier)}</div><div class="sous">par colis déposé</div></div>
       </div>
-      <div class="deux-col">
+
+      <div class="grille-tdb">
+        <section class="panneau large">
+          <div class="panneau-tete teinte-bleu"><div><h2>Colis déposés par jour</h2><p class="tres-petit muet">Par mode de transport · ${lib}</p></div>
+            <div class="legende">${['express', 'air', 'mer'].map(m => `<span><i style="background:${COULEUR_MODE[m]}"></i>${LIB_MODE[m]}</span>`).join('')}</div></div>
+          <div class="panneau-corps">${colonnes(t.parJour, ['express', 'air', 'mer'].map(m => ({ cle: m, lib: LIB_MODE[m], couleur: COULEUR_MODE[m] })))}</div>
+        </section>
         <section class="panneau">
-          <div class="panneau-tete"><h2>Lots en cours</h2><button class="btn btn-noir btn-petit" data-nouveau-lot>${ic('plus', 'ic-sm')} Nouveau lot</button></div>
-          <div class="defile"><table class="tableau"><thead><tr><th>Lot</th><th>Transport</th><th>Colis</th><th>Poids</th><th>Statut</th><th>Arrivée prévue</th></tr></thead><tbody>
-            ${enCours.length ? enCours.map(l => `<tr class="cliquable" data-lot="${esc(l.code)}"><td class="gras">${esc(l.code)}</td><td>${esc(libSens(l.sens))} · ${K.libMode(l.mode)}${l.reference ? ` · ${esc(l.reference)}` : ''}</td><td>${l.nbColis}</td><td>${kg(l.poidsTotal)}</td><td>${badge(l.statut === 'preparation' ? 'reserve' : l.statut === 'parti' ? 'en_transit' : 'pret', LIB_STATUT_LOT[l.statut])}</td><td>${l.dateArriveePrevue ? esc(date(l.dateArriveePrevue, false)) : '—'}</td></tr>`).join('')
-              : '<tr><td colspan="6" class="vide">Aucun lot en cours. Créez un lot pour commencer le chargement.</td></tr>'}
+          <div class="panneau-tete teinte-vert"><div><h2>Encaissé par jour</h2><p class="tres-petit muet">Équivalent en euros, toutes agences</p></div></div>
+          <div class="panneau-corps">${colonnes(t.parJour, [{ cle: 'encaisseEur', lib: 'Encaissé', couleur: '#04244F' }], { format: (v) => (v >= 1000 ? `${nf(v / 1000, 1)} k€` : `${nf(v)} €`), etroit: innerWidth >= 1200 })}</div>
+        </section>
+
+        <section class="panneau">
+          <div class="panneau-tete teinte-violet"><div><h2>Où sont les colis maintenant</h2><p class="tres-petit muet">${enCours} colis en cours</p></div></div>
+          <div class="panneau-corps">${barresH(etapes.map(([s, l]) => ({ lib: l, v: p[s] || 0, couleur: s === 'pret' || s === 'en_livraison' ? '#1F7A4D' : s === 'reserve' ? '#C8982B' : '#04244F' })))}</div>
+        </section>
+        <section class="panneau">
+          <div class="panneau-tete teinte-or"><div><h2>Délai moyen dépôt → retrait</h2><p class="tres-petit muet">Colis arrivés en agence sur ${lib}</p></div></div>
+          <div class="panneau-corps delais">${['express', 'air', 'mer'].map(m => `
+            <div class="delai"><span class="pastille-mode" style="background:${COULEUR_MODE[m]}">${K.icMode(m, 'ic-sm')}</span>
+              <div><div class="gras">${LIB_MODE[m]}</div><div class="tres-petit muet">${t.delais[m].nb} colis · prévu ${esc((CONFIG.modes || []).find(x => x.key === m)?.delai || '')}</div></div>
+              <b class="delai-val">${t.delais[m].moyenne === null ? '<span class="muet petit">pas de donnée</span>' : `${nf(t.delais[m].moyenne, 1)} j`}</b></div>`).join('')}
+          </div>
+        </section>
+        <section class="panneau">
+          <div class="panneau-tete teinte-vert"><div><h2>Comment les clients paient</h2><p class="tres-petit muet">Équivalent euros · ${lib}</p></div></div>
+          <div class="panneau-corps">${t.parMethode.length ? barresH(t.parMethode.map(x => ({ lib: LIB_METHODE[x.methode] || x.methode, v: x.eur })), { couleur: '#1F7A4D', format: (v) => eur(v) }) : '<p class="muet petit">Aucun encaissement sur la période.</p>'}</div>
+        </section>
+
+        <section class="panneau pleine">
+          <div class="panneau-tete teinte-bleu"><div><h2>Agences</h2><p class="tres-petit muet">Activité sur ${lib} et situation actuelle</p></div></div>
+          <div class="defile"><table class="tableau"><thead><tr><th>Agence</th><th class="n">Déposés</th><th class="n">Kilos</th><th class="n">CA transport</th><th class="n">Encaissé</th><th class="n">À retirer</th><th class="n">Garde longue</th><th class="n">Impayés</th></tr></thead><tbody>
+            ${t.agences.map(a => `<tr><td><b>${esc(a.nom)}</b><div class="tres-petit muet">${esc(CONFIG.pays[a.pays]?.nom || a.pays)}</div></td>
+              <td class="n chiffres">${nf(a.deposes)}</td><td class="n chiffres">${nf(a.kg)}</td><td class="n chiffres">${eur(a.caEur)}</td>
+              <td class="n chiffres">${[a.encaisse.EUR ? eur(a.encaisse.EUR) : '', a.encaisse.GNF ? gnf(a.encaisse.GNF) : ''].filter(Boolean).join('<br>') || '<span class="muet">0</span>'}</td>
+              <td class="n chiffres">${nf(a.aRetirer)}</td><td class="n chiffres">${a.gardeLongue ? `<span class="pastille-txt or">${nf(a.gardeLongue)}</span>` : '0'}</td>
+              <td class="n chiffres">${a.impayes ? `<span class="pastille-txt rouge">${nf(a.impayes)} · ${gnf(a.impayesGnf)}</span>` : '0'}</td></tr>`).join('')}
+          </tbody></table></div>
+        </section>
+
+        <section class="panneau large">
+          <div class="panneau-tete teinte-or"><div><h2>Lignes et modes</h2><p class="tres-petit muet">Ce qui rapporte le plus sur ${lib}</p></div></div>
+          <div class="defile"><table class="tableau"><thead><tr><th>Ligne</th><th>Mode</th><th class="n">Colis</th><th class="n">Kilos</th><th class="n">CA transport</th><th>Part du CA</th></tr></thead><tbody>
+            ${t.lignes.length ? t.lignes.map(l => { const part = k.caEur ? (l.caEur / k.caEur) * 100 : 0; return `<tr><td><b>${esc(libSens(l.sens))}</b></td>
+              <td><span class="mode-tag"><i style="background:${COULEUR_MODE[l.mode]}"></i>${LIB_MODE[l.mode]}</span></td>
+              <td class="n chiffres">${nf(l.nb)}</td><td class="n chiffres">${nf(l.kg)}</td><td class="n chiffres">${eur(l.caEur)}</td>
+              <td style="min-width:140px"><span class="part"><span style="width:${part}%;background:${COULEUR_MODE[l.mode]}"></span></span> <span class="tres-petit">${nf(part)} %</span></td></tr>`; }).join('')
+              : '<tr><td colspan="6" class="vide">Aucun colis déposé sur la période.</td></tr>'}
+          </tbody></table></div>
+        </section>
+
+        <section class="panneau">
+          <div class="panneau-tete teinte-bleu"><div><h2>Lots en cours</h2></div><a class="btn btn-petit" href="#/lots">Tous les lots</a></div>
+          <div class="panneau-corps pile" style="--gap:10px">
+            ${t.lots.length ? t.lots.map(l => `<a class="lot-ligne" href="#/lots/${esc(l.code)}">
+              <span class="pastille-mode" style="background:${COULEUR_MODE[l.mode]}">${K.icMode(l.mode, 'ic-sm')}</span>
+              <span class="grandit"><b>${esc(l.code)}</b> <span class="tres-petit muet">${esc(libSens(l.sens))}${l.dateArriveePrevue ? ` · arrivée ${esc(date(l.dateArriveePrevue, false))}` : ''}</span>
+                ${l.statut === 'preparation' ? `<span class="tres-petit muet" style="display:block">${nf(l.nb)} colis chargés</span>` : `<span class="part" style="display:block;margin-top:5px"><span style="width:${l.nb ? (l.recus / l.nb) * 100 : 0}%;background:#1F7A4D"></span></span><span class="tres-petit muet">${nf(l.recus)} / ${nf(l.nb)} réceptionnés</span>`}</span>
+              ${badge(l.statut === 'preparation' ? 'reserve' : l.statut === 'parti' ? 'en_transit' : 'pret', LIB_STATUT_LOT[l.statut])}</a>`).join('') : '<p class="muet petit">Aucun lot en cours.</p>'}
+          </div>
+        </section>
+        <section class="panneau">
+          <div class="panneau-tete teinte-violet"><div><h2>Meilleurs clients</h2><p class="tres-petit muet">Expéditeurs sur ${lib}</p></div></div>
+          <div class="defile"><table class="tableau"><thead><tr><th>Client</th><th class="n">Colis</th><th class="n">CA</th></tr></thead><tbody>
+            ${t.clients.length ? t.clients.map((c, i) => `<tr><td><span class="rang">${i + 1}</span><b>${esc(c.nom || '')}</b><div class="tres-petit muet">${esc(c.telephone)}</div></td><td class="n chiffres">${nf(c.nb)}</td><td class="n chiffres">${eur(c.caEur)}</td></tr>`).join('') : '<tr><td colspan="3" class="vide">Aucun client sur la période.</td></tr>'}
           </tbody></table></div>
         </section>
         <section class="panneau">
-          <div class="panneau-tete"><h2>À traiter</h2></div>
-          <div class="panneau-corps pile" style="--gap:8px">
-            ${s.alertes.tauxAgeJours !== null && s.alertes.tauxAgeJours > 7 ? `<div class="alerte-ligne ocre">${ic('prix', 'ic-sm')}<div>Le taux EUR/GNF n'a pas été mis à jour depuis ${s.alertes.tauxAgeJours} jours. <a href="#/reglages">Mettre à jour</a></div></div>` : ''}
-            ${s.alertes.anciens.length ? `<div class="alerte-ligne ocre">${ic('horloge', 'ic-sm')}<div><b>${s.alertes.anciens.length} colis</b> au guichet depuis plus de ${CONFIG.magasinage.joursGratuits} jours. <button class="btn btn-lien" style="min-height:0;padding:0" data-relancer>Relancer par SMS</button></div></div>` : ''}
-            ${s.alertes.ecartsPesee.map(e => `<div class="alerte-ligne rouge">${ic('balance', 'ic-sm')}<div><b>Écart de pesée</b> · <a href="#/colis?q=${esc(e.numeroSuivi)}">${esc(e.numeroSuivi)}</a> : annoncé ${kg(e.poidsEstime)}, pesé ${kg(e.poidsReel)} (${e.ecart > 0 ? '+' : ''}${kg(e.ecart)})</div></div>`).join('')}
-            ${s.alertes.caissesEnRetard ? `<div class="alerte-ligne ocre">${ic('billet', 'ic-sm')}<div><b>${s.alertes.caissesEnRetard} caisse(s)</b> non clôturée(s) depuis hier. <a href="#/caisses">Voir</a></div></div>` : ''}
-            ${!s.alertes.anciens.length && !s.alertes.ecartsPesee.length && !s.alertes.caissesEnRetard && !(s.alertes.tauxAgeJours > 7) ? '<p class="muet petit">Rien à signaler.</p>' : ''}
+          <div class="panneau-tete teinte-or"><div><h2>Ramassage et livraison</h2></div><a class="btn btn-petit" href="#/courses">Courses</a></div>
+          <div class="panneau-corps mini-stats">
+            <div><b>${nf(t.domicile.ouvertes)}</b><span>courses en cours</span></div>
+            <div class="${t.domicile.sansLivreur ? 'alerte' : ''}"><b>${nf(t.domicile.sansLivreur)}</b><span>sans livreur</span></div>
+            <div><b>${nf(t.domicile.faites)}</b><span>faites · ${lib}</span></div>
+            <div><b>${eurC(t.domicile.encaisseEur)}</b><span>payées en ligne</span></div>
           </div>
+        </section>
+
+        <section class="panneau" id="bloques">
+          <div class="panneau-tete teinte-rouge"><div><h2>Colis qui n'avancent plus</h2><p class="tres-petit muet">Même étape depuis trop longtemps pour leur mode</p></div><span class="badge b-annule">${nf(t.nbBloques)}</span></div>
+          <div class="defile"><table class="tableau"><thead><tr><th>Colis</th><th>Étape</th><th class="n">Depuis</th></tr></thead><tbody>
+            ${t.bloques.length ? t.bloques.map(b => `<tr class="cliquable" data-num="${esc(b.numeroSuivi)}"><td><b>${esc(b.numeroSuivi)}</b><div class="tres-petit muet">${esc(b.expediteur || '')}</div></td><td>${badge(b.statut)}<div class="tres-petit muet">${LIB_MODE[b.mode] || ''} · ${esc(nomLieu(b.lieu))}</div></td><td class="n"><span class="pastille-txt rouge">${nf(b.jours)} j</span></td></tr>`).join('') : '<tr><td colspan="3" class="vide">Aucun colis bloqué. Tout avance normalement.</td></tr>'}
+          </tbody></table></div>
         </section>
       </div>`;
     main.insertAdjacentHTML('afterbegin', '<div data-notifs style="margin-bottom:16px;max-width:560px"></div>');
-    K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Nouvelle réclamation, message d\'un client : prévenu sur cet appareil.' });
-    main.querySelectorAll('[data-lot]').forEach(tr => tr.addEventListener('click', () => { location.hash = `#/lots/${tr.dataset.lot}`; }));
+    K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Nouvelle réclamation, paiement à vérifier : prévenu sur cet appareil.' });
+    main.querySelectorAll('[data-jours]').forEach(b => b.addEventListener('click', () => { stock.ecrire('tdb_jours', Number(b.dataset.jours)); tableauDeBord(); }));
     main.querySelector('[data-nouveau-lot]').addEventListener('click', nouveauLot);
-    main.querySelector('[data-relancer]')?.addEventListener('click', async () => {
-      if (!confirm('Envoyer un SMS de rappel à tous ces destinataires ?')) return;
-      try { const r = await api.post('/admin/relances'); toast(`${r.envoyes} rappel(s) envoyé(s).`, 'ok'); } catch (e) { toast(e.message, 'erreur'); }
-    });
+    main.querySelector('a[href="#bloques"]')?.addEventListener('click', (e) => { e.preventDefault(); main.querySelector('#bloques').scrollIntoView({ behavior: 'smooth' }); });
+    main.querySelectorAll('tr[data-num]').forEach(tr => tr.addEventListener('click', () => { location.hash = `#/colis?q=${encodeURIComponent(tr.dataset.num)}`; }));
+    brancherInfobulles(main);
   }
 
   function nouveauLot() {
@@ -282,7 +431,7 @@
     if (!w) { toast('Autorisez les fenêtres pour imprimer.', 'erreur'); return; }
     w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Manifeste ${esc(lot.code)}</title>
       <style>body{font-family:system-ui,sans-serif;font-size:11pt;margin:15mm}h1{font-size:18pt;margin:0}table{width:100%;border-collapse:collapse;margin-top:10mm}th,td{border:1px solid #999;padding:4px 6px;text-align:left}th{background:#eee}.pied{margin-top:12mm;display:flex;justify-content:space-between}</style></head><body>
-      <h1>${esc(CONFIG.app)} — Manifeste du lot ${esc(lot.code)}</h1>
+      <h1>${esc(CONFIG.app)} · Manifeste du lot ${esc(lot.code)}</h1>
       <p>${esc(libSens(lot.sens))} · ${K.libMode(lot.mode).replace(/^./, x => x.toUpperCase())} · ${esc(lot.reference || '')} ${esc(lot.transporteur || '')} · ${stats.nb} colis · ${kg(stats.poids)} · imprimé le ${esc(date(new Date()))}</p>
       <table><thead><tr><th>#</th><th>N° de suivi</th><th>Expéditeur</th><th>Destinataire</th><th>Téléphone</th><th>Contenu</th><th>Cartons</th><th>Poids</th><th>Valeur (€)</th></tr></thead><tbody>
       ${manifeste.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.numeroSuivi)}</td><td>${esc(c.expediteur.nom)}</td><td>${esc(c.destinataire.nom)}</td><td>${esc(c.destinataire.telephone)}</td><td>${esc(c.description || c.typeColis)}</td><td>${c.nbCartons}</td><td>${kg(c.poids)}</td><td>${c.valeurDeclaree || ''}</td></tr>`).join('')}
@@ -312,7 +461,7 @@
       const qs = new URLSearchParams(Object.entries(etat).filter(([, v]) => v)).toString();
       const r = await api.get(`/admin/colis?${qs}`);
       zone.innerHTML = `<table class="tableau"><thead><tr><th>N° de suivi</th><th>Expéditeur</th><th>Destinataire</th><th>Guichet</th><th>Poids</th><th>Lot</th><th>Reste</th><th>Statut</th><th>Mis à jour</th></tr></thead><tbody>
-        ${r.colis.length ? r.colis.map(c => `<tr class="cliquable" data-num="${esc(c.numeroSuivi)}"><td class="gras">${esc(c.numeroSuivi)}</td><td>${esc(c.expediteur.nom)}</td><td>${esc(c.destinataire.nom)}<div class="tres-petit muet">${esc(c.destinataire.telephone)}</div></td><td>${esc(nomLieu(c.guichet))}</td><td>${kg(c.poidsReel || c.poidsEstime)}</td><td>${esc(c.lotCode || '—')}</td><td>${c.solde.soldeGnf ? gnf(c.solde.soldeGnf) : '—'}</td><td>${badge(c.statut)}</td><td class="tres-petit muet">${esc(date(c.updatedAt))}</td></tr>`).join('')
+        ${r.colis.length ? r.colis.map(c => `<tr class="cliquable" data-num="${esc(c.numeroSuivi)}"><td class="gras">${esc(c.numeroSuivi)}</td><td>${esc(c.expediteur.nom)}</td><td>${esc(c.destinataire.nom)}<div class="tres-petit muet">${esc(c.destinataire.telephone)}</div></td><td>${esc(nomLieu(c.guichet))}</td><td>${kg(c.poidsReel || c.poidsEstime)}</td><td>${esc(c.lotCode || 'Aucun')}</td><td>${c.solde.soldeGnf ? gnf(c.solde.soldeGnf) : 'Payé'}</td><td>${badge(c.statut)}</td><td class="tres-petit muet">${esc(date(c.updatedAt))}</td></tr>`).join('')
           : '<tr><td colspan="9" class="vide">Aucun colis trouvé.</td></tr>'}
       </tbody></table>
       <p class="petit muet" style="padding:12px 20px">${r.total} résultat(s)${r.total > 50 ? ' · 50 premiers affichés' : ''}</p>`;
@@ -333,14 +482,14 @@
     const { el, fermer } = modale(`
       <div class="pile" style="--gap:14px">
         <div class="ligne entre"><div><h2>${esc(c.numeroSuivi)}</h2><div style="margin-top:4px">${badge(c.statut)}</div></div><button class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
-        ${['pret', 'en_livraison'].includes(c.statut) ? `<div class="carte-ocre ligne entre"><div><div class="tres-petit gras">Code de retrait</div><div class="titre" style="font-size:26px;letter-spacing:5px">${esc(c.codeRetrait || '—')}</div>${c.codeEssais ? `<div class="tres-petit">${c.codeEssais} essai(s) faux</div>` : ''}</div>${c.codeEssais >= 5 ? '<button class="btn btn-noir btn-petit" data-debloquer>Débloquer</button>' : ''}</div>` : ''}
+        ${['pret', 'en_livraison'].includes(c.statut) ? `<div class="carte-ocre ligne entre"><div><div class="tres-petit gras">Code de retrait</div><div class="titre" style="font-size:26px;letter-spacing:5px">${esc(c.codeRetrait || 'Masqué')}</div>${c.codeEssais ? `<div class="tres-petit">${c.codeEssais} essai(s) faux</div>` : ''}</div>${c.codeEssais >= 5 ? '<button class="btn btn-noir btn-petit" data-debloquer>Débloquer</button>' : ''}</div>` : ''}
         <div class="carte">
           <div class="ligne-info"><span>Expéditeur</span><span>${esc(c.expediteur.nom)} · ${esc(c.expediteur.telephone)}</span></div>
           <div class="ligne-info"><span>Destinataire</span><span>${esc(c.destinataire.nom)} · ${esc(c.destinataire.telephone)}</span></div>
           ${c.tiersAutorise?.nom ? `<div class="ligne-info"><span>Autorisé à retirer</span><span>${esc(c.tiersAutorise.nom)} · ${esc(c.tiersAutorise.telephone)}</span></div>` : ''}
           <div class="ligne-info"><span>Trajet</span><span>${esc(nomLieu(c.depot))} → ${esc(nomLieu(c.guichet))}</span></div>
-          <div class="ligne-info"><span>Transport</span><span>${esc(libSens(c.sens))} · ${K.libMode(c.mode)} · lot ${esc(c.lotCode || '—')}</span></div>
-          <div class="ligne-info"><span>Poids</span><span>${c.poidsReel ? kg(c.poidsReel) : '—'} pesé${c.poidsEstime ? ` · ${kg(c.poidsEstime)} annoncé` : ''} · ${c.nbCartons} carton(s)</span></div>
+          <div class="ligne-info"><span>Transport</span><span>${esc(libSens(c.sens))} · ${K.libMode(c.mode)} · ${c.lotCode ? `lot ${esc(c.lotCode)}` : 'pas encore de lot'}</span></div>
+          <div class="ligne-info"><span>Poids</span><span>${c.poidsReel ? `${kg(c.poidsReel)} pesé` : 'pas encore pesé'}${c.poidsEstime ? ` · ${kg(c.poidsEstime)} annoncé` : ''} · ${c.nbCartons} carton(s)</span></div>
           <div class="ligne-info"><span>Prix transport</span><span>${eur(c.tarif?.totalEur)} · ${gnf(c.tarif?.totalGnf)} (taux ${gnf(c.tarif?.taux)})${c.tarif?.estime ? ' · estimé' : ''}</span></div>
           <div class="ligne-info"><span>Douane · garde</span><span>${gnf(c.fraisDouaneGnf)} · ${gnf(c.solde.magasinage.fraisGnf)}</span></div>
           <div class="ligne-info"><span>Payé</span><span>${gnf(c.solde.payeGnf)}${c.payeurArrivee ? ' · paie à l\'arrivée' : ''}</span></div>
@@ -408,7 +557,7 @@
     const r = await api.get(`/admin/courses${filtre ? `?agence=${encodeURIComponent(filtre)}` : ''}`);
     const sansPos = r.courses.filter(c => !c.adresse?.position?.lat);
     const sansLivreur = r.courses.filter(c => !c.livreur);
-    const optionsLivreurs = (c) => `<option value="">— Aucun —</option>${r.livreurs.filter(l => l.lieu === c.agence).map(l => `<option value="${esc(l._id)}" ${String(l._id) === String(c.livreur) ? 'selected' : ''}>${esc(l.prenom)} ${esc(l.nom)}</option>`).join('')}`;
+    const optionsLivreurs = (c) => `<option value="">Aucun livreur</option>${r.livreurs.filter(l => l.lieu === c.agence).map(l => `<option value="${esc(l._id)}" ${String(l._id) === String(c.livreur) ? 'selected' : ''}>${esc(l.prenom)} ${esc(l.nom)}</option>`).join('')}`;
     const ligne = (c) => `
       <tr data-num="${esc(c.numeroSuivi)}" data-type="${c.type}">
         <td><span class="badge">${c.type === 'ramassage' ? 'Ramassage' : 'Livraison'}</span></td>
@@ -417,7 +566,7 @@
         <td>${esc([c.adresse?.quartier, c.adresse?.ville].filter(Boolean).join(', '))}<div class="tres-petit muet">${esc(c.adresse?.repere || '')}</div>
           ${c.adresse?.position?.lat ? `<a class="tres-petit" href="${esc(K.lienCarte(c.adresse.position))}" target="_blank" rel="noopener">carte</a>` : '<span class="tres-petit rouge">position manquante</span>'}</td>
         <td>${esc(nomLieu(c.agence))}<div class="tres-petit muet">${c.distanceKm ? `${esc(String(c.distanceKm).replace('.', ','))} km` : ''}</div></td>
-        <td class="chiffres">${c.prix ? montant(c.prix, c.devise) : '—'}<div class="tres-petit ${c.payee ? 'vert' : 'rouge'}">${c.prix ? (c.payee ? 'payée' : 'pas encore payée') : ''}</div></td>
+        <td class="chiffres">${c.prix ? montant(c.prix, c.devise) : '<span class="muet">sans position</span>'}<div class="tres-petit ${c.payee ? 'vert' : 'rouge'}">${c.prix ? (c.payee ? 'payée' : 'pas encore payée') : ''}</div></td>
         <td>${c.statut === 'en_route' ? `<span class="gras">${esc(c.livreurNom || '')}</span><div class="tres-petit muet">en route</div>`
           : `<select class="saisie" style="min-height:40px;font-size:14px" data-livreur aria-label="Livreur">${optionsLivreurs(c)}</select>`}
           ${c.echecs?.length ? `<div class="tres-petit rouge">${c.echecs.length} échec(s) : ${esc(c.echecs.at(-1).motif)}</div>` : ''}</td>
@@ -442,7 +591,7 @@
           <thead><tr><th>Quand</th><th>Type</th><th>Colis</th><th>Quartier</th><th>Livreur</th><th>Prix</th><th>Écart GPS</th></tr></thead>
           <tbody>${r.faites.map(c => `<tr>
             <td>${esc(date(c.faiteLe))}</td><td>${c.type === 'ramassage' ? 'Ramassage' : 'Livraison'}</td><td>${esc(c.numeroSuivi)}</td>
-            <td>${esc(c.adresse?.quartier || '')}</td><td>${esc(c.livreurNom || '')}</td><td class="chiffres">${c.prix ? montant(c.prix, c.devise) : '—'}</td>
+            <td>${esc(c.adresse?.quartier || '')}</td><td>${esc(c.livreurNom || '')}</td><td class="chiffres">${c.prix ? montant(c.prix, c.devise) : ''}</td>
             <td class="chiffres">${c.ecartM === undefined || c.ecartM === null ? '<span class="muet">pas de GPS</span>' : c.ecartM > 500 ? `<span class="alerte-ecart">${(c.ecartM / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km</span>` : `${c.ecartM} m`}</td>
           </tr>`).join('') || '<tr><td colspan="7" class="muet">Rien pour l\'instant.</td></tr>'}</tbody></table></div></section>`;
     main.querySelector('[data-filtre]').addEventListener('change', (e) => { stock.ecrire('filtre_courses', e.target.value); courses(); });
@@ -563,7 +712,7 @@
           <td class="gras">${esc(x.numero)}</td><td>${esc(date(x.createdAt))}</td><td>${esc(x.numeroSuivi)}</td>
           <td>${esc(x.demandeur?.nom || '')}<div class="tres-petit muet">${esc(x.demandeur?.role || '')} · ${esc(x.demandeur?.telephone || '')}</div></td>
           <td>${esc(MOTIFS_REC[x.motif] || x.motif)}${x.horsDelai ? '<div class="tres-petit rouge">hors délai</div>' : ''}${x.photos?.length ? `<div class="tres-petit muet">${x.photos.length} photo(s)</div>` : ''}</td>
-          <td class="chiffres n">${x.montantDemande ? montant(x.montantDemande, x.deviseDemande || 'EUR') : '—'}</td>
+          <td class="chiffres n">${x.montantDemande ? montant(x.montantDemande, x.deviseDemande || 'EUR') : ''}</td>
           <td><span class="badge b-${esc(x.statut)}">${esc(LIB_REC[x.statut])}</span></td>
         </tr>`).join('') || '<tr><td colspan="7" class="muet">Aucune réclamation.</td></tr>'}</tbody></table></div></section>`;
     main.querySelector('[data-filtre]').addEventListener('change', (e) => { stock.ecrire('filtre_rec', e.target.value); reclamations(); });
@@ -587,7 +736,7 @@
             <div class="panneau-corps pile" style="--gap:10px">
               <p style="white-space:pre-wrap">${esc(r.description || '')}</p>
               <div class="ligne-info"><span>Client</span><span>${esc(r.demandeur?.nom || '')} (${esc(r.demandeur?.role || '')}) · ${esc(r.demandeur?.telephone || '')}</span></div>
-              <div class="ligne-info"><span>Montant demandé</span><span>${r.montantDemande ? montant(r.montantDemande, r.deviseDemande || 'EUR') : '—'}</span></div>
+              <div class="ligne-info"><span>Montant demandé</span><span>${r.montantDemande ? montant(r.montantDemande, r.deviseDemande || 'EUR') : 'Aucun'}</span></div>
               ${plafond ? `<div class="ligne-info"><span>Plafond selon les CGV</span><span class="gras">${eur(plafond.montantEur)} <span class="tres-petit muet">(${esc(plafond.base || '')})</span></span></div>` : ''}
               ${r.photos?.length ? `<div><div class="petit muet" style="margin-bottom:6px">Photos du client</div><div class="vignettes">${r.photos.map(id => `<a href="#" data-zoom><img data-photo-id="${esc(id)}" alt="Photo du client"></a>`).join('')}</div></div>` : ''}
               ${c?.photoDepot ? `<div><div class="petit muet" style="margin-bottom:6px">Photo prise au dépôt</div><div class="vignettes"><a href="#" data-zoom><img data-photo-id="${esc(c.photoDepot)}" alt="Photo au dépôt"></a></div></div>` : '<p class="petit muet">Pas de photo au dépôt pour ce colis.</p>'}
@@ -595,7 +744,7 @@
           ${c ? `<section class="panneau"><div class="panneau-tete"><h2>Colis</h2>${badge(c.statut)}</div><div class="panneau-corps">
             <div class="ligne-info"><span>Trajet</span><span>${esc(nomLieu(c.depot))} → ${esc(nomLieu(c.guichet))}</span></div>
             <div class="ligne-info"><span>Poids · cartons</span><span>${kg(c.poidsReel || c.poidsEstime)} · ${c.nbCartons}</span></div>
-            <div class="ligne-info"><span>Contenu</span><span>${esc(c.description || '—')}</span></div>
+            <div class="ligne-info"><span>Contenu</span><span>${esc(c.description || 'Non précisé')}</span></div>
             <div class="ligne-info"><span>Assurance</span><span>${c.assurance ? `oui, valeur ${esc(c.valeurDeclaree)}` : 'non'}</span></div>
             <div class="ligne-info"><span>Remis</span><span>${c.remise?.le ? `${esc(date(c.remise.le))} à ${esc(c.remise.nomRetrait || '')}` : 'non'}</span></div>
             <div class="pile" style="--gap:2px;margin-top:8px">${fs.map(ligneFacture).join('') || '<span class="petit muet">Aucune facture.</span>'}</div>
@@ -699,7 +848,7 @@
             <tbody>${declarations.map(d => `<tr data-id="${esc(d.id)}">
               <td>${esc(date(d.le))}</td><td><a href="#/colis?q=${esc(d.numeroSuivi)}" class="gras">${esc(d.numeroSuivi)}</a><div class="tres-petit muet">${esc(d.expediteur || '')}</div></td>
               <td>${d.objet === 'domicile' ? 'Livraison / ramassage' : 'Solde du colis'}</td><td>${esc(d.methodeLabel)}</td>
-              <td class="gras">${esc(d.reference)}</td><td>${esc(d.telephone || '—')}</td><td class="chiffres gras">${gnf(d.montantGnf)}</td>
+              <td class="gras">${esc(d.reference)}</td><td>${esc(d.telephone || 'Non indiqué')}</td><td class="chiffres gras">${gnf(d.montantGnf)}</td>
               <td><div class="ligne" style="--gap:6px"><button class="btn btn-petit btn-principal" data-valider>Reçu</button><button class="btn btn-petit" data-refuser>Pas reçu</button></div></td>
             </tr>`).join('')}</tbody></table></div></section>` : '';
       zone.querySelectorAll('tr[data-id]').forEach(tr => {
@@ -717,7 +866,7 @@
     const charger = async (d) => {
       const r = await api.get(`/caisse/jour?date=${d}`);
       const methodes = Object.fromEntries(CONFIG.methodesPaiement.map(m => [m.key, m.label]));
-      const totaux = (t) => Object.entries(t).map(([dev, parM]) => Object.entries(parM).map(([m, v]) => `${esc(methodes[m] || m)} ${montant(v, dev)}`).join(' · ')).join(' — ') || '—';
+      const totaux = (t) => Object.entries(t).map(([dev, parM]) => Object.entries(parM).map(([m, v]) => `${esc(methodes[m] || m)} ${montant(v, dev)}`).join(' · ')).join(' · ') || 'Rien';
       const somme = (t, dev) => Object.values(t[dev] || {}).reduce((a, b) => a + b, 0);
       main.querySelector('[data-caisses]').innerHTML = `
         <div class="kpis">
@@ -795,7 +944,7 @@
       <div class="carte formulaire-grille" data-article data-cle="${esc(a.cle || '')}" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr))">
         <label class="champ" style="grid-column:span 2">Article <input class="saisie" name="art_label" value="${esc(a.label || '')}" placeholder="ex. Paire de chaussures"></label>
         <label class="champ">Compte (kg) <input class="saisie" name="art_poids" type="number" min="0" step="0.1" value="${a.poids ?? ''}"></label>
-        ${CONFIG.sens.map(x => ['air', 'mer'].map(m => `<label class="champ" title="${esc(x.label)}">${esc(x.depart)} → ${esc(x.arrivee)} ${m === 'air' ? 'avion' : 'bateau'} (${symbole(x.key)}) <input class="saisie" name="art_${x.key}_${m}" type="number" min="0" step="${symbole(x.key) === '€' ? '0.5' : '1000'}" value="${a.prix?.[x.key]?.[m] ?? ''}" placeholder="—"></label>`).join('')).join('')}
+        ${CONFIG.sens.map(x => ['air', 'mer'].map(m => `<label class="champ" title="${esc(x.label)}">${esc(x.depart)} → ${esc(x.arrivee)} ${m === 'air' ? 'avion' : 'bateau'} (${symbole(x.key)}) <input class="saisie" name="art_${x.key}_${m}" type="number" min="0" step="${symbole(x.key) === '€' ? '0.5' : '1000'}" value="${a.prix?.[x.key]?.[m] ?? ''}" placeholder="non proposé"></label>`).join('')).join('')}
         <div class="ligne entre" style="grid-column:1/-1">
           <label class="case"><input type="checkbox" name="art_actif" ${a.actif !== false ? 'checked' : ''}> Proposé aux clients</label>
           <button type="button" class="btn btn-petit" data-suppr-article>${ic('fermer', 'ic-sm')} Retirer</button>
@@ -994,7 +1143,7 @@
             <tr data-id="${esc(u._id)}">
               <td class="gras">${esc(u.prenom)} ${esc(u.nom)}</td><td class="chiffres">${esc(u.telephone)}</td>
               <td>${u.role === 'admin' ? 'Administrateur' : u.role === 'livreur' ? 'Livreur' : 'Agent'}</td>
-              <td><select class="saisie" style="min-height:40px;font-size:14px" data-lieu aria-label="Lieu de ${esc(u.prenom)}">${lieux.map(l => `<option value="${esc(l.code)}" ${l.code === u.lieu ? 'selected' : ''}>${esc(l.nom)}</option>`).join('')}${!u.lieu ? '<option value="" selected>—</option>' : ''}</select></td>
+              <td><select class="saisie" style="min-height:40px;font-size:14px" data-lieu aria-label="Lieu de ${esc(u.prenom)}">${lieux.map(l => `<option value="${esc(l.code)}" ${l.code === u.lieu ? 'selected' : ''}>${esc(l.nom)}</option>`).join('')}${!u.lieu ? '<option value="" selected>Toutes les agences</option>' : ''}</select></td>
               <td><label class="case" style="min-height:40px"><input type="checkbox" data-actif ${u.actif ? 'checked' : ''}> Actif</label></td>
               <td><button class="btn btn-petit" type="button" data-reinit>Mot de passe</button></td>
             </tr>`).join('')}</tbody></table></div></section>
@@ -1049,7 +1198,7 @@
   async function demarrer() {
     try { CONFIG = await K.config({ forcer: true }); } catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">Serveur injoignable.</p>`; return; }
     document.querySelectorAll('[data-nom-app]').forEach(el => { el.textContent = CONFIG.app; });
-    document.title = `${CONFIG.app} — Back-office`;
+    document.title = `${CONFIG.app} · Back-office`;
     majEncartTaux();
     window.addEventListener('hashchange', router);
     router();

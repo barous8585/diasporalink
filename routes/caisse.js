@@ -38,7 +38,7 @@ router.post('/cloturer', ah(async (req, res) => {
     if (Number.isFinite(compte)) ecart[d] = Math.round((compte - attendu) * 100) / 100;
   }
   const cloture = await Cloture.create({
-    agent: req.user._id, lieu: req.user.lieu || '—', totaux,
+    agent: req.user._id, lieu: req.user.lieu || 'SIEGE', totaux,
     especesComptees: comptees, ecart, nbMouvements: mouvements.length, commentaire: req.body.commentaire,
   });
   await Mouvement.updateMany({ _id: { $in: mouvements.map(m => m._id) } }, { $set: { cloture: cloture._id } });

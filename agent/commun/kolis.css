@@ -344,3 +344,47 @@ main.entree > * { animation: pgIn .28s var(--ease) both; }
 .logo-moyen.mtn_momo { background: #FFCB05; color: #00283C; font-size: 11px; }
 .etapes-paiement { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.45; }
 .a-payer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--ocre-doux); color: var(--ocre-texte); }
+
+/* ══ Couleurs : moins de blanc, des repères colorés pour lire plus vite ══ */
+:root {
+  --fond: #EDF1F7;                 /* fond des pages, légèrement bleuté : les cartes blanches ressortent */
+  --carte: #FFFFFF;
+  --ligne: #DFE5EE;
+  --vert-ok: #1F7A4D; --vert-ok-doux: #E2F3E9;
+  --bleu-vif: #1F5FBF; --bleu-vif-doux: #E4EDFB;
+  --violet: #5B3FBF; --violet-doux: #EEEAFB;
+  --orange: #B4501C; --orange-doux: #FCEADF;
+  --ombre: 0 1px 2px rgba(4, 36, 79, .06), 0 6px 18px rgba(4, 36, 79, .05);
+}
+.carte, .carte-colis, .ligne-colis, .tache, .moyen-paiement { box-shadow: var(--ombre); border-color: #E3E8F0; }
+.carte-noire { background: linear-gradient(135deg, #EAF0FA, #F6F1E4); border-color: #DCE4F0; }
+/* Statuts : une couleur par étape */
+.b-reserve { background: var(--or-clair); color: var(--ocre-texte); }
+.b-depose, .b-charge { background: var(--bleu-vif-doux); color: var(--bleu-vif); }
+.b-en_transit, .b-arrive, .b-acheminement { background: var(--violet-doux); color: var(--violet); }
+.b-pret, .b-en_livraison, .b-ok { background: var(--vert-ok-doux); color: var(--vert-ok); }
+.b-remis { background: var(--marine); color: #fff; }
+/* Bandeaux colorés */
+.bandeau-vert { background: var(--vert-ok-doux) !important; color: var(--vert-ok) !important; }
+/* Tuiles de l'accueil client : chacune sa couleur */
+.tuiles-accueil .tuile:nth-child(1) { background: var(--or); color: var(--marine-fonce); border-color: var(--or); }
+.tuiles-accueil .tuile:nth-child(2) { background: var(--bleu-vif-doux); color: var(--bleu-vif); border-color: transparent; }
+.tuiles-accueil .tuile:nth-child(3) { background: var(--vert-ok-doux); color: var(--vert-ok); border-color: transparent; }
+.tuiles-accueil .tuile:nth-child(4) { background: var(--violet-doux); color: var(--violet); border-color: transparent; }
+/* Titres de sections avec une pastille de couleur */
+.page-suivi .carte > h3, .page-suivi .carte .ligne > h3 { display: flex; align-items: center; gap: 8px; }
+.page-suivi .carte > h3::before { content: ""; width: 8px; height: 20px; border-radius: 4px; background: var(--or); }
+.fiche-ligne span:first-child { color: var(--gris); }
+.actions-rapides a, .actions-rapides button { box-shadow: var(--ombre); }
+.actions-rapides a:nth-child(2) { background: var(--vert-ok-doux); color: var(--vert-ok); border-color: transparent; }
+.actions-rapides a:nth-child(3) { background: #E3F6EA; color: #147A3D; border-color: transparent; }
+.cc-action.info { background: var(--bleu-vif-doux); color: var(--bleu-vif); border-top-color: transparent; }
+.cc-action.pret { background: var(--vert-ok); }
+.resume-colis div:nth-child(1) { background: var(--bleu-vif-doux); }
+.resume-colis div:nth-child(1) b { color: var(--bleu-vif); }
+.resume-colis div:nth-child(2) { background: var(--vert-ok-doux); }
+.resume-colis div:nth-child(2) b { color: var(--vert-ok); }
+.resume-colis div:nth-child(3) { background: var(--or-clair); }
+.resume-colis div:nth-child(3) b { color: var(--ocre-texte); }
+.segments { background: #DFE6F1; }
+.saisie { background: #fff; }
