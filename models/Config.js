@@ -35,6 +35,7 @@ const configSchema = new mongoose.Schema({
   domicile: { type: mongoose.Schema.Types.Mixed },
   facturation: { type: mongoose.Schema.Types.Mixed },
   litiges: { type: mongoose.Schema.Types.Mixed },
+  paiements: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true, minimize: false });
 
 let cache = null;
@@ -53,6 +54,14 @@ configSchema.statics.get = async function () {
   if (!Array.isArray(config.articles)) config.articles = CONFIG_DEFAUT.articles;
   config.facturation = { ...CONFIG_DEFAUT.facturation, ...(config.facturation || {}), tva: { ...CONFIG_DEFAUT.facturation.tva, ...(config.facturation?.tva || {}) } };
   config.litiges = { ...CONFIG_DEFAUT.litiges, ...(config.litiges || {}) };
+  const pd = CONFIG_DEFAUT.paiements, pc = config.paiements || {};
+  config.paiements = {
+    FR: { ...pd.FR, ...(pc.FR || {}) }, GN: { ...pd.GN, ...(pc.GN || {}) },
+    comptes: {
+      orange_money: { ...pd.comptes.orange_money, ...(pc.comptes?.orange_money || {}) },
+      mtn_momo: { ...pd.comptes.mtn_momo, ...(pc.comptes?.mtn_momo || {}) },
+    },
+  };
   if (config.magasinage && config.magasinage.fraisJourEur === undefined) config.magasinage.fraisJourEur = CONFIG_DEFAUT.magasinage.fraisJourEur;
   cache = config;
   cacheAt = Date.now();

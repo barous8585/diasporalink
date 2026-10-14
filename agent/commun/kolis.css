@@ -297,3 +297,50 @@ main.entree > * { animation: pgIn .28s var(--ease) both; }
 .ligne-article .compteur .gras { min-width: 22px; text-align: center; font-size: 17px; }
 .ligne-article .compteur .btn { width: 40px; height: 40px; font-size: 22px; padding: 0; }
 .ligne-article .compteur .btn:disabled { opacity: .35; }
+
+/* Petites icônes, segments et puces (communs) */
+.ic-xs { width: 14px; height: 14px; vertical-align: -2px; }
+.segments { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; background: var(--creme-2); padding: 4px; border-radius: 16px; }
+.segments button { min-height: 44px; padding: 0 4px; border-radius: 12px; border: none; background: transparent; color: var(--gris); font: inherit; font-size: 14px; line-height: 1.15; font-weight: 600; cursor: pointer; }
+.segments button[aria-pressed="true"] { background: var(--marine); color: #fff; font-weight: 700; }
+.puces { flex-wrap: wrap; }
+.puce { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid var(--ligne-2); background: #fff; color: var(--encre); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.puce[aria-pressed="true"] { background: var(--or-clair); border-color: var(--or); color: var(--marine); }
+.titre-section { font-size: 15px; font-family: var(--police); font-weight: 700; color: var(--gris); text-transform: uppercase; letter-spacing: .06em; }
+
+/* Carte d'un colis (listes du client) */
+.carte-colis { position: relative; background: #fff; border: 1px solid var(--ligne); border-radius: 18px; overflow: hidden; }
+.carte-colis .cc-lien { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.carte-colis .cc-lien:focus-visible { outline: 3px solid var(--or); outline-offset: -3px; }
+.carte-colis .btn { position: relative; z-index: 2; }
+.carte-colis.finie { background: var(--creme-2); }
+.cc-tete { display: flex; align-items: center; gap: 12px; padding: 14px 14px 10px; }
+.cc-qui { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-trajet { font-size: 13px; color: var(--gris); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.cc-avancement { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 0 14px; }
+.cc-avancement span { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--gris); font-weight: 600; }
+.cc-avancement i { display: block; height: 5px; border-radius: 3px; background: var(--ligne); }
+.cc-avancement span.fait { color: var(--marine); }
+.cc-avancement span.fait i { background: var(--or); }
+.cc-pied { padding: 10px 14px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.cc-pied .badge { font-size: 12px; padding: 3px 8px; }
+.cc-action { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--ligne); font-size: 14px; font-weight: 600; min-height: 48px; box-sizing: border-box; }
+.cc-action.action { background: var(--ocre-doux); color: var(--ocre-texte); border-top-color: transparent; }
+.cc-action.pret { background: var(--marine); color: #fff; border-top-color: transparent; }
+.cc-action.info { color: var(--marine); }
+.cc-action.fini { color: var(--gris); font-weight: 500; }
+.resume-colis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.resume-colis div { background: var(--creme-2); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; }
+.resume-colis b { font-family: var(--police-titre); font-size: 24px; color: var(--marine); line-height: 1.1; }
+.resume-colis span { font-size: 12px; color: var(--gris); font-weight: 600; }
+.recherche-liste { display: flex; align-items: center; gap: 8px; border: 1px solid var(--ligne-2); border-radius: 14px; padding: 0 12px; background: #fff; color: var(--gris); }
+.recherche-liste input { flex: 1; border: 0; min-height: 44px; font: inherit; background: transparent; color: var(--encre); outline: none; }
+
+/* Paiement en ligne */
+.moyen-paiement { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--ligne-2); background: #fff; font: inherit; color: var(--encre); cursor: pointer; }
+.moyen-paiement:hover { border-color: var(--marine); }
+.logo-moyen { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; background: var(--bleu-doux); color: var(--marine); }
+.logo-moyen.orange_money { background: #FF7900; color: #000; }
+.logo-moyen.mtn_momo { background: #FFCB05; color: #00283C; font-size: 11px; }
+.etapes-paiement { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.45; }
+.a-payer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--ocre-doux); color: var(--ocre-texte); }

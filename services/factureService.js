@@ -57,12 +57,16 @@ function lignesDuColis(colis, config, maintenant = new Date()) {
   }
   for (const k of ['ramassage', 'livraison']) {
     const c = colis[k];
-    if (c?.demande && c.statut !== 'annulee' && c.prix) {
-      lignes.push({
-        cle: k, designation: k === 'ramassage' ? 'Ramassage à domicile' : 'Livraison à domicile',
-        detail: [c.adresse?.quartier || c.adresse?.commune, c.adresse?.ville, c.distanceKm ? `${String(c.distanceKm).replace('.', ',')} km` : ''].filter(Boolean).join(' · '),
-        montant: c.prix, devise: c.devise,
-      });
+    if (!c) continue;
+    const active = c.demande && c.statut !== 'annulee';
+    const lib = k === 'ramassage' ? 'Ramassage à domicile' : 'Livraison à domicile';
+    const lieu = [c.adresse?.quartier || c.adresse?.commune, c.adresse?.ville, c.distanceKm ? `${String(c.distanceKm).replace('.', ',')} km` : ''].filter(Boolean).join(' · ');
+    if (active && c.prix) {
+      // Payée d'avance plus cher qu'aujourd'hui (adresse changée) : le paiement reste acquis
+      const plus = (c.payeGnf || 0) > (c.prixGnf || 0);
+      lignes.push({ cle: k, designation: lib, detail: lieu, montant: plus ? c.payeGnf : c.prix, devise: plus ? 'GNF' : c.devise });
+    } else if (!active && c.payeGnf > 0) {
+      lignes.push({ cle: k, designation: `${lib} (annulée)`, detail: 'Payée d\'avance, non remboursable', montant: c.payeGnf, devise: 'GNF' });
     }
   }
   if (colis.fraisDouaneGnf) lignes.push({ cle: 'douane', designation: 'Droits et taxes de douane', detail: 'Débours : refacturés à l\'identique', montant: colis.fraisDouaneGnf, devise: 'GNF', debours: true });
@@ -118,8 +122,11 @@ async function emettre(colis, { moment = 'depot', agent } = {}) {
   let lignes = lignesDuColis(colis, config).filter(l => !groupesFactures.has(groupe(l.cle)));
   // Au dépôt : la garde et la douane n'existent pas encore ; seulement ce qui est connu
   if (moment === 'depot') lignes = lignes.filter(l => !['douane', 'garde'].includes(l.cle));
+  // Paiement d'avance en ligne des courses à domicile : seulement ces courses
+  if (moment === 'domicile') lignes = lignes.filter(l => ['ramassage', 'livraison'].includes(l.cle));
   if (!lignes.length) return null;
 
+  if (moment === 'domicile') moment = 'depot'; // facturé par l'agence de départ, à l'expéditeur
   const codeAgence = agent?.lieu || (moment === 'depot' ? colis.depot : colis.guichet);
   const agence = (config.agences || []).find(a => a.code === codeAgence)
     || (config.agences || []).find(a => a.code === (moment === 'depot' ? colis.depot : colis.guichet));

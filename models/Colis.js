@@ -14,7 +14,7 @@ const paiementSchema = new mongoose.Schema({
   montant:  { type: Number, required: true, min: 0 },
   devise:   { type: String, enum: DEVISES, required: true },
   methode:  { type: String, enum: METHODES_PAIEMENT.map(m => m.key), required: true },
-  objet:    { type: String, enum: ['transport', 'douane', 'magasinage', 'global'], default: 'global' },
+  objet:    { type: String, enum: ['transport', 'douane', 'magasinage', 'domicile', 'global'], default: 'global' },
   lieu:     { type: String },          // code de l'agence
   agent:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   reference:{ type: String },          // ref. Orange Money, Stripe…
@@ -63,7 +63,25 @@ const courseSchema = new mongoose.Schema({
   positionLivreur: pointSchema,
   ecartM:   Number,
   echecs:   [{ le: Date, motif: String, livreur: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, _id: false }],
+  // Payé d'avance en ligne (GNF) : reste acquis même si la course est annulée ensuite
+  payeGnf:  { type: Number, default: 0 },
+  payeeLe:  Date,
 }, { _id: false });
+
+// Paiement mobile money déclaré par le client (envoi sur le compte marchand TMS),
+// en attente de vérification par l'équipe
+const declarationSchema = new mongoose.Schema({
+  methode:   { type: String, enum: ['orange_money', 'mtn_momo'], required: true },
+  objet:     { type: String, enum: ['domicile', 'global'], default: 'global' },
+  montantGnf:{ type: Number, required: true },
+  reference: { type: String, required: true, trim: true },
+  telephone: { type: String, trim: true },       // numéro qui a payé
+  statut:    { type: String, enum: ['a_verifier', 'valide', 'refuse'], default: 'a_verifier' },
+  le:        { type: Date, default: Date.now },
+  traiteLe:  Date,
+  traitePar: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  motif:     String,
+}, { _id: true });
 
 const colisSchema = new mongoose.Schema({
   numeroSuivi: { type: String, unique: true, index: true },
@@ -110,6 +128,7 @@ const colisSchema = new mongoose.Schema({
   ramassage: { type: courseSchema, default: undefined },
   livraison: { type: courseSchema, default: undefined },
   paiements:      [paiementSchema],
+  declarations:   { type: [declarationSchema], default: undefined },
   avoirsGnf:      { type: Number, default: 0 },          // total des avoirs émis (en GNF)
   cgv: { version: String, accepteesLe: Date, par: String }, // conditions acceptées (en ligne ou au comptoir)
   photoDepot: { type: mongoose.Schema.Types.ObjectId, ref: 'Photo' },

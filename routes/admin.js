@@ -192,6 +192,12 @@ router.post('/courses/assigner', [
     livreur = await User.findOne({ _id: req.body.livreur, role: ROLES.LIVREUR, actif: true });
     if (!livreur) return res.status(404).json({ succes: false, message: 'Livreur introuvable.' });
   }
+  // Une course à domicile se paie d'avance : on prévient avant d'envoyer un livreur
+  if (livreur && !req.body.force) {
+    const c0 = await Colis.findOne({ numeroSuivi: String(req.body.numero).trim().toUpperCase() });
+    const v = c0?.[req.body.type] ? await dom.vueCourse(c0, req.body.type, await Config.get()) : null;
+    if (v && !v.payee) return res.status(409).json({ succes: false, code: 'non_payee', message: 'Cette course n\'est pas encore payée par le client.' });
+  }
   const colis = await dom.assigner(req.body.numero, req.body.type, livreur, { par: req.user });
   if (livreur) { const push = require('../utils/push'); push.sansAttendre(push.aLUtilisateur(livreur._id, { titre: 'Course pour vous', corps: `${req.body.type === 'ramassage' ? 'Ramassage' : 'Livraison'} ${colis.numeroSuivi}${colis[req.body.type]?.adresse?.quartier ? ` à ${colis[req.body.type].adresse.quartier}` : ''}.`, chemin: '/#/courses' })); }
   res.json({ succes: true, course: await dom.vueCourse(colis, req.body.type, await Config.get()) });

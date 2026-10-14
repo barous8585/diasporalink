@@ -129,6 +129,8 @@ async function demanderCourse(colis, type, data) {
   const position = nettoyerPoint(a.position) || (a.lien ? nettoyerPoint(await positionDepuisLien(a.lien)) : null);
   if (a.lien && !position) throw new ErreurMetier('Lien de position non reconnu. Envoyez la position depuis Google Maps ou WhatsApp.');
   const precedent = colis[type]?.demande && colis[type].statut !== STATUTS_COURSE.ANNULEE ? colis[type] : null;
+  // Une livraison payée puis annulée reste payée : si elle est redemandée, le paiement compte
+  const dejaPaye = { payeGnf: colis[type]?.payeGnf || 0, payeeLe: colis[type]?.payeeLe };
 
   const adresse = {
     nom: (a.nom || '').trim() || (type === 'ramassage' ? colis.expediteur?.nom : colis.destinataire?.nom),
@@ -165,6 +167,7 @@ async function demanderCourse(colis, type, data) {
     jour: jour && !isNaN(jour) ? jour : precedent?.jour,
     moment: moment || precedent?.moment,
     ...prix,
+    ...dejaPaye,
   };
   if (!precedent) {
     colis.historique.push({
@@ -200,6 +203,9 @@ async function vueCourse(colis, type, config) {
     description: colis.description,
     // À encaisser chez le client : tout le solde à la livraison ; au ramassage rien (payé à l'agence)
     soldeGnf: solde.soldeGnf, soldeEur: solde.soldeEur,
+    // Payée d'avance en ligne, ou tout le colis réglé (au comptoir par exemple)
+    payee: !!(c.prixGnf > 0 && (c.payeGnf || 0) >= c.prixGnf) || (solde.soldeGnf === 0 && !colis.tarif?.estime),
+    payeGnf: c.payeGnf || 0,
     empreinteCode: type === 'livraison' && colis.codeRetrait ? Colis.empreinteCode(colis.numeroSuivi, colis.codeRetrait) : undefined,
     majLe: colis.updatedAt,
   };

@@ -417,7 +417,7 @@
         <td>${esc([c.adresse?.quartier, c.adresse?.ville].filter(Boolean).join(', '))}<div class="tres-petit muet">${esc(c.adresse?.repere || '')}</div>
           ${c.adresse?.position?.lat ? `<a class="tres-petit" href="${esc(K.lienCarte(c.adresse.position))}" target="_blank" rel="noopener">carte</a>` : '<span class="tres-petit rouge">position manquante</span>'}</td>
         <td>${esc(nomLieu(c.agence))}<div class="tres-petit muet">${c.distanceKm ? `${esc(String(c.distanceKm).replace('.', ','))} km` : ''}</div></td>
-        <td class="chiffres">${c.prix ? montant(c.prix, c.devise) : '—'}</td>
+        <td class="chiffres">${c.prix ? montant(c.prix, c.devise) : '—'}<div class="tres-petit ${c.payee ? 'vert' : 'rouge'}">${c.prix ? (c.payee ? 'payée' : 'pas encore payée') : ''}</div></td>
         <td>${c.statut === 'en_route' ? `<span class="gras">${esc(c.livreurNom || '')}</span><div class="tres-petit muet">en route</div>`
           : `<select class="saisie" style="min-height:40px;font-size:14px" data-livreur aria-label="Livreur">${optionsLivreurs(c)}</select>`}
           ${c.echecs?.length ? `<div class="tres-petit rouge">${c.echecs.length} échec(s) : ${esc(c.echecs.at(-1).motif)}</div>` : ''}</td>
@@ -451,8 +451,14 @@
       const c = r.courses.find(x => x.numeroSuivi === num && x.type === type);
       tr.querySelector('[data-fiche]').addEventListener('click', (e) => { e.preventDefault(); ficheColis(num, courses); });
       tr.querySelector('[data-livreur]')?.addEventListener('change', async (e) => {
-        try { await api.post('/admin/courses/assigner', { numero: num, type, livreur: e.target.value || null }); toast(e.target.value ? 'Livreur assigné.' : 'Course libérée.', 'ok'); }
-        catch (err) { toast(err.message, 'erreur'); courses(); }
+        const envoyer = (force) => api.post('/admin/courses/assigner', { numero: num, type, livreur: e.target.value || null, force });
+        try { await envoyer(false); toast(e.target.value ? 'Livreur assigné.' : 'Course libérée.', 'ok'); }
+        catch (err) {
+          if (err.code === 'non_payee' && confirm(`${err.message} Envoyer quand même le livreur ? (Il encaissera chez le client.)`)) {
+            try { await envoyer(true); toast('Livreur assigné.', 'ok'); return; } catch (e2) { toast(e2.message, 'erreur'); }
+          } else if (err.code !== 'non_payee') toast(err.message, 'erreur');
+          courses();
+        }
       });
       tr.querySelector('[data-adresse]').addEventListener('click', () => modifierAdresse(c));
     });
@@ -680,7 +686,34 @@
     const jour = new Date().toISOString().slice(0, 10);
     main.innerHTML = `
       <div class="entete-page"><h1>Caisses</h1><label class="ligne" style="--gap:8px">Jour <input class="saisie" type="date" data-jour value="${jour}" style="width:auto"></label></div>
+      <div data-declarations></div>
       <div data-caisses></div>`;
+    // Paiements Orange Money / MTN MoMo déclarés par les clients : à vérifier sur le compte marchand
+    const chargerDeclarations = async () => {
+      const zone = main.querySelector('[data-declarations]');
+      const { declarations } = await api.get('/paiements/declarations');
+      zone.innerHTML = declarations.length ? `
+        <section class="panneau" style="margin-bottom:20px"><div class="panneau-tete"><div><h2>Paiements mobile money à vérifier</h2><p class="petit muet" style="margin-top:4px">Vérifiez sur le compte marchand que l'argent est bien arrivé avec cette référence, puis validez.</p></div><span class="badge b-arrive">${declarations.length}</span></div>
+          <div class="defile"><table class="tableau">
+            <thead><tr><th>Reçu le</th><th>Colis</th><th>Pour</th><th>Moyen</th><th>Référence</th><th>Payé depuis</th><th class="chiffres">Montant</th><th></th></tr></thead>
+            <tbody>${declarations.map(d => `<tr data-id="${esc(d.id)}">
+              <td>${esc(date(d.le))}</td><td><a href="#/colis?q=${esc(d.numeroSuivi)}" class="gras">${esc(d.numeroSuivi)}</a><div class="tres-petit muet">${esc(d.expediteur || '')}</div></td>
+              <td>${d.objet === 'domicile' ? 'Livraison / ramassage' : 'Solde du colis'}</td><td>${esc(d.methodeLabel)}</td>
+              <td class="gras">${esc(d.reference)}</td><td>${esc(d.telephone || '—')}</td><td class="chiffres gras">${gnf(d.montantGnf)}</td>
+              <td><div class="ligne" style="--gap:6px"><button class="btn btn-petit btn-principal" data-valider>Reçu</button><button class="btn btn-petit" data-refuser>Pas reçu</button></div></td>
+            </tr>`).join('')}</tbody></table></div></section>` : '';
+      zone.querySelectorAll('tr[data-id]').forEach(tr => {
+        const traiter = async (decision) => {
+          let motif = '';
+          if (decision === 'refuser') { motif = prompt('Motif (envoyé au client par SMS) :', 'Paiement introuvable avec cette référence.'); if (motif === null) return; }
+          try { await api.post(`/paiements/declarations/${tr.dataset.id}`, { decision, motif }); toast(decision === 'valider' ? 'Paiement enregistré, le client est prévenu.' : 'Client prévenu.', 'ok'); chargerDeclarations(); }
+          catch (err) { toast(err.message, 'erreur'); }
+        };
+        tr.querySelector('[data-valider]').addEventListener('click', () => traiter('valider'));
+        tr.querySelector('[data-refuser]').addEventListener('click', () => traiter('refuser'));
+      });
+    };
+    chargerDeclarations().catch(err => toast(err.message, 'erreur'));
     const charger = async (d) => {
       const r = await api.get(`/caisse/jour?date=${d}`);
       const methodes = Object.fromEntries(CONFIG.methodesPaiement.map(m => [m.key, m.label]));
@@ -800,6 +833,26 @@
               <label class="champ">TVA ${esc(pp.nom)} (encaissé en ${esc(pp.nom)}), en % <input class="saisie" name="tva_${pp.code}_taux" type="number" min="0" max="99" step="0.1" value="${Math.round((c.facturation?.tva?.[pp.code]?.taux || 0) * 1000) / 10}"></label>
               <label class="champ">Mention si TVA à 0 (${esc(pp.nom)}) <input class="saisie" name="tva_${pp.code}_mention" value="${esc(c.facturation?.tva?.[pp.code]?.mention || '')}" placeholder="ex. TVA non applicable, art. … du CGI"></label>`).join('')}
           </div></section>
+        <section class="panneau"><div class="panneau-tete"><div><h2>Paiement en ligne (espace client)</h2><p class="petit muet" style="margin-top:4px">Moyens proposés selon le pays d'où le client paie. Carte : par Stripe. Orange Money / MTN MoMo : le client envoie l'argent sur votre compte marchand et donne la référence, vous validez dans Caisses.</p></div></div>
+          <div class="panneau-corps pile" style="--gap:14px">
+            <div class="ligne" style="--gap:18px;flex-wrap:wrap">
+              <span class="gras">Depuis la France :</span>
+              <label class="case"><input type="checkbox" name="pay_FR_carte" ${c.paiements?.FR?.carte ? 'checked' : ''}> Carte bancaire</label>
+            </div>
+            <div class="ligne" style="--gap:18px;flex-wrap:wrap">
+              <span class="gras">Depuis la Guinée :</span>
+              <label class="case"><input type="checkbox" name="pay_GN_orange_money" ${c.paiements?.GN?.orange_money ? 'checked' : ''}> Orange Money</label>
+              <label class="case"><input type="checkbox" name="pay_GN_mtn_momo" ${c.paiements?.GN?.mtn_momo ? 'checked' : ''}> MTN MoMo</label>
+              <label class="case"><input type="checkbox" name="pay_GN_carte" ${c.paiements?.GN?.carte ? 'checked' : ''}> Carte bancaire</label>
+            </div>
+            <div class="formulaire-grille">
+              <label class="champ">Numéro marchand Orange Money <input class="saisie" name="pay_om_numero" value="${esc(c.paiements?.comptes?.orange_money?.numero || '')}" placeholder="6XX XX XX XX"></label>
+              <label class="champ">Nom affiché (Orange Money) <input class="saisie" name="pay_om_titulaire" value="${esc(c.paiements?.comptes?.orange_money?.titulaire || '')}"></label>
+              <label class="champ">Numéro marchand MTN MoMo <input class="saisie" name="pay_mtn_numero" value="${esc(c.paiements?.comptes?.mtn_momo?.numero || '')}" placeholder="66X XX XX XX"></label>
+              <label class="champ">Nom affiché (MTN MoMo) <input class="saisie" name="pay_mtn_titulaire" value="${esc(c.paiements?.comptes?.mtn_momo?.titulaire || '')}"></label>
+            </div>
+            <p class="tres-petit muet">Un moyen n'apparaît chez le client que s'il est coché ET configuré (numéro marchand renseigné, clés Stripe pour la carte).</p>
+          </div></section>
         <section class="panneau"><div class="panneau-tete"><div><h2>Réclamations</h2><p class="petit muet" style="margin-top:4px">Repris dans les conditions générales montrées aux clients.</p></div></div>
           <div class="panneau-corps formulaire-grille">
             <label class="champ">Indemnisation maximale sans assurance (€ par kg) <input class="saisie" name="lit_kg" type="number" min="0" step="1" value="${c.litiges?.indemnisationKgEur ?? ''}"></label>
@@ -900,6 +953,11 @@
         facturation: {
           capital: v('fac_capital'), email: v('fac_email'), telephone: v('fac_telephone'), site: v('fac_site'), mediateur: v('fac_mediateur'), conditionsPaiement: v('fac_conditions'),
           tva: Object.fromEntries(Object.keys(CONFIG.pays).map(k => [k, { taux: (parseFloat(v(`tva_${k}_taux`)) || 0) / 100, mention: v(`tva_${k}_mention`) }])),
+        },
+        paiements: {
+          FR: { carte: form.querySelector('[name=pay_FR_carte]').checked },
+          GN: { orange_money: form.querySelector('[name=pay_GN_orange_money]').checked, mtn_momo: form.querySelector('[name=pay_GN_mtn_momo]').checked, carte: form.querySelector('[name=pay_GN_carte]').checked },
+          comptes: { orange_money: { numero: v('pay_om_numero'), titulaire: v('pay_om_titulaire') }, mtn_momo: { numero: v('pay_mtn_numero'), titulaire: v('pay_mtn_titulaire') } },
         },
         litiges: { indemnisationKgEur: v('lit_kg'), delaiAbimeJours: v('lit_abime'), delaiPerduJours: v('lit_perdu') },
         domicile: Object.fromEntries([...form.querySelectorAll('[data-domicile]')].map(b => [b.dataset.domicile, {

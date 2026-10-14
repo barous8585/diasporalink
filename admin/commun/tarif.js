@@ -145,12 +145,27 @@ function calculerCourse(config, agence, point, { taux } = {}) {
   return { ok: true, distanceKm: km, prix, devise, prixGnf: enGnf(prix, devise, t) };
 }
 
-/** Frais des courses à domicile demandées sur un colis, en GNF. */
+const courseActive = (c) => !!(c?.demande && c.statut !== 'annulee');
+/**
+ * Frais des courses à domicile d'un colis, en GNF. Une course payée d'avance reste due
+ * (non remboursable) même si elle est annulée ensuite.
+ */
 function fraisDomicileGnf(colis) {
   let total = 0;
   for (const k of ['ramassage', 'livraison']) {
     const c = colis?.[k];
-    if (c?.demande && c.statut !== 'annulee') total += c.prixGnf || 0;
+    if (!c) continue;
+    total += courseActive(c) ? Math.max(c.prixGnf || 0, c.payeGnf || 0) : (c.payeGnf || 0);
+  }
+  return total;
+}
+
+/** Courses à domicile pas encore payées d'avance, en GNF (prix connu seulement). */
+function domicileAPayerGnf(colis) {
+  let total = 0;
+  for (const k of ['ramassage', 'livraison']) {
+    const c = colis?.[k];
+    if (courseActive(c) && c.prixGnf > 0) total += Math.max(0, c.prixGnf - (c.payeGnf || 0));
   }
   return total;
 }
@@ -182,7 +197,7 @@ function calculerSolde(colis, config, maintenant = new Date()) {
   };
 }
 
-const api = { calculerTarif, chiffrerArticles, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee, distanceKm, calculerCourse, fraisDomicileGnf, pointValide };
+const api = { calculerTarif, chiffrerArticles, domicileAPayerGnf, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee, distanceKm, calculerCourse, fraisDomicileGnf, pointValide };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else racine.KolisTarif = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -144,3 +144,13 @@ test('articles : inconnus ou sans prix ignorés, GNF dans le sens Guinée → Fr
   assert.strictEqual(t.poidsFacture, 1);
   assert.strictEqual(t.totalGnf, 120000 + 200000);
 });
+
+test('courses à domicile payées d\'avance : restent dues si annulées, prix monté = reste à payer', () => {
+  const { fraisDomicileGnf, domicileAPayerGnf } = require('../utils/tarif');
+  const liv = { demande: true, statut: 'a_planifier', prixGnf: 30000, payeGnf: 30000 };
+  assert.strictEqual(domicileAPayerGnf({ livraison: liv }), 0);
+  assert.strictEqual(fraisDomicileGnf({ livraison: { ...liv, demande: false, statut: 'annulee' } }), 30000);
+  assert.strictEqual(fraisDomicileGnf({ livraison: { ...liv, payeGnf: 0, demande: false, statut: 'annulee' } }), 0);
+  assert.strictEqual(domicileAPayerGnf({ livraison: { ...liv, prixGnf: 40000 } }), 10000);
+  assert.strictEqual(fraisDomicileGnf({ livraison: { ...liv, prixGnf: 20000 } }), 30000, 'adresse plus proche : pas de remboursement');
+});
