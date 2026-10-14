@@ -103,6 +103,9 @@ const colisSchema = new mongoose.Schema({
   ramassage: { type: courseSchema, default: undefined },
   livraison: { type: courseSchema, default: undefined },
   paiements:      [paiementSchema],
+  avoirsGnf:      { type: Number, default: 0 },          // total des avoirs émis (en GNF)
+  cgv: { version: String, accepteesLe: Date, par: String }, // conditions acceptées (en ligne ou au comptoir)
+  photoDepot: { type: mongoose.Schema.Types.ObjectId, ref: 'Photo' },
 
   // Statut
   statut:     { type: String, enum: Object.values(STATUTS), default: STATUTS.RESERVE, index: true },

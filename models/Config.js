@@ -32,6 +32,8 @@ const configSchema = new mongoose.Schema({
   },
   agences: [agenceSchema],
   domicile: { type: mongoose.Schema.Types.Mixed },
+  facturation: { type: mongoose.Schema.Types.Mixed },
+  litiges: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true, minimize: false });
 
 let cache = null;
@@ -47,6 +49,8 @@ configSchema.statics.get = async function () {
   if (!config.agences?.length) config.agences = CONFIG_DEFAUT.agences;
   if (!config.tarifs?.['FR-GN']) config.tarifs = CONFIG_DEFAUT.tarifs;
   if (!config.domicile) config.domicile = CONFIG_DEFAUT.domicile;
+  config.facturation = { ...CONFIG_DEFAUT.facturation, ...(config.facturation || {}), tva: { ...CONFIG_DEFAUT.facturation.tva, ...(config.facturation?.tva || {}) } };
+  config.litiges = { ...CONFIG_DEFAUT.litiges, ...(config.litiges || {}) };
   if (config.magasinage && config.magasinage.fraisJourEur === undefined) config.magasinage.fraisJourEur = CONFIG_DEFAUT.magasinage.fraisJourEur;
   cache = config;
   cacheAt = Date.now();
