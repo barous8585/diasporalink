@@ -88,6 +88,8 @@ const colisSchema = new mongoose.Schema({
   typeColis:      { type: String, enum: TYPES_COLIS.map(t => t.key), required: true },
   description:    { type: String, trim: true },
   nbCartons:      { type: Number, default: 1, min: 1 },
+  // Articles facturés à la pièce (chaussures, téléphone…), en plus du poids au kilo
+  articles:       { type: [{ cle: String, label: String, quantite: Number, _id: false }], default: undefined },
   poidsEstime:    { type: Number, min: 0 },
   poidsReel:      { type: Number, min: 0 },
   valeurDeclaree: { type: Number, default: 0 },
@@ -97,6 +99,8 @@ const colisSchema = new mongoose.Schema({
   tarif: {
     sens: String, devise: String, total: Number, mode: String, prixKg: Number, poidsFacture: Number, transport: Number,
     surcharge: Number, assurance: Number, totalEur: Number, taux: Number, totalGnf: Number,
+    poidsMin: Number, poidsArticles: Number, articlesTotal: Number,
+    articles: { type: [{ cle: String, label: String, quantite: Number, prix: Number, montant: Number, poids: Number, _id: false }], default: undefined },
     estime: { type: Boolean, default: true },
   },
   fraisDouaneGnf: { type: Number, default: 0 },

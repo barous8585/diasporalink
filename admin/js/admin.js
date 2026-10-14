@@ -755,6 +755,17 @@
           <label class="champ">Bateau : poids minimum (kg) <input class="saisie" name="${x.key}_mer_poidsMin" type="number" step="0.1" min="0" value="${t.mer?.poidsMin ?? ''}"></label>
         </div></section>`;
     };
+    const symbole = (sensKey) => ((c.tarifs?.[sensKey]?.devise || 'EUR') === 'EUR' ? '€' : 'GNF');
+    const articleHtml = (a) => `
+      <div class="carte formulaire-grille" data-article data-cle="${esc(a.cle || '')}" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr))">
+        <label class="champ" style="grid-column:span 2">Article <input class="saisie" name="art_label" value="${esc(a.label || '')}" placeholder="ex. Paire de chaussures"></label>
+        <label class="champ">Compte (kg) <input class="saisie" name="art_poids" type="number" min="0" step="0.1" value="${a.poids ?? ''}"></label>
+        ${CONFIG.sens.map(x => ['air', 'mer'].map(m => `<label class="champ" title="${esc(x.label)}">${esc(x.depart)} → ${esc(x.arrivee)} ${m === 'air' ? 'avion' : 'bateau'} (${symbole(x.key)}) <input class="saisie" name="art_${x.key}_${m}" type="number" min="0" step="${symbole(x.key) === '€' ? '0.5' : '1000'}" value="${a.prix?.[x.key]?.[m] ?? ''}" placeholder="—"></label>`).join('')).join('')}
+        <div class="ligne entre" style="grid-column:1/-1">
+          <label class="case"><input type="checkbox" name="art_actif" ${a.actif !== false ? 'checked' : ''}> Proposé aux clients</label>
+          <button type="button" class="btn btn-petit" data-suppr-article>${ic('fermer', 'ic-sm')} Retirer</button>
+        </div>
+      </div>`;
     main.innerHTML = `
       <div class="entete-page"><h1>Tarifs &amp; agences</h1></div>
       <form class="pile" style="--gap:20px;max-width:1040px" data-reglages>
@@ -764,6 +775,8 @@
             <p class="petit muet" style="align-self:end">Dernière mise à jour : ${esc(date(c.tauxMisAJourLe))}</p>
           </div></section>
         ${CONFIG.sens.map(blocTarif).join('')}
+        <section class="panneau"><div class="panneau-tete"><div><h2>Articles à la pièce</h2><p class="petit muet" style="margin-top:4px">Prix fixe par article (chaussures, téléphone…) au lieu du prix au kilo. « Compte » : kilos retirés de la pesée pour chaque article, le surplus est payé au kilo. Laissez un prix vide pour ne pas proposer l'article dans ce sens ou ce mode.</p></div><button type="button" class="btn btn-petit" data-ajout-article>${ic('plus', 'ic-sm')} Ajouter un article</button></div>
+          <div class="panneau-corps pile" data-liste-articles>${(c.articles || []).map(articleHtml).join('')}</div></section>
         <section class="panneau"><div class="panneau-tete"><h2>Suppléments et assurance</h2></div>
           <div class="panneau-corps formulaire-grille">
             ${CONFIG.typesColis.map(t => `<label class="champ">Supplément ${esc(t.label.toLowerCase())} (%) <input class="saisie" name="sur_${t.key}" type="number" step="1" min="0" value="${Math.round((c.surcharges?.[t.key] || 0) * 100)}"></label>`).join('')}
@@ -844,6 +857,14 @@
       } catch (err) { toast(err.message, 'erreur'); } finally { b.disabled = false; }
     });
     majExemples();
+    form.querySelector('[data-ajout-article]').addEventListener('click', () => {
+      form.querySelector('[data-liste-articles]').insertAdjacentHTML('beforeend', articleHtml({ actif: true }));
+      form.querySelector('[data-liste-articles] [data-article]:last-child [name=art_label]').focus();
+    });
+    form.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-suppr-article]');
+      if (b && confirm('Retirer cet article du catalogue ? (Les colis déjà enregistrés gardent leur prix.)')) b.closest('[data-article]').remove();
+    });
     form.querySelector('[data-ajout]').addEventListener('click', () => {
       form.querySelector('[data-liste-agences]').insertAdjacentHTML('beforeend', agenceHtml({ pays: 'GN' }));
     });
@@ -863,8 +884,16 @@
         air: { prixKg: v(`${x.key}_air_prixKg`), poidsMin: v(`${x.key}_air_poidsMin`) },
         mer: { prixKg: v(`${x.key}_mer_prixKg`), poidsMin: v(`${x.key}_mer_poidsMin`) },
       }]));
+      const articles = [...form.querySelectorAll('[data-article]')].map(bloc => {
+        const val = (n) => bloc.querySelector(`[name="${n}"]`).value.trim();
+        return {
+          cle: bloc.dataset.cle || undefined, label: val('art_label'), poids: val('art_poids') || 0,
+          actif: bloc.querySelector('[name=art_actif]').checked,
+          prix: Object.fromEntries(CONFIG.sens.map(x => [x.key, Object.fromEntries(['air', 'mer'].map(m => [m, val(`art_${x.key}_${m}`)]).filter(([, p]) => p !== ''))])),
+        };
+      }).filter(a => a.label);
       const corps = {
-        tauxEurGnf: v('tauxEurGnf'), tarifs,
+        tauxEurGnf: v('tauxEurGnf'), tarifs, articles,
         surcharges: Object.fromEntries(CONFIG.typesColis.map(t => [t.key, (parseFloat(v(`sur_${t.key}`)) || 0) / 100])),
         tauxAssurance: (parseFloat(v('tauxAssurance')) || 0) / 100,
         magasinage: { joursGratuits: v('joursGratuits'), fraisJourGnf: v('fraisJourGnf'), fraisJourEur: v('fraisJourEur') },

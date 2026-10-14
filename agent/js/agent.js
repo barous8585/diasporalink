@@ -500,10 +500,13 @@
       depot: CTX?.lieu?.code || r.depot || CONFIG.agences[0]?.code,
       mode: r.mode || 'air', typeColis: r.typeColis || 'vetements', guichet: r.guichet || '',
       assurance: !!r.assurance, payeurArrivee: !!r.payeurArrivee, methode: 'especes',
+      articles: Object.fromEntries((r.articles || []).map(a => [a.cle, a.quantite])),
     };
     const paysDepart = () => agenceDe(etat.depot)?.pays || 'FR';
     const paysDest = () => (paysDepart() === 'FR' ? 'GN' : 'FR');
     const sens = () => `${paysDepart()}-${paysDest()}`;
+    const articlesDispo = () => (CONFIG.articles || []).filter(a => Number.isFinite(parseFloat(a.prix?.[sens()]?.[etat.mode])));
+    const articlesChoisis = () => articlesDispo().filter(a => etat.articles[a.cle] > 0).map(a => ({ cle: a.cle, quantite: etat.articles[a.cle] }));
     const devisePaie = () => CONFIG.pays[paysDepart()]?.devise || 'EUR'; // on paie dans la devise du pays de dépôt
     const optionsRetrait = () => {
       const parVille = {};
@@ -520,11 +523,18 @@
             <input class="saisie saisie-forte gros-poids" name="poidsReel" type="number" inputmode="decimal" step="0.1" min="0.1" required placeholder="0,0">
           </label>
           ${r.poidsEstime ? `<p class="petit muet centre" data-ecart>Annoncé par le client : ${kg(r.poidsEstime)}</p>` : ''}
+          <p class="petit centre" data-repartition></p>
+        </div>
+
+        <div class="carte pile" style="--gap:2px" data-bloc-articles>
+          <div class="gras">Articles à la pièce</div>
+          <div class="tres-petit muet" style="margin-bottom:6px">Chaussures, téléphones… payés à la pièce. Pesez tout le colis : leur poids forfaitaire est retiré du poids au kilo.</div>
+          <div class="pile" style="--gap:0" data-articles></div>
         </div>
 
         ${choisirDepart ? `<label class="champ">Agence de départ <select class="saisie" name="depot">${CONFIG.agences.map(a => `<option value="${esc(a.code)}" ${a.code === etat.depot ? 'selected' : ''}>${esc(a.nom)} · ${esc(CONFIG.pays[a.pays]?.nom || a.pays)}</option>`).join('')}</select></label>` : ''}
         <div class="segments" role="group" aria-label="Transport">${CONFIG.modes.map(m => `<button type="button" data-mode="${m.key}" aria-pressed="${etat.mode === m.key}">${esc(m.label)}</button>`).join('')}</div>
-        <label class="champ">Contenu
+        <label class="champ">Type d'affaires au kilo
           <select class="saisie" name="typeColis">${CONFIG.typesColis.map(t => `<option value="${t.key}" ${t.key === etat.typeColis ? 'selected' : ''}>${esc(t.label)}${t.surcharge ? ` (+${Math.round(t.surcharge * 100)} %)` : ''}</option>`).join('')}</select>
         </label>
         <label class="champ"><span data-lib-retrait>Agence de retrait</span>
@@ -645,13 +655,41 @@
       form.querySelectorAll('[data-methode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.methode === etat.methode));
       const deviseTarif = CONFIG.tarifs[sens()]?.devise || 'EUR';
       $('[data-lib-valeur]').textContent = `Valeur déclarée (${deviseTarif === 'EUR' ? '€' : 'GNF'})`;
-      if (!(poids > 0)) { $('[data-prix]').textContent = '—'; $('[data-prix-autre]').textContent = '—'; $('[data-detail]').textContent = 'Pesez le colis.'; tarif = null; return; }
-      tarif = KolisTarif.calculerTarif(CONFIG.regles, { sens: sens(), mode: etat.mode, poidsKg: poids, typeColis: etat.typeColis, valeurDeclaree: form.valeurDeclaree.value, assurance: form.assurance.checked });
+      const dispo = articlesDispo();
+      $('[data-bloc-articles]').classList.toggle('cache', !dispo.length);
+      // La liste n'est reconstruite que si les articles ou leurs prix changent : sinon un clic
+      // sur « + » juste après la saisie du poids serait perdu (la liste changerait sous le doigt)
+      const signature = JSON.stringify(dispo.map(a => [a.cle, a.label, a.prix[sens()][etat.mode]]));
+      if ($('[data-articles]').dataset.signature !== signature) {
+        $('[data-articles]').dataset.signature = signature;
+        $('[data-articles]').innerHTML = dispo.map(a => {
+        const q = etat.articles[a.cle] || 0;
+        return `<div class="ligne-article${q ? ' choisi' : ''}">
+          <div><div class="nom">${esc(a.label)}</div><div class="tres-petit muet">${esc(montant(parseFloat(a.prix[sens()][etat.mode]), deviseTarif))} la pièce · compte ${esc(String(a.poids || 0).replace('.', ','))} kg</div></div>
+          <div class="compteur">
+            <button type="button" class="btn btn-rond" data-art-moins="${esc(a.cle)}" aria-label="Retirer : ${esc(a.label)}" ${q ? '' : 'disabled'}>−</button>
+            <span class="gras">${q}</span>
+            <button type="button" class="btn btn-rond" data-art-plus="${esc(a.cle)}" aria-label="Ajouter : ${esc(a.label)}">+</button>
+          </div>
+        </div>`;
+      }).join('');
+      }
+      $('[data-articles]').querySelectorAll('.ligne-article').forEach(l => {
+        const cle = l.querySelector('[data-art-plus]').dataset.artPlus;
+        const q = etat.articles[cle] || 0;
+        l.classList.toggle('choisi', q > 0);
+        l.querySelector('.compteur .gras').textContent = q;
+        l.querySelector('[data-art-moins]').disabled = !q;
+      });
+      if (!(poids > 0)) { $('[data-repartition]').textContent = ''; $('[data-prix]').textContent = '—'; $('[data-prix-autre]').textContent = '—'; $('[data-detail]').textContent = 'Pesez le colis.'; tarif = null; return; }
+      tarif = KolisTarif.calculerTarif(CONFIG.regles, { sens: sens(), mode: etat.mode, poidsKg: poids, typeColis: etat.typeColis, valeurDeclaree: form.valeurDeclaree.value, assurance: form.assurance.checked, articles: articlesChoisis() });
+      $('[data-repartition]').innerHTML = tarif.articles.length
+        ? `${kg(tarif.poidsFacture)} au kilo · ${kg(tarif.poidsArticles)} comptés dans les articles${poids < tarif.poidsArticles ? ' <b style="color:var(--rouge)">(la balance indique moins que les articles : vérifiez)</b>' : ''}` : '';
       $('[data-prix]').textContent = dev(aPayer());
       $('[data-prix-autre]').textContent = devisePaie() === 'EUR' ? gnf(tarif.totalGnf) : eur(tarif.totalEur);
       const md = (n) => montant(n, tarif.devise);
       const cLiv = form.livraisonDom.checked ? adrLiv.course() : null;
-      $('[data-detail]').textContent = `${kg(tarif.poidsFacture)} × ${md(tarif.prixKg)}${tarif.surcharge ? ` + ${md(tarif.surcharge)} supplément` : ''}${tarif.assurance ? ` + ${md(tarif.assurance)} assurance` : ''}${ramasse?.prix ? ` + ${montant(ramasse.prix, ramasse.devise)} ramassage` : ''}${cLiv?.ok ? ` + ${montant(cLiv.prix, cLiv.devise)} livraison` : form.livraisonDom.checked ? ' + livraison (prix quand la position sera connue)' : ''}`;
+      $('[data-detail]').textContent = `${tarif.transport || !tarif.articles.length ? `${kg(tarif.poidsFacture)} × ${md(tarif.prixKg)}` : ''}${tarif.articles.map(l => `${tarif.transport ? ' + ' : ''}${l.quantite} × ${l.label.toLowerCase()} (${md(l.montant)})`).join(tarif.transport ? '' : ' + ')}${tarif.surcharge ? ` + ${md(tarif.surcharge)} supplément` : ''}${tarif.assurance ? ` + ${md(tarif.assurance)} assurance` : ''}${ramasse?.prix ? ` + ${montant(ramasse.prix, ramasse.devise)} ramassage` : ''}${cLiv?.ok ? ` + ${montant(cLiv.prix, cLiv.devise)} livraison` : form.livraisonDom.checked ? ' + livraison (prix quand la position sera connue)' : ''}`;
       if (r.poidsEstime) {
         const ecart = Math.round((poids - r.poidsEstime) * 10) / 10;
         $('[data-ecart]').innerHTML = `Annoncé : ${kg(r.poidsEstime)} · ${ecart > 0 ? `<b style="color:var(--rouge)">+${kg(ecart)}</b>` : ecart < 0 ? `${kg(ecart)}` : 'identique'}`;
@@ -663,6 +701,14 @@
     form.addEventListener('input', (e) => { if (e.target.name === 'montant') e.target.dataset.touche = '1'; calc(); });
     form.addEventListener('change', (e) => { if (e.target.name === 'guichet') adrLiv.recalculer(); calc(); });
     form.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { etat.mode = b.dataset.mode; calc(); }));
+    $('[data-articles]').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-art-plus],[data-art-moins]');
+      if (!b) return;
+      const cle = b.dataset.artPlus || b.dataset.artMoins;
+      const q = Math.min(Math.max((etat.articles[cle] || 0) + (b.dataset.artPlus ? 1 : -1), 0), 99);
+      if (q) etat.articles[cle] = q; else delete etat.articles[cle];
+      calc();
+    });
     $('[data-retour]').addEventListener('click', vueDepot);
     calc();
     form.poidsReel.focus();
@@ -694,6 +740,7 @@
           depot: etat.depot,
           poidsReel: parseFloat(form.poidsReel.value), mode: etat.mode, typeColis: etat.typeColis,
           guichet: form.guichet.value, nbCartons: parseInt(form.nbCartons.value, 10) || 1,
+          articles: articlesChoisis(),
           description: form.description.value, assurance: form.assurance.checked,
           valeurDeclaree: parseFloat(form.valeurDeclaree.value) || 0, payeurArrivee: form.payeurArrivee.checked,
           expediteur: { nom: form.expNom.value.trim(), telephone: normTel(form.expTel.value) },

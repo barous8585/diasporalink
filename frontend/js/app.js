@@ -237,7 +237,7 @@
         <div class="carte-vert pile" style="--gap:10px">
           <span class="badge" style="align-self:flex-start;background:var(--ocre);color:var(--encre)">${pret ? ic('ok', 'ic-sm') : icMode(c.mode).replace('class="ic ', 'class="ic ic-sm ')} ${esc(c.statutLabel)}</span>
           <h1 style="font-size:26px">${esc(titreStatut(c, g))}</h1>
-          <p style="opacity:.9">${poids ? esc(kg(poids)) : ''}${c.nbCartons ? ` · ${c.nbCartons} carton${c.nbCartons > 1 ? 's' : ''}` : ''}${c.lotCode ? ` · lot ${esc(c.lotCode)}` : ''}</p>
+          <p style="opacity:.9">${poids ? esc(kg(poids)) : ''}${c.articles?.length ? ` · ${esc(c.articles.map(a => `${a.quantite} ${a.label.toLowerCase()}`).join(', '))}` : ''}${c.nbCartons > 1 ? ` · ${c.nbCartons} cartons` : ''}${c.lotCode ? ` · lot ${esc(c.lotCode)}` : ''}</p>
         </div>
 
         ${pret && c.codeRetrait ? `
@@ -567,8 +567,14 @@
   //  ENVOYER : estimation + réservation
   // ════════════════════════════════════════════════════════
   async function envoyer() {
-    const defaut = { sens: 'FR-GN', mode: 'air', poids: 5, type: 'vetements', assurance: false, valeur: '', depart: 'agence', arrivee: 'agence' };
+    const defaut = { sens: 'FR-GN', mode: 'air', poids: 5, type: 'vetements', assurance: false, valeur: '', depart: 'agence', arrivee: 'agence', articles: {} };
     const etat = { ...defaut, ...(stock.lire('brouillon_envoi') || {}) };
+    if (!etat.articles || typeof etat.articles !== 'object') etat.articles = {};
+    // Articles à la pièce proposés pour ce sens et ce mode (ceux qui ont un prix)
+    const articlesDispo = () => (CONFIG.articles || []).filter(a => Number.isFinite(parseFloat(a.prix?.[etat.sens]?.[etat.mode])));
+    const articlesChoisis = () => articlesDispo().filter(a => etat.articles[a.cle] > 0).map(a => ({ cle: a.cle, quantite: etat.articles[a.cle] }));
+    const poidsArticles = () => articlesDispo().reduce((s, a) => s + (etat.articles[a.cle] || 0) * (parseFloat(a.poids) || 0), 0);
+    const nombreFr = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
     if (!CONFIG.sens.some(s => s.key === etat.sens)) etat.sens = 'FR-GN';
     const types = CONFIG.typesColis;
     const sensInfo = () => CONFIG.sens.find(s => s.key === etat.sens);
@@ -605,19 +611,28 @@
         </section>
 
         <section class="pile" style="--gap:8px" aria-labelledby="q2">
-          <h3 id="q2">3. Poids estimé</h3>
+          <h3 id="q2">3. Ce que vous envoyez</h3>
           <div class="carte pile">
+            <div class="ligne entre" style="align-items:flex-start">
+              <div><div class="gras">Au kilo</div><div class="tres-petit muet">Vêtements, vivres, affaires…</div></div>
+              <span class="tres-petit muet" style="text-align:right" data-note-poids></span>
+            </div>
             <div class="pas-a-pas">
-              <button type="button" class="btn" data-moins aria-label="Moins un kilo">−</button>
-              <div><div class="valeur" data-poids aria-live="polite"></div><div class="tres-petit muet centre" data-note-poids></div></div>
-              <button type="button" class="btn" data-plus aria-label="Plus un kilo">+</button>
+              <button type="button" class="btn" data-moins aria-label="Un kilo de moins">−</button>
+              <label class="saisie-poids"><input type="text" inputmode="decimal" autocomplete="off" data-poids aria-label="Poids en kilos" placeholder="0"><span>kg</span></label>
+              <button type="button" class="btn" data-plus aria-label="Un kilo de plus">+</button>
             </div>
             <div class="ligne" style="--gap:6px;flex-wrap:wrap">${[2, 5, 10, 20, 30].map(k => `<button type="button" class="choix choix-noir" style="min-height:44px;flex:1;align-items:center;padding:0 4px;white-space:nowrap;font-weight:600" data-preset="${k}">${k} kg</button>`).join('')}</div>
+          </div>
+          <div class="carte pile" style="--gap:2px" data-bloc-articles>
+            <div class="gras">À la pièce</div>
+            <div class="tres-petit muet" style="margin-bottom:6px">Prix fixe par article, quel que soit le reste du colis. Ne comptez pas ces articles dans le poids au kilo.</div>
+            <div class="pile" style="--gap:0" data-articles></div>
           </div>
         </section>
 
         <section class="pile" style="--gap:8px" aria-labelledby="q3">
-          <h3 id="q3">4. Contenu</h3>
+          <h3 id="q3">4. Type d'affaires au kilo</h3>
           <div class="grille-3">${types.map(t => `
             <button type="button" class="choix choix-ocre" style="align-items:center;text-align:center;min-height:68px" data-type="${t.key}" aria-pressed="${etat.type === t.key}">
               <span class="nom" style="font-size:15px">${esc(t.label)}</span>${t.surcharge ? `<span class="sous">+${Math.round(t.surcharge * 100)} %</span>` : ''}
@@ -633,6 +648,7 @@
           <div class="petit" style="color: var(--gris)">Prix estimé</div>
           <div class="prix-gnf" data-prix-principal></div>
           <div data-prix-autre></div>
+          <div class="petit" data-prix-detail style="color: var(--gris)"></div>
           <div class="petit" data-prix-domicile style="color: var(--gris)"></div>
           <div style="height:1px;background: var(--ligne-2);margin:10px 0 6px"></div>
           <div class="ligne tres-petit" style="color: var(--gris);align-items:flex-start">${ic('balance', 'ic-sm')}<span>Le prix final est fixé à la pesée en agence. Taux : 1 € = ${gnf(CONFIG.tauxEurGnf)}, bloqué sur votre reçu.</span></div>
@@ -667,8 +683,7 @@
           <h3>7. Pour qui ?</h3>
           <label class="champ">Nom du destinataire <input class="saisie" name="nom" required autocomplete="off"></label>
           <label class="champ"><span data-lib-tel>Son téléphone</span> <input class="saisie" name="telephone" type="tel" inputmode="tel" required></label>
-          <label class="champ">Nombre de cartons <input class="saisie" name="nbCartons" type="number" inputmode="numeric" min="1" value="1"></label>
-          <label class="champ">Contenu (facultatif) <input class="saisie" name="description" placeholder="Ex. vêtements, chaussures"></label>
+          <label class="champ">Contenu (facultatif) <input class="saisie" name="description" placeholder="Ex. vêtements, pagnes, épices"></label>
           <label class="case"><input type="checkbox" name="payeurArrivee"> Le destinataire paiera à l'arrivée</label>
           <label class="case" style="align-items:flex-start"><input type="checkbox" name="cgv" style="margin-top:2px"> <span>J'accepte les <a href="#/cgv" target="_blank">conditions générales</a> et je confirme que mon colis ne contient aucun <a href="#/interdits" target="_blank">objet interdit</a>.</span></label>
           <button class="btn btn-principal btn-grand btn-plein" type="submit">Réserver mon envoi</button>
@@ -735,18 +750,72 @@
       const devise = grille.devise;
       const m = grille[etat.mode];
       $('[data-lib-valeur]').textContent = `Valeur du contenu (${devise === 'EUR' ? '€' : 'GNF'})`;
-      $('[data-poids]').textContent = kg(etat.poids);
-      $('[data-note-poids]').textContent = etat.poids < m.poidsMin ? `minimum facturé : ${m.poidsMin} kg` : `${montant(m.prixKg, devise)} le kilo`;
-      const t = KolisTarif.calculerTarif(CONFIG.regles, { sens: etat.sens, mode: etat.mode, poidsKg: etat.poids, typeColis: etat.type, valeurDeclaree: etat.valeur, assurance: etat.assurance });
+      const champPoids = $('[data-poids]');
+      if (document.activeElement !== champPoids) champPoids.value = etat.poids ? nombreFr(etat.poids) : '';
+      // Articles à la pièce
+      const dispo = articlesDispo();
+      $('[data-bloc-articles]').classList.toggle('cache', !dispo.length);
+      // La liste n'est reconstruite que si les articles ou leurs prix changent : sinon un clic
+      // sur « + » juste après la saisie du poids serait perdu (la liste changerait sous le doigt)
+      const signature = JSON.stringify(dispo.map(a => [a.cle, a.label, a.prix[etat.sens][etat.mode]]));
+      if ($('[data-articles]').dataset.signature !== signature) {
+        $('[data-articles]').dataset.signature = signature;
+        $('[data-articles]').innerHTML = dispo.map(a => {
+        const q = etat.articles[a.cle] || 0;
+        return `<div class="ligne-article${q ? ' choisi' : ''}">
+          <div><div class="nom">${esc(a.label)}</div><div class="tres-petit muet">${esc(montant(parseFloat(a.prix[etat.sens][etat.mode]), devise))} la pièce</div></div>
+          <div class="compteur">
+            <button type="button" class="btn btn-rond" data-art-moins="${esc(a.cle)}" aria-label="Retirer : ${esc(a.label)}" ${q ? '' : 'disabled'}>−</button>
+            <span class="gras" aria-live="polite">${q}</span>
+            <button type="button" class="btn btn-rond" data-art-plus="${esc(a.cle)}" aria-label="Ajouter : ${esc(a.label)}">+</button>
+          </div>
+        </div>`;
+      }).join('');
+      }
+      $('[data-articles]').querySelectorAll('.ligne-article').forEach(l => {
+        const cle = l.querySelector('[data-art-plus]').dataset.artPlus;
+        const q = etat.articles[cle] || 0;
+        l.classList.toggle('choisi', q > 0);
+        l.querySelector('.compteur .gras').textContent = q;
+        l.querySelector('[data-art-moins]').disabled = !q;
+      });
+      const choisis = articlesChoisis();
+      const pArt = poidsArticles();
+      const t = KolisTarif.calculerTarif(CONFIG.regles, { sens: etat.sens, mode: etat.mode, poidsKg: etat.poids + pArt, typeColis: etat.type, valeurDeclaree: etat.valeur, assurance: etat.assurance, articles: choisis });
+      $('[data-note-poids]').innerHTML = !etat.poids
+        ? (choisis.length ? 'rien au kilo' : 'Indiquez un poids<br>ou un article')
+        : !choisis.length && etat.poids < m.poidsMin ? `${montant(m.prixKg, devise)} le kilo<br>minimum facturé : ${m.poidsMin} kg` : `${montant(m.prixKg, devise)} le kilo`;
       $('[data-prix-principal]').textContent = devise === 'EUR' ? eur(t.totalEur) : gnf(t.totalGnf);
       $('[data-prix-autre]').textContent = `soit ${devise === 'EUR' ? gnf(t.totalGnf) : eur(t.totalEur)}`;
+      const detail = [];
+      if (t.transport) detail.push(`${nombreFr(t.poidsFacture)} kg au kilo : ${montant(t.transport + t.surcharge, devise)}`);
+      t.articles.forEach(l => detail.push(`${l.quantite} × ${l.label.toLowerCase()} : ${montant(l.montant, devise)}`));
+      if (t.assurance) detail.push(`assurance : ${montant(t.assurance, devise)}`);
+      $('[data-prix-detail]').innerHTML = detail.length > 1 || t.articles.length ? detail.map(esc).join('<br>') : '';
     };
     main.querySelectorAll('[data-sens]').forEach(b => b.addEventListener('click', () => { etat.sens = b.dataset.sens; maj(); }));
     main.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { etat.mode = b.dataset.mode; maj(); }));
     main.querySelectorAll('[data-type]').forEach(b => b.addEventListener('click', () => { etat.type = b.dataset.type; maj(); }));
     main.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => { etat.poids = Number(b.dataset.preset); maj(); }));
-    $('[data-moins]').addEventListener('click', () => { etat.poids = Math.max(1, Math.round(etat.poids) - 1); maj(); });
-    $('[data-plus]').addEventListener('click', () => { etat.poids = Math.min(500, Math.round(etat.poids) + 1); maj(); });
+    $('[data-moins]').addEventListener('click', () => { etat.poids = Math.max(0, Math.ceil(etat.poids) - 1); maj(); });
+    $('[data-plus]').addEventListener('click', () => { etat.poids = Math.min(500, Math.floor(etat.poids) + 1); maj(); });
+    // Poids tapé au clavier (virgule ou point)
+    $('[data-poids]').addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''));
+      etat.poids = Number.isFinite(v) ? Math.min(Math.max(v, 0), 500) : 0;
+      maj();
+    });
+    $('[data-poids]').addEventListener('blur', () => maj());
+    $('[data-poids]').addEventListener('focus', (e) => e.target.select());
+    $('[data-articles]').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-art-plus],[data-art-moins]');
+      if (!b) return;
+      const cle = b.dataset.artPlus || b.dataset.artMoins;
+      const q = (etat.articles[cle] || 0) + (b.dataset.artPlus ? 1 : -1);
+      etat.articles = { ...etat.articles, [cle]: Math.min(Math.max(q, 0), 99) };
+      if (!etat.articles[cle]) delete etat.articles[cle];
+      maj();
+    });
     $('[data-assurance]').addEventListener('change', (e) => { etat.assurance = e.target.checked; maj(); });
     $('[data-valeur]').addEventListener('input', (e) => { etat.valeur = e.target.value; maj(); });
     main.querySelectorAll('[data-depart]').forEach(b => b.addEventListener('click', () => { etat.depart = b.dataset.depart; maj(); }));
@@ -759,6 +828,9 @@
       e.preventDefault();
       const f = new FormData(e.target);
       if (!f.get('nom') || !f.get('telephone')) { toast('Indiquez le nom et le téléphone du destinataire.', 'erreur'); return; }
+      const choisis = articlesChoisis();
+      const poidsTotal = Math.round((etat.poids + poidsArticles()) * 10) / 10;
+      if (!(poidsTotal >= 0.1)) { toast('Indiquez le poids de ce qui est payé au kilo, ou ajoutez un article à la pièce.', 'erreur'); $('[data-poids]').focus(); return; }
       if (f.get('cgv') !== 'on') { toast('Acceptez les conditions générales et confirmez qu\'il n\'y a aucun objet interdit.', 'erreur'); return; }
       const ram = etat.depart === 'domicile' ? adrRam.lire() : null;
       const liv = etat.arrivee === 'domicile' ? adrLiv.lire() : null;
@@ -776,9 +848,9 @@
       const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
       try {
         const r = await api.post('/colis', {
-          mode: etat.mode, typeColis: etat.type, poidsEstime: etat.poids,
+          mode: etat.mode, typeColis: etat.type, poidsEstime: poidsTotal, articles: choisis,
           assurance: etat.assurance, valeurDeclaree: parseFloat(etat.valeur) || 0,
-          depot: f.get('depot'), guichet: f.get('guichet'), nbCartons: parseInt(f.get('nbCartons'), 10) || 1,
+          depot: f.get('depot'), guichet: f.get('guichet'),
           description: f.get('description'), payeurArrivee: f.get('payeurArrivee') === 'on', cgvAcceptees: true,
           destinataire: { nom: f.get('nom'), telephone: normTel(f.get('telephone')) },
           ramassage: ram ? { demande: true, adresse: ram, jour: f.get('ram_jour') || undefined, moment: f.get('ram_moment') } : undefined,

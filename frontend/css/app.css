@@ -51,6 +51,10 @@ main > .pile { --gap: 18px; }
 .pas-a-pas { display: flex; align-items: center; justify-content: space-between; }
 .pas-a-pas .valeur { font-family: var(--police-titre); font-size: 40px; font-weight: 800; line-height: 1; text-align: center; }
 .pas-a-pas .btn { width: 56px; height: 56px; font-size: 28px; background: var(--fond); border: none; }
+.saisie-poids { display: flex; align-items: baseline; justify-content: center; gap: 4px; flex: 1; min-width: 0; cursor: text; }
+.saisie-poids input { width: 100%; max-width: 150px; border: none; border-bottom: 2px solid var(--ligne-2, #ddd); background: transparent; font-family: var(--police-titre); font-size: 40px; font-weight: 800; line-height: 1.1; text-align: center; color: inherit; padding: 2px 0; border-radius: 0; }
+.saisie-poids input:focus { outline: none; border-bottom-color: var(--marine, #13294b); }
+.saisie-poids span { font-size: 18px; font-weight: 700; color: var(--gris, #777); }
 .etape-num { width: 26px; height: 26px; border-radius: 13px; background: var(--marine); color: #fff; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
 
 /* Scanner caméra */

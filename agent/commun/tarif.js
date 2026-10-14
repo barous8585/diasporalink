@@ -13,43 +13,76 @@ const arrondiGnf = (n) => Math.ceil(n / 500) * 500;
 const paysArrivee = (sens) => String(sens || 'FR-GN').split('-')[1];
 
 /**
+ * Articles facturés à la pièce (chaussures, téléphone…) : prix fixe par sens et par mode,
+ * dans la devise du sens. Chaque article « compte » pour un poids forfaitaire, retiré
+ * du poids pesé : le reste (vêtements, vivres…) est facturé au kilo.
+ * @param articles [{ cle, quantite }] ; les articles inconnus ou fermés sont ignorés.
+ */
+function chiffrerArticles(config, sens, mode, articles) {
+  const catalogue = config.articles || [];
+  const lignes = [];
+  for (const a of Array.isArray(articles) ? articles : []) {
+    const quantite = Math.min(Math.max(parseInt(a?.quantite, 10) || 0, 0), 99);
+    const art = catalogue.find(x => x.cle === a?.cle && x.actif !== false);
+    const prix = parseFloat(art?.prix?.[sens]?.[mode]);
+    if (!quantite || !art || !(prix >= 0)) continue;
+    const exist = lignes.find(l => l.cle === art.cle);
+    if (exist) { exist.quantite += quantite; exist.montant = exist.quantite * prix; exist.poids = exist.quantite * (art.poids || 0); continue; }
+    lignes.push({ cle: art.cle, label: art.label, quantite, prix, montant: quantite * prix, poids: quantite * (parseFloat(art.poids) || 0) });
+  }
+  return lignes;
+}
+
+/**
  * Calcule le prix d'un envoi.
  * Le prix au kilo est exprimé dans la devise du sens (€ depuis la France,
  * GNF depuis la Guinée) ; l'autre devise est calculée au taux du jour.
- * @param {object} config  { tarifs: { 'FR-GN': { devise, air, mer }, … }, surcharges, tauxAssurance, tauxEurGnf }
- * @param {object} p       { sens, mode, poidsKg, typeColis, valeurDeclaree, assurance }
+ * @param {object} config  { tarifs: { 'FR-GN': { devise, air, mer }, … }, surcharges, tauxAssurance, tauxEurGnf, articles }
+ * @param {object} p       { sens, mode, poidsKg, typeColis, valeurDeclaree, assurance, articles }
+ *                         poidsKg = poids total sur la balance (articles compris).
  *                         valeurDeclaree est dans la devise du sens.
  */
-function calculerTarif(config, { sens = 'FR-GN', mode, poidsKg, typeColis, valeurDeclaree = 0, assurance = false }) {
+function calculerTarif(config, { sens = 'FR-GN', mode, poidsKg, typeColis, valeurDeclaree = 0, assurance = false, articles = [] }) {
   const grille = config.tarifs?.[sens];
   if (!grille) throw new Error(`Sens d'envoi inconnu : ${sens}`);
   const t = grille[mode];
   if (!t) throw new Error(`Mode de transport inconnu : ${mode}`);
   const devise = grille.devise || 'EUR';
   const taux = config.tauxEurGnf;
+  const arr = devise === 'GNF' ? Math.round : arrondi2;
+
+  const lignesArticles = chiffrerArticles(config, sens, mode, articles);
+  const poidsArticles  = arrondi2(lignesArticles.reduce((s, l) => s + l.poids, 0));
+  const articlesTotal  = lignesArticles.reduce((s, l) => s + l.montant, 0);
 
   const poids         = Math.max(parseFloat(poidsKg) || 0, 0);
-  const poidsFacture  = Math.max(poids, t.poidsMin || 0);
+  // Ce qui reste une fois les articles à la pièce retirés est facturé au kilo
+  const poidsKilo     = Math.max(arrondi2(poids - poidsArticles), 0);
+  // Le minimum facturé ne s'applique pas quand l'envoi contient des articles à la pièce
+  const poidsFacture  = lignesArticles.length ? poidsKilo : Math.max(poidsKilo, t.poidsMin || 0);
   const transport     = poidsFacture * t.prixKg;
   const tauxSurcharge = config.surcharges?.[typeColis] || 0;
   const surcharge     = transport * tauxSurcharge;
   const valeur        = parseFloat(valeurDeclaree) || 0;
   const assuranceMt   = assurance && valeur > 0 ? valeur * (config.tauxAssurance || 0) : 0;
-  const brut          = transport + surcharge + assuranceMt;
+  const brut          = transport + surcharge + articlesTotal + assuranceMt;
 
   // Montant de référence dans la devise du sens, puis conversion
   const totalGnf = devise === 'GNF' ? arrondiGnf(brut) : arrondiGnf(arrondi2(brut) * taux);
   const totalEur = devise === 'GNF' ? arrondi2(totalGnf / taux) : arrondi2(brut);
-  const arr = devise === 'GNF' ? Math.round : arrondi2;
 
   return {
     sens,
     mode,
     devise,
     prixKg:        t.prixKg,
+    poidsMin:      t.poidsMin || 0,
     poidsFacture:  arrondi2(poidsFacture),
+    poidsArticles,
     transport:     arr(transport),
     surcharge:     arr(surcharge),
+    articles:      lignesArticles.map(l => ({ ...l, prix: arr(l.prix), montant: arr(l.montant) })),
+    articlesTotal: arr(articlesTotal),
     assurance:     arr(assuranceMt),
     total:         devise === 'GNF' ? totalGnf : totalEur, // dans la devise du sens
     totalEur,
@@ -149,7 +182,7 @@ function calculerSolde(colis, config, maintenant = new Date()) {
   };
 }
 
-const api = { calculerTarif, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee, distanceKm, calculerCourse, fraisDomicileGnf, pointValide };
+const api = { calculerTarif, chiffrerArticles, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee, distanceKm, calculerCourse, fraisDomicileGnf, pointValide };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else racine.KolisTarif = api;
 })(typeof window !== 'undefined' ? window : globalThis);

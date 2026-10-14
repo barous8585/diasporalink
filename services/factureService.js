@@ -16,6 +16,7 @@ const { ENTREPRISE, APP_NOM, PAYS, SENS, MODES_INFO, TYPES_COLIS } = require('..
 
 // Groupes de lignes : une fois un groupe facturé, il ne l'est plus jamais
 const GROUPE = { transport: 'transport', supplement: 'transport', assurance: 'transport', arrondi: 'transport', ramassage: 'ramassage', livraison: 'livraison', douane: 'douane', garde: 'garde' };
+const groupe = (cle) => (String(cle).startsWith('article:') ? 'transport' : GROUPE[cle] || cle);
 
 const conv = (montant, de, vers, taux) => {
   if (!montant) return 0;
@@ -32,15 +33,25 @@ function lignesDuColis(colis, config, maintenant = new Date()) {
   const mode = MODES_INFO.find(m => m.key === colis.mode);
   const type = TYPES_COLIS.find(x => x.key === colis.typeColis);
   const lignes = [];
-  if (t.transport) {
-    lignes.push({
-      cle: 'transport', designation: `Transport ${mode?.label.toLowerCase() === 'bateau' ? 'maritime' : 'aérien'} ${sens?.label || ''}`.trim(),
-      detail: `Colis ${colis.numeroSuivi} · ${colis.nbCartons || 1} carton(s)${type ? ` · ${type.label.toLowerCase()}` : ''}${colis.poidsReel ? ` · ${String(colis.poidsReel).replace('.', ',')} kg pesés` : ''}`,
-      quantite: t.poidsFacture, unite: 'kg', prixUnitaire: t.prixKg, montant: t.transport, devise: dev,
-    });
-    if (t.surcharge) lignes.push({ cle: 'supplement', designation: `Supplément ${type?.label.toLowerCase() || ''}`.trim(), detail: type?.surcharge ? `${Math.round((config.surcharges?.[colis.typeColis] ?? type.surcharge) * 100)} % du transport` : '', montant: t.surcharge, devise: dev });
+  const articles = t.articles || [];
+  if (t.transport || t.articlesTotal) {
+    const transportLib = `Transport ${mode?.label.toLowerCase() === 'bateau' ? 'maritime' : 'aérien'} ${sens?.label || ''}`.trim();
+    const pese = colis.poidsReel ? ` · ${String(colis.poidsReel).replace('.', ',')} kg pesés` : '';
+    if (t.transport) {
+      lignes.push({
+        cle: 'transport', designation: articles.length ? `${transportLib}, au kilo` : transportLib,
+        detail: `Colis ${colis.numeroSuivi} · ${colis.nbCartons || 1} carton(s)${type ? ` · ${type.label.toLowerCase()}` : ''}${pese}${t.poidsArticles ? ` (dont ${String(t.poidsArticles).replace('.', ',')} kg comptés dans les articles à la pièce)` : ''}`,
+        quantite: t.poidsFacture, unite: 'kg', prixUnitaire: t.prixKg, montant: t.transport, devise: dev,
+      });
+    }
+    articles.forEach((a, i) => lignes.push({
+      cle: `article:${a.cle}`, designation: `${a.label}${t.transport ? '' : ` · ${transportLib.toLowerCase()}`}`,
+      detail: i === 0 && !t.transport ? `Colis ${colis.numeroSuivi} · prix à la pièce${pese}` : 'Prix à la pièce',
+      quantite: a.quantite, unite: a.quantite > 1 ? 'pièces' : 'pièce', prixUnitaire: a.prix, montant: a.montant, devise: dev,
+    }));
+    if (t.surcharge) lignes.push({ cle: 'supplement', designation: `Supplément ${type?.label.toLowerCase() || ''}`.trim(), detail: type?.surcharge ? `${Math.round((config.surcharges?.[colis.typeColis] ?? type.surcharge) * 100)} % du transport au kilo` : '', montant: t.surcharge, devise: dev });
     if (t.assurance) lignes.push({ cle: 'assurance', designation: 'Assurance ad valorem', detail: `Valeur déclarée : ${colis.valeurDeclaree} ${dev === 'EUR' ? '€' : 'GNF'}`, montant: t.assurance, devise: dev });
-    const somme = (t.transport || 0) + (t.surcharge || 0) + (t.assurance || 0);
+    const somme = (t.transport || 0) + (t.surcharge || 0) + (t.articlesTotal || 0) + (t.assurance || 0);
     const ecart = arrondir((t.total ?? somme) - somme, dev);
     if (Math.abs(ecart) > 0.004) lignes.push({ cle: 'arrondi', designation: 'Arrondi', montant: ecart, devise: dev });
   }
@@ -103,8 +114,8 @@ function emetteur(config) {
 async function emettre(colis, { moment = 'depot', agent } = {}) {
   const config = await Config.get();
   const deja = await Facture.find({ colis: colis._id, type: 'facture' }).lean();
-  const groupesFactures = new Set(deja.flatMap(f => f.lignes.map(l => GROUPE[l.cle] || l.cle)));
-  let lignes = lignesDuColis(colis, config).filter(l => !groupesFactures.has(GROUPE[l.cle] || l.cle));
+  const groupesFactures = new Set(deja.flatMap(f => f.lignes.map(l => groupe(l.cle))));
+  let lignes = lignesDuColis(colis, config).filter(l => !groupesFactures.has(groupe(l.cle)));
   // Au dépôt : la garde et la douane n'existent pas encore ; seulement ce qui est connu
   if (moment === 'depot') lignes = lignes.filter(l => !['douane', 'garde'].includes(l.cle));
   if (!lignes.length) return null;
