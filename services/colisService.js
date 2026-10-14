@@ -9,7 +9,7 @@ const { Mouvement } = require('../models/Mouvement');
 const { calculerTarif, calculerSolde, calculerMagasinage, enGnf } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
 const {
-  STATUTS, STATUTS_LABELS, STATUTS_LOT, CODE_RETRAIT_ESSAIS_MAX, METHODES_PAIEMENT, DEVISES, PAYS, sensEntre, CGV_VERSION, SENS: SENS_LISTE,
+  STATUTS, STATUTS_LABELS, STATUTS_LOT, CODE_RETRAIT_ESSAIS_MAX, METHODES_PAIEMENT, DEVISES, PAYS, sensEntre, CGV_VERSION, SENS: SENS_LISTE, libMode,
 } = require('../config/constants');
 
 const paysArriveeDe = (sens) => String(sens || 'FR-GN').split('-')[1];
@@ -440,7 +440,7 @@ async function appliquerScan(agent, scan) {
     if (!lot) return { ...base, ...resume, ok: false, erreur: 'Choisissez un lot.' };
     if (lot.statut !== STATUTS_LOT.PREPARATION) return { ...base, ...resume, ok: false, erreur: `Le lot ${lot.code} est déjà parti.` };
     if ((lot.sens || 'FR-GN') !== (colis.sens || 'FR-GN')) return { ...base, ...resume, ok: false, erreur: `Ce colis va vers : ${nomPays(paysDest)}. Le lot ${lot.code} part dans l'autre sens.` };
-    if (lot.mode !== colis.mode) return { ...base, ...resume, ok: false, erreur: `Colis prévu en ${colis.mode === 'air' ? 'avion' : 'bateau'}, lot ${lot.code} en ${lot.mode === 'air' ? 'avion' : 'bateau'}.` };
+    if (lot.mode !== colis.mode) return { ...base, ...resume, ok: false, erreur: `Colis prévu en ${libMode(colis.mode)}, lot ${lot.code} en ${libMode(lot.mode)}.` };
     colis.lot = lot._id;
     colis.lotCode = lot.code;
     colis.ajouterEvenement(STATUTS.CHARGE, `Lot ${lot.code}`, { lieu: agent.lieu, agent: agent._id });

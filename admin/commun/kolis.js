@@ -118,6 +118,7 @@
     prix: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
     avion: '<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/>',
     bateau: '<path d="M3 17l2 4h14l2-4H3z"/><path d="M5 17v-6h14v6"/><path d="M9 11V7h6v4"/><path d="M12 7V3"/>',
+    eclair: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
     ok: '<path d="m5 12 5 5 9-10"/>',
     horloge: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     copier: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/>',
@@ -379,7 +380,7 @@
       const n = c.nbCartons || 1;
       zone.innerHTML = Array.from({ length: n }, (_, i) => `
         <div class="page">
-          <div style="display:flex;justify-content:space-between;font-weight:700"><span>${esc(config.appCourt || config.app)}</span><span>${esc(sens?.label || '')} · ${c.mode === 'mer' ? 'BATEAU' : 'AVION'}</span></div>
+          <div style="display:flex;justify-content:space-between;font-weight:700"><span>${esc(config.appCourt || config.app)}</span><span>${esc(sens?.label || '')} · ${libMode(c.mode).toUpperCase()}</span></div>
           <div class="num">${esc(c.numeroSuivi)}</div>
           <div class="qr">${svg}</div>
           <div class="grand">${esc(c.destinataire.nom)}</div>
@@ -693,7 +694,12 @@
     },
   };
 
+  // Libellé court d'un mode de transport : express, avion, bateau
+  const libMode = (m) => ({ express: 'express', air: 'avion', mer: 'bateau' })[m] || 'avion';
+  const icMode = (m, cls) => ic(m === 'mer' ? 'bateau' : m === 'express' ? 'eclair' : 'avion', cls);
+
   window.K = {
+    libMode, icMode,
     API_URL, api, session, stock, config, ErreurReseau,
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
     positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse, choisirSurCarte, chargerLeaflet,

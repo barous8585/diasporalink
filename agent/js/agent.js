@@ -496,7 +496,7 @@
         zone.innerHTML = r.colis.length ? r.colis.map((c, i) => `
           <button class="choix" data-i="${i}" style="width:100%">
             <span class="nom">${esc(c.numeroSuivi)} · ${esc(c.expediteur.nom)}</span>
-            <span class="sous">Pour ${esc(c.destinataire.nom)} · ${c.mode === 'mer' ? 'bateau' : 'avion'} · ${kg(c.poidsEstime)} annoncés${c.ramassage?.statut === 'faite' ? ` · ramassé par ${esc(c.ramassage.livreurNom || 'un livreur')}` : ''}</span>
+            <span class="sous">Pour ${esc(c.destinataire.nom)} · ${K.libMode(c.mode)} · ${kg(c.poidsEstime)} annoncés${c.ramassage?.statut === 'faite' ? ` · ramassé par ${esc(c.ramassage.livreurNom || 'un livreur')}` : ''}</span>
           </button>`).join('') : '<p class="vide petit">Aucune réservation trouvée.</p>';
         zone.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', () => formulaireDepot(r.colis[b.dataset.i])));
       } catch (err) { zone.innerHTML = `<p class="bandeau bandeau-rouge">${esc(err.message)}</p>`; }
@@ -739,7 +739,7 @@
       let livraison;
       if (form.livraisonDom.checked) {
         const a = adrLiv.lire();
-        if (!a.quartier || !a.repere) { toast('Livraison : indiquez le quartier et un point de repère.', 'erreur'); return; }
+        // Adresse incomplète : la livraison est enregistrée « à compléter », jamais bloquante
         const c = a.position ? adrLiv.course() : null;
         if (c && !c.ok) { toast(`Livraison : ${c.message}`, 'erreur'); return; }
         livraison = { demande: true, adresse: a };

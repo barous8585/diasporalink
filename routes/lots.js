@@ -105,7 +105,7 @@ router.post('/:code/statut', role(ROLES.ADMIN), [
     const push = require('../utils/push');
     const arrivee = String(lot.sens || 'FR-GN').split('-')[1];
     const nb = resultats.filter(r => r.ok).length;
-    push.sansAttendre(push.auxAgencesDuPays(arrivee, { titre: `Lot ${lot.code} en route`, corps: `${nb} colis ${lot.mode === 'mer' ? 'par bateau' : 'par avion'}${lot.reference ? ` (${lot.reference})` : ''}. Préparez la réception.`, chemin: '/#/jour', etiquette: lot.code }));
+    push.sansAttendre(push.auxAgencesDuPays(arrivee, { titre: `Lot ${lot.code} en route`, corps: `${nb} colis ${lot.mode === 'mer' ? 'par bateau' : lot.mode === 'express' ? 'en express' : 'par avion'}${lot.reference ? ` (${lot.reference})` : ''}. Préparez la réception.`, chemin: '/#/jour', etiquette: lot.code }));
   }
   if (t.annulation) lot.departLe = undefined;
   await lot.save();

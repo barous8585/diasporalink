@@ -35,7 +35,7 @@ function lignesDuColis(colis, config, maintenant = new Date()) {
   const lignes = [];
   const articles = t.articles || [];
   if (t.transport || t.articlesTotal) {
-    const transportLib = `Transport ${mode?.label.toLowerCase() === 'bateau' ? 'maritime' : 'aérien'} ${sens?.label || ''}`.trim();
+    const transportLib = `Transport ${mode?.key === 'mer' ? 'maritime' : mode?.key === 'express' ? 'aérien express' : 'aérien'} ${sens?.label || ''}`.trim();
     const pese = colis.poidsReel ? ` · ${String(colis.poidsReel).replace('.', ',')} kg pesés` : '';
     if (t.transport) {
       lignes.push({

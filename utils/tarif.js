@@ -24,7 +24,8 @@ function chiffrerArticles(config, sens, mode, articles) {
   for (const a of Array.isArray(articles) ? articles : []) {
     const quantite = Math.min(Math.max(parseInt(a?.quantite, 10) || 0, 0), 99);
     const art = catalogue.find(x => x.cle === a?.cle && x.actif !== false);
-    const prix = parseFloat(art?.prix?.[sens]?.[mode]);
+    // Express sans prix propre : même prix à la pièce que l'avion
+    const prix = parseFloat(art?.prix?.[sens]?.[mode] ?? (mode === 'express' ? art?.prix?.[sens]?.air : undefined));
     if (!quantite || !art || !(prix >= 0)) continue;
     const exist = lignes.find(l => l.cle === art.cle);
     if (exist) { exist.quantite += quantite; exist.montant = exist.quantite * prix; exist.poids = exist.quantite * (art.poids || 0); continue; }

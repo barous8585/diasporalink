@@ -10,7 +10,7 @@ const Lot = require('../models/Lot');
 const Config = require('../models/Config');
 const { auth, role } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
-const { ROLES, STATUTS, STATUTS_LOT, TYPES_COLIS, MODES, SENS } = require('../config/constants');
+const { ROLES, STATUTS, STATUTS_LOT, TYPES_COLIS, MODES, SENS, libMode } = require('../config/constants');
 const { enGnf } = require('../utils/tarif');
 const svc = require('../services/colisService');
 
@@ -71,11 +71,11 @@ router.get('/aujourdhui', ah(async (req, res) => {
   maCaisse.forEach(m => { totaux[m.devise] = (totaux[m.devise] || 0) + m.montant; });
   const taches = [];
   if (reservations) taches.push({ cle: 'reservations', nb: reservations, titre: `${reservations} réservation(s) en ligne attendue(s) ici`, aide: 'Le client vient déposer : cherchez son numéro ou son téléphone dans « Dépôt ».', onglet: 'depot' });
-  if (aCharger.length) taches.push({ cle: 'charger', nb: aCharger.length, titre: `${aCharger.length} colis à mettre dans un lot`, aide: `${aCharger.filter(c => c.mode === 'air').length} avion · ${aCharger.filter(c => c.mode === 'mer').length} bateau. Scannez-les : le bon lot est choisi tout seul.`, onglet: 'scanner' });
+  if (aCharger.length) taches.push({ cle: 'charger', nb: aCharger.length, titre: `${aCharger.length} colis à mettre dans un lot`, aide: `${['express', 'air', 'mer'].map(m => [aCharger.filter(c => c.mode === m).length, libMode(m)]).filter(([n]) => n).map(([n, l]) => `${n} ${l}`).join(' · ')}. Scannez-les : le bon lot est choisi tout seul.`, onglet: 'scanner' });
   for (const l of lotsAttendus) {
     const total = compte(l.code), recus = compte(l.code, [STATUTS.ARRIVE, STATUTS.ACHEMINEMENT, STATUTS.PRET, STATUTS.EN_LIVRAISON, STATUTS.REMIS]);
     if (total - recus > 0 && (lieu.plateforme || l.destination === lieu.code)) {
-      taches.push({ cle: `lot-${l.code}`, nb: total - recus, titre: `Lot ${l.code} : ${total - recus} colis à réceptionner`, aide: `${l.mode === 'mer' ? 'Bateau' : 'Avion'}${l.reference ? ` ${l.reference}` : ''} · ${recus} / ${total} déjà scannés. Scannez chaque colis à sa sortie.`, onglet: 'scanner', lot: l.code, progression: total ? recus / total : 0 });
+      taches.push({ cle: `lot-${l.code}`, nb: total - recus, titre: `Lot ${l.code} : ${total - recus} colis à réceptionner`, aide: `${libMode(l.mode)[0].toUpperCase() + libMode(l.mode).slice(1)}${l.reference ? ` ${l.reference}` : ''} · ${recus} / ${total} déjà scannés. Scannez chaque colis à sa sortie.`, onglet: 'scanner', lot: l.code, progression: total ? recus / total : 0 });
     }
   }
   if (enRayon.length) taches.push({ cle: 'rayon', nb: enRayon.length, titre: `${enRayon.length} colis arrivé(s) à mettre en rayon`, aide: 'Scannez-les en les posant sur l\'étagère : le destinataire reçoit son code.', onglet: 'scanner' });

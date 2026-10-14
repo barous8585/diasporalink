@@ -141,9 +141,9 @@ async function demanderCourse(colis, type, data) {
     repere: (a.repere || '').trim(),
     position: position || precedent?.adresse?.position || undefined,
   };
-  if (!adresse.quartier && !adresse.commune) throw new ErreurMetier('Indiquez le quartier ou la commune.');
-  if (!adresse.repere) throw new ErreurMetier('Indiquez un point de repère pour le livreur.');
-  if (type === 'ramassage' && !adresse.position) throw new ErreurMetier('Envoyez la position du lieu de ramassage (bouton « Ma position » ou lien de localisation).');
+  // Quartier, repère et position aident le livreur mais ne bloquent jamais la réservation :
+  // s'ils manquent, la course est créée « adresse à compléter » et le prix sera calculé
+  // dès que la position sera connue (le livreur appelle le client au besoin).
 
   let prix = {};
   if (adresse.position) {

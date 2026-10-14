@@ -16,7 +16,7 @@
     { lib: 'Agence', statuts: ['pret', 'en_livraison', 'remis'] },
   ];
   const indexEtape = (s) => ETAPES.findIndex(e => e.statuts.includes(s));
-  const icMode = (mode) => ic(mode === 'mer' ? 'bateau' : 'avion');
+  const icMode = (mode) => K.icMode(mode);
   const agence = (code) => CONFIG?.agences?.find(a => a.code === code) || null;
   const nomGuichet = (code) => agence(code)?.nom || code;
   const agencesDe = (pays) => (CONFIG?.agences || []).filter(a => a.pays === pays);
@@ -151,7 +151,7 @@
       <div class="carte-vert pile vedette" style="--gap:14px">
         <div class="ligne entre" style="align-items:flex-start">
           <div>
-            <div class="petit" style="opacity:.85">${esc(c.numeroSuivi)} · vers ${esc(nomPays(paysArrivee(c)))} · ${c.mode === 'mer' ? 'bateau' : 'avion'}</div>
+            <div class="petit" style="opacity:.85">${esc(c.numeroSuivi)} · vers ${esc(nomPays(paysArrivee(c)))} · ${K.libMode(c.mode)}</div>
             <div class="etat titre">${esc(c.statutLabel)}</div>
             <div style="font-size:15px">${esc(nomGuichet(c.guichet))}${agence(c.guichet)?.ville ? ` · ${esc(agence(c.guichet).ville)}` : ''}</div>
           </div>
@@ -228,87 +228,117 @@
     const depart = complet ? agence(c.depot) : null;
     const joursRestants = mag?.gratuitJusquau ? Math.ceil((new Date(mag.gratuitJusquau) - Date.now()) / 86400000) : null;
 
+    // ── Données utiles à l'affichage ──
+    const [pd, pa] = String(c.sens || 'FR-GN').split('-');
+    const agDepart = agence(c.depot) || (typeof c.depot === 'object' ? c.depot : null);
+    // Où aller : l'agence de dépôt tant que le colis n'est pas déposé, sinon celle de retrait
+    const cible = c.statut === 'reserve' && !ram ? (agDepart || depart) : g;
+    const lienItineraire = (a) => {
+      if (!a) return null;
+      if (a.position?.lat) return `https://www.google.com/maps/dir/?api=1&destination=${a.position.lat},${a.position.lng}`;
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${a.adresse || a.nom} ${a.commune || ''} ${a.ville || ''} ${nomPays(a.pays || pa)}`)}`;
+    };
+    const iEtape = indexEtape(c.statut);
+    const fini = ['remis', 'annule'].includes(c.statut);
+    const contenu = [poids ? kg(poids) : '', c.articles?.length ? c.articles.map(a => `${a.quantite} ${a.label.toLowerCase()}`).join(', ') : '', c.nbCartons > 1 ? `${c.nbCartons} cartons` : ''].filter(Boolean).join(' · ');
+    const modeInfo = (CONFIG.modes || []).find(m => m.key === c.mode);
+    const enVerif = c.paiementEnVerification || (c.declarations || []).some(d => d.statut === 'a_verifier');
+    const domicileAPayer = complet ? c.domicileAPayerGnf > 0 : [ram, liv].some(x => x?.prixGnf > 0 && !x.payee);
+    const ligneInfo = (lib, val) => val ? `<div class="fiche-ligne"><span>${lib}</span><span>${val}</span></div>` : '';
+
     main.innerHTML = `
-      <div class="pile">
+      <div class="pile page-suivi" style="--gap:14px">
         <div class="ligne">
-          <a href="#/" class="btn btn-rond" aria-label="Retour">${ic('retour')}</a>
+          <a href="#/mes-colis" class="btn btn-rond" aria-label="Retour">${ic('retour')}</a>
           <div class="grandit"><div class="tres-petit muet">Colis</div><div class="titre" style="font-size:19px;font-weight:700">${esc(c.numeroSuivi)}</div></div>
           <button class="btn btn-rond" data-partager aria-label="Partager le suivi">${ic('partager')}</button>
         </div>
 
-        <div class="carte-vert pile" style="--gap:10px">
+        <section class="carte-vert pile suivi-hero" style="--gap:12px">
           <span class="badge" style="align-self:flex-start;background:var(--ocre);color:var(--encre)">${pret ? ic('ok', 'ic-sm') : icMode(c.mode).replace('class="ic ', 'class="ic ic-sm ')} ${esc(c.statutLabel)}</span>
-          <h1 style="font-size:26px">${esc(titreStatut(c, g))}</h1>
-          <p style="opacity:.9">${poids ? esc(kg(poids)) : ''}${c.articles?.length ? ` · ${esc(c.articles.map(a => `${a.quantite} ${a.label.toLowerCase()}`).join(', '))}` : ''}${c.nbCartons > 1 ? ` · ${c.nbCartons} cartons` : ''}${c.lotCode ? ` · lot ${esc(c.lotCode)}` : ''}</p>
-        </div>
+          <h1 style="font-size:25px;line-height:1.2">${esc(titreStatut(c, g))}</h1>
+          <div class="suivi-trajet">
+            <div><span class="tres-petit">Départ</span><b>${esc(agDepart?.ville || agDepart?.nom || nomPays(pd))}</b></div>
+            <span class="trait">${icMode(c.mode).replace('class="ic ', 'class="ic ic-sm ')}</span>
+            <div style="text-align:right"><span class="tres-petit">Arrivée</span><b>${esc(g?.ville || g?.nom || nomPays(pa))}</b></div>
+          </div>
+          ${fini ? '' : `<div class="progression" aria-hidden="true">${ETAPES.map((_, k) => `<span class="${k <= iEtape ? 'fait' : ''}"></span>`).join('')}</div>
+          <div class="progression-lib" aria-hidden="true">${ETAPES.map(e => `<span>${e.lib}</span>`).join('')}</div>`}
+          <p class="petit" style="opacity:.9">${esc(modeInfo?.label || K.libMode(c.mode))}${modeInfo?.delai ? ` (${esc(modeInfo.delai)})` : ''}${contenu ? ` · ${esc(contenu)}` : ''}</p>
+        </section>
+
+        <nav class="actions-rapides" aria-label="Actions">
+          ${cible ? `<a href="${esc(lienItineraire(cible))}" target="_blank" rel="noopener">${ic('lieu')}<span>Itinéraire</span></a>` : ''}
+          ${cible?.telephone ? `<a href="tel:${esc(cible.telephone)}">${ic('tel')}<span>Appeler</span></a>
+          <a href="${esc(lienWhatsApp(cible.telephone, `Bonjour, je vous contacte pour le colis ${c.numeroSuivi}.`))}" target="_blank" rel="noopener">${ic('bulle')}<span>WhatsApp</span></a>` : ''}
+          <button type="button" data-partager2>${ic('partager')}<span>Partager</span></button>
+        </nav>
+        ${cible ? `<p class="tres-petit muet" style="margin-top:-6px">${c.statut === 'reserve' && !ram ? 'Déposer à' : 'Retrait à'} <b>${esc(cible.nom || '')}</b>${cible.adresse ? ` · ${esc(cible.adresse)}` : ''}${cible.horaires ? ` · ${esc(cible.horaires)}` : ''}</p>` : ''}
 
         ${pret && c.codeRetrait ? `
-          <div class="carte pile">
-            <h3>Code de retrait</h3>
+          <section class="carte pile bloc-code">
+            <div class="ligne entre"><h3>Code de retrait</h3><span class="tres-petit muet">${liv ? 'à donner au livreur' : 'avec une pièce d\'identité'}</span></div>
             <div class="code-4">${c.codeRetrait.split('').map(d => `<div>${esc(d)}</div>`).join('')}</div>
-            <p class="petit muet">${liv ? 'Donnez ce code au livreur quand il vous remet le colis.' : 'Montrez ce code et une pièce d\'identité à l\'agent de l\'agence.'}</p>
-          </div>` : pret ? `
-          <div class="carte pile">
+          </section>` : pret ? `
+          <section class="carte pile">
             <h3>Code de retrait</h3>
-            <p class="petit muet">Le code de retrait est visible dans le compte de la personne qui a envoyé le colis : elle peut vous le transmettre. ${session.connecte() ? '' : 'Si c\'est vous, connectez-vous pour le voir ici.'}</p>
+            <p class="petit muet">Il est visible dans le compte de l'expéditeur, qui peut vous le transmettre.</p>
             ${session.connecte() ? '' : `<a class="btn btn-plein" href="#/connexion" data-memo-retour>Se connecter</a>`}
-          </div>` : ''}
+          </section>` : ''}
+
+        ${enVerif ? `<p class="bandeau bandeau-ocre">${ic('horloge', 'ic-sm')}<span>Paiement mobile money en cours de vérification. Vous recevrez un SMS.</span></p>` : ''}
+        ${!fini && (solde.soldeGnf > 0 || domicileAPayer) ? `
+        <section class="carte-ocre pile" style="--gap:6px">
+          <div class="ligne entre" style="align-items:flex-end">
+            <div>
+              <div class="tres-petit gras">${estime ? 'Prix estimé' : 'Reste à payer'}</div>
+              <div class="titre" style="font-size:24px;font-weight:800">${principal(solde.soldeGnf, solde.soldeEur)}</div>
+              <div class="tres-petit">soit ${secondaire(solde.soldeGnf, solde.soldeEur)}${estime ? ' · fixé à la pesée' : ''}</div>
+            </div>
+            ${!estime && solde.soldeGnf > 0 && !enVerif ? '<button class="btn btn-noir" data-payer>Payer</button>' : domicileAPayer && !enVerif ? '<button class="btn btn-noir" data-payer-domicile>Payer la livraison</button>' : ''}
+          </div>
+        </section>` : !fini && !estime ? `<p class="bandeau bandeau-vert">${ic('ok', 'ic-sm')}<span>Tout est payé.</span></p>` : ''}
+        ${pret && joursRestants !== null ? `<p class="petit ${joursRestants > 0 ? 'muet' : ''}" style="${joursRestants > 0 ? '' : 'color:var(--rouge);font-weight:600'}">${joursRestants > 0 ? `Retrait gratuit encore ${joursRestants} jour(s), ensuite ${fraisJour} par jour.` : `Frais de garde : ${principal(mag.fraisGnf, mag.fraisGnf / (c.tarif?.taux || CONFIG.tauxEurGnf))} (${mag.joursFactures} jour(s)).`}</p>` : ''}
+
+        ${carteCourses(c, ram, liv)}
 
         ${complet && c.tiersAutorise?.nom ? `<p class="bandeau bandeau-vert">${ic('ajoutPers', 'ic-sm')}<span><b>${esc(c.tiersAutorise.nom)}</b> peut retirer ce colis.</span></p>` : ''}
         ${peutAutoriser ? `<button class="btn btn-plein" data-tiers>${ic('ajoutPers', 'ic-sm')} Envoyer quelqu'un à ma place</button>` : ''}
 
-        ${(solde.soldeGnf > 0 || pret) ? `
-        <div class="grille-2">
-          ${solde.soldeGnf > 0 ? `
-          <div class="carte-ocre pile" style="--gap:6px">
-            <div class="tres-petit gras">${estime ? 'Prix estimé' : 'Reste à payer'}</div>
-            <div class="titre" style="font-size:22px;font-weight:800">${principal(solde.soldeGnf, solde.soldeEur)}</div>
-            <div class="tres-petit">soit ${secondaire(solde.soldeGnf, solde.soldeEur)}${estime ? ' · fixé à la pesée' : ''}</div>
-            ${c.statut !== 'reserve' ? `<button class="btn btn-noir btn-petit" data-payer style="margin-top:6px">Payer</button>` : ''}
-          </div>` : `
-          <div class="carte pile" style="--gap:6px"><div class="tres-petit gras muet">Paiement</div><div class="titre" style="font-size:20px;font-weight:800">Tout est payé</div></div>`}
-          ${pret && joursRestants !== null ? `
-          <div class="carte pile" style="--gap:6px">
-            <div class="tres-petit gras muet">${joursRestants > 0 ? 'Retrait gratuit' : 'Frais de garde'}</div>
-            <div class="titre" style="font-size:22px;font-weight:800">${joursRestants > 0 ? `encore ${joursRestants} j` : principal(mag.fraisGnf, mag.fraisGnf / (c.tarif?.taux || CONFIG.tauxEurGnf))}</div>
-            <div class="tres-petit muet">${joursRestants > 0 ? `Ensuite ${fraisJour} par jour` : `${mag.joursFactures} jour(s) facturé(s)`}</div>
-          </div>` : ''}
-        </div>` : ''}
+        <section class="carte pile" style="--gap:2px">
+          <h3 style="margin-bottom:6px">Détails</h3>
+          ${ligneInfo('De', complet ? esc(c.expediteur?.nom || '') : '')}
+          ${ligneInfo('Pour', esc(complet ? c.destinataire?.nom || '' : c.destinataire || ''))}
+          ${ligneInfo('Trajet', `${esc(agDepart?.nom || nomPays(pd))} → ${esc(g?.nom || nomPays(pa))}`)}
+          ${ligneInfo('Transport', `${esc(modeInfo?.label || '')}${modeInfo?.delai ? ` · ${esc(modeInfo.delai)}` : ''}`)}
+          ${ligneInfo('Contenu', esc(contenu))}
+          ${ligneInfo('Lot', c.lotCode ? esc(c.lotCode) : '')}
+          ${ligneInfo('Réservé le', c.createdAt ? esc(date(c.createdAt, false)) : '')}
+        </section>
 
-        ${carteCourses(c, ram, liv)}
         <div data-notifs-suivi></div>
-
-        ${c.statut === 'reserve' && !ram ? `
-          <div class="carte pile">
-            <h3>Prochaine étape : le dépôt</h3>
-            <p class="petit">Apportez le colis en agence avec ce numéro. Il sera pesé et le prix final sera fixé à ce moment-là.</p>
-            ${depart ? `<p class="petit"><b>${esc(depart.nom)}</b>${depart.adresse ? ` · ${esc(depart.adresse)}` : ''}${depart.horaires ? `<br><span class="muet">${esc(depart.horaires)}</span>` : ''}</p>` : `<a class="btn btn-petit" href="#/guichets">Voir les agences</a>`}
-          </div>` : ''}
 
         ${complet && !['reserve', 'annule'].includes(c.statut) ? `
         <div class="carte pile" style="--gap:6px" data-factures><h3>Factures</h3><p class="petit muet">Chargement…</p></div>
         <div data-reclamations></div>` : ''}
 
-        <div class="carte">
-          <h2 style="margin-bottom:14px">Historique</h2>
-          <div class="frise">
-            ${historique.map(h => `
-              <div class="etape"><div class="rail"><div class="point"></div><div class="trait"></div></div>
+        <section class="carte">
+          <div class="ligne entre" style="margin-bottom:12px"><h3>Historique</h3>${historique.length > 3 ? `<button type="button" class="btn-lien petit" data-tout-historique>Tout voir (${historique.length})</button>` : ''}</div>
+          <div class="frise" data-frise>
+            ${historique.map((h, k) => `
+              <div class="etape ${k >= 3 ? 'cache' : ''}"><div class="rail"><div class="point"></div><div class="trait"></div></div>
                 <div class="texte"><div class="gras">${esc(h.label)}</div><div class="petit muet">${esc(date(h.le))}${h.detail ? ` · ${esc(h.detail)}` : ''}</div></div>
               </div>`).join('')}
           </div>
-        </div>
-
-        ${g?.nom ? `
-        <div class="grille-3">
-          ${g.telephone ? `<a class="tuile" style="min-height:72px;gap:4px;align-items:center;justify-content:center;font-size:13px" href="tel:${esc(g.telephone)}">${ic('tel')}Appeler</a>
-          <a class="tuile" style="min-height:72px;gap:4px;align-items:center;justify-content:center;font-size:13px" href="${esc(lienWhatsApp(g.telephone, `Bonjour, je vous contacte pour le colis ${c.numeroSuivi}.`))}" target="_blank" rel="noopener">${ic('bulle')}WhatsApp</a>` : ''}
-          <a class="tuile" style="min-height:72px;gap:4px;align-items:center;justify-content:center;font-size:13px" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${g.adresse || g.nom} ${g.commune || ''} ${g.ville || ''} ${nomPays(g.pays || paysArrivee(c))}`)}" target="_blank" rel="noopener">${ic('lieu')}Itinéraire</a>
-        </div>
-        <p class="petit muet centre">${esc(g.nom)}${g.ville ? `, ${esc(g.ville)}` : ''}${g.horaires ? ` · ${esc(g.horaires)}` : ''}</p>` : ''}
+        </section>
         ${complet && c.statut === 'reserve' ? `<button class="btn btn-lien" data-annuler>Annuler cette réservation</button>` : ''}
       </div>`;
 
+    main.querySelector('[data-tout-historique]')?.addEventListener('click', (e) => {
+      main.querySelectorAll('[data-frise] .etape.cache').forEach(x => x.classList.remove('cache'));
+      e.currentTarget.remove();
+    });
+    main.querySelector('[data-partager2]')?.addEventListener('click', () => main.querySelector('[data-partager]').click());
     main.querySelector('[data-memo-retour]')?.addEventListener('click', () => stock.ecrire('retour', location.hash));
     main.querySelector('[data-partager]').addEventListener('click', async () => {
       const url = `${location.origin}${location.pathname}#/suivi/${c.numeroSuivi}`;
@@ -514,8 +544,8 @@
       e.preventDefault();
       const a = adr.lire();
       const tel = el.querySelector('[name=telephone]').value;
-      if (!tel || !a.quartier || !a.repere) { toast('Numéro, quartier et point de repère sont nécessaires.', 'erreur'); return; }
-      if (!a.position) { toast('Envoyez votre position : « Je suis sur place » ou lien de localisation.', 'erreur'); return; }
+      if (!tel) { toast('Indiquez votre numéro de téléphone (celui du destinataire sur le colis).', 'erreur'); return; }
+      if (!a.position && !confirm('Sans votre position, le prix de la livraison ne peut pas être calculé et le livreur devra vous appeler. Enregistrer quand même ?')) return;
       const course = adr.course();
       if (course && !course.ok) { toast(course.message, 'erreur'); return; }
       if (course && !confirm(`Livraison : ${montant(course.prix, course.devise)} (${course.distanceKm.toLocaleString('fr-FR')} km), à payer en ligne maintenant. Une livraison payée n'est pas remboursée si vous l'annulez. Continuer ?`)) return;
@@ -532,8 +562,8 @@
         ? (c.ramassage.statut === 'faite' ? 'Ramassé, en route vers l\'agence' : 'Réservé : un livreur vient le chercher')
         : 'Réservé : à déposer en agence';
       case 'depose': return 'Reçu en agence, bientôt en route';
-      case 'charge': return `Chargé, départ ${c.mode === 'mer' ? 'en bateau' : 'en avion'} prochainement`;
-      case 'en_transit': return `En route vers ${pays === 'France' ? 'la France' : 'la Guinée'} ${c.mode === 'mer' ? 'par bateau' : 'par avion'}`;
+      case 'charge': return `Chargé, départ ${c.mode === 'mer' ? 'en bateau' : c.mode === 'express' ? 'en express' : 'en avion'} prochainement`;
+      case 'en_transit': return `En route vers ${pays === 'France' ? 'la France' : 'la Guinée'} ${c.mode === 'mer' ? 'par bateau' : c.mode === 'express' ? 'en express' : 'par avion'}`;
       case 'arrive': return `Arrivé ${en}, en cours de dédouanement`;
       case 'acheminement': return `En route vers ${nom}${g?.ville ? ` (${g.ville})` : ''}`;
       case 'pret': return c.livraison && c.livraison.statut !== 'annulee' && c.livraison.demande !== false ? `Arrivé à ${nom}, bientôt livré chez vous` : `Votre colis vous attend à ${nom}`;
@@ -697,7 +727,7 @@
 
         <section class="pile" style="--gap:8px" aria-labelledby="q1">
           <h3 id="q1">2. Comment l'envoyer ?</h3>
-          <div class="grille-2">${CONFIG.modes.map(m => `
+          <div class="grille-3">${CONFIG.modes.map(m => `
             <button type="button" class="choix" style="min-height:112px;justify-content:space-between" data-mode="${m.key}" aria-pressed="${etat.mode === m.key}">
               ${icMode(m.key).replace('class="ic ', 'class="ic ic-lg ')}
               <span class="nom" style="font-size:17px">${esc(m.label)}</span>
@@ -931,11 +961,8 @@
       if (f.get('cgv') !== 'on') { toast('Acceptez les conditions générales et confirmez qu\'il n\'y a aucun objet interdit.', 'erreur'); return; }
       const ram = etat.depart === 'domicile' ? adrRam.lire() : null;
       const liv = etat.arrivee === 'domicile' ? adrLiv.lire() : null;
-      for (const [a, lib] of [[ram, 'ramassage'], [liv, 'livraison']]) {
-        if (a && !a.quartier) { toast(`Adresse de ${lib} : indiquez le quartier.`, 'erreur'); return; }
-        if (a && !a.repere) { toast(`Adresse de ${lib} : indiquez un point de repère.`, 'erreur'); return; }
-      }
-      if (ram && !ram.position) { toast('Pour le ramassage, envoyez votre position (« Je suis sur place » ou lien de localisation).', 'erreur'); return; }
+      // Adresse incomplète : on réserve quand même, on prévient seulement
+      const manque = [[ram, 'ramassage'], [liv, 'livraison']].filter(([a]) => a && (!a.position || !a.quartier)).map(([, lib]) => lib);
       for (const [c, lib] of [[ram && adrRam.course(), 'ramassage'], [liv && liv.position && adrLiv.course(), 'livraison']]) {
         if (c && !c.ok) { toast(`${lib[0].toUpperCase() + lib.slice(1)} : ${c.message}`, 'erreur'); return; }
       }
@@ -954,6 +981,7 @@
           livraison: liv ? { demande: true, adresse: liv } : undefined,
         });
         stock.suppr('brouillon_dest'); stock.suppr('brouillon_adresses');
+        if (manque.length) toast(`Réservé. Adresse de ${manque.join(' et ')} à compléter : le prix sera calculé dès que la position sera envoyée.`, '', { duree: 5000 });
         confirmation(r.colis);
       } catch (err) { toast(err.message, 'erreur'); btn.disabled = false; }
     });
@@ -1050,7 +1078,7 @@
           <span class="pastille ${c.statut === 'pret' ? 'pret' : c.mode}" aria-hidden="true">${c.statut === 'pret' ? ic('ok') : icMode(c.mode)}</span>
           <div class="grandit" style="min-width:0">
             <div class="cc-qui">${recu ? `De ${esc(c.expediteur?.nom || '')}` : `Pour ${esc(c.destinataire?.nom || '')}`}</div>
-            <div class="cc-trajet"><span>${esc(lieu(dep, pd))}</span>${ic('fleche', 'ic-xs')}<span>${esc(lieu(arr, pa))}</span><span>· ${c.mode === 'mer' ? 'bateau' : 'avion'}</span></div>
+            <div class="cc-trajet"><span>${esc(lieu(dep, pd))}</span>${ic('fleche', 'ic-xs')}<span>${esc(lieu(arr, pa))}</span><span>· ${K.libMode(c.mode)}</span></div>
           </div>
         </div>
         ${fini ? '' : `<div class="cc-avancement" aria-hidden="true">${ETAPES.map((e, k) => `<span class="${k <= i ? 'fait' : ''}"><i></i>${esc(e.lib)}</span>`).join('')}</div>`}

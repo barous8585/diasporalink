@@ -126,7 +126,7 @@
         <section class="panneau">
           <div class="panneau-tete"><h2>Lots en cours</h2><button class="btn btn-noir btn-petit" data-nouveau-lot>${ic('plus', 'ic-sm')} Nouveau lot</button></div>
           <div class="defile"><table class="tableau"><thead><tr><th>Lot</th><th>Transport</th><th>Colis</th><th>Poids</th><th>Statut</th><th>Arrivée prévue</th></tr></thead><tbody>
-            ${enCours.length ? enCours.map(l => `<tr class="cliquable" data-lot="${esc(l.code)}"><td class="gras">${esc(l.code)}</td><td>${esc(libSens(l.sens))} · ${l.mode === 'mer' ? 'bateau' : 'avion'}${l.reference ? ` · ${esc(l.reference)}` : ''}</td><td>${l.nbColis}</td><td>${kg(l.poidsTotal)}</td><td>${badge(l.statut === 'preparation' ? 'reserve' : l.statut === 'parti' ? 'en_transit' : 'pret', LIB_STATUT_LOT[l.statut])}</td><td>${l.dateArriveePrevue ? esc(date(l.dateArriveePrevue, false)) : '—'}</td></tr>`).join('')
+            ${enCours.length ? enCours.map(l => `<tr class="cliquable" data-lot="${esc(l.code)}"><td class="gras">${esc(l.code)}</td><td>${esc(libSens(l.sens))} · ${K.libMode(l.mode)}${l.reference ? ` · ${esc(l.reference)}` : ''}</td><td>${l.nbColis}</td><td>${kg(l.poidsTotal)}</td><td>${badge(l.statut === 'preparation' ? 'reserve' : l.statut === 'parti' ? 'en_transit' : 'pret', LIB_STATUT_LOT[l.statut])}</td><td>${l.dateArriveePrevue ? esc(date(l.dateArriveePrevue, false)) : '—'}</td></tr>`).join('')
               : '<tr><td colspan="6" class="vide">Aucun lot en cours. Créez un lot pour commencer le chargement.</td></tr>'}
           </tbody></table></div>
         </section>
@@ -156,7 +156,7 @@
       <form class="pile" style="--gap:12px">
         <div class="ligne entre"><h2>Nouveau lot</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
         <div class="grille-2">${CONFIG.sens.map((x, i) => `<label class="case" style="border:1px solid var(--ligne-2);border-radius:12px;padding:0 12px;background:#fff"><input type="radio" name="sens" value="${x.key}" ${i === 0 ? 'checked' : ''}> ${esc(x.label)}</label>`).join('')}</div>
-        <div class="grille-2">${CONFIG.modes.map((m, i) => `<label class="case" style="border:1px solid var(--ligne-2);border-radius:12px;padding:0 12px;background:#fff"><input type="radio" name="mode" value="${m.key}" ${i === 0 ? 'checked' : ''}> ${esc(m.label)}</label>`).join('')}</div>
+        <div class="grille-3">${CONFIG.modes.map((m, i) => `<label class="case" style="border:1px solid var(--ligne-2);border-radius:12px;padding:0 12px;background:#fff"><input type="radio" name="mode" value="${m.key}" ${i === 0 ? 'checked' : ''}> ${esc(m.label)}</label>`).join('')}</div>
         <label class="champ">Référence (n° de vol, de conteneur, LTA…) <input class="saisie" name="reference"></label>
         <label class="champ">Transporteur <input class="saisie" name="transporteur"></label>
         <div class="grille-2">
@@ -202,7 +202,7 @@
       <section class="panneau">
         <div class="panneau-tete" style="align-items:flex-end">
           <div>
-            <h2 style="font-size:24px">Lot ${esc(lot.code)} · ${lot.mode === 'mer' ? 'bateau' : 'avion'}</h2>
+            <h2 style="font-size:24px">Lot ${esc(lot.code)} · ${K.libMode(lot.mode)}</h2>
             <p class="petit muet" style="margin-top:4px">${[lot.reference, lot.transporteur].filter(Boolean).map(esc).join(' · ') || 'Sans référence'} ·
               ${stats.nb} colis · ${kg(stats.poids)}${lot.statut !== 'preparation' ? ` · reçus en Guinée : ${stats.scannesArrivee} / ${stats.nb}` : ''}
               ${lot.departLe ? ` · parti le ${esc(date(lot.departLe, false))}` : lot.dateDepartPrevue ? ` · départ prévu ${esc(date(lot.dateDepartPrevue, false))}` : ''}</p>
@@ -283,7 +283,7 @@
     w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Manifeste ${esc(lot.code)}</title>
       <style>body{font-family:system-ui,sans-serif;font-size:11pt;margin:15mm}h1{font-size:18pt;margin:0}table{width:100%;border-collapse:collapse;margin-top:10mm}th,td{border:1px solid #999;padding:4px 6px;text-align:left}th{background:#eee}.pied{margin-top:12mm;display:flex;justify-content:space-between}</style></head><body>
       <h1>${esc(CONFIG.app)} — Manifeste du lot ${esc(lot.code)}</h1>
-      <p>${esc(libSens(lot.sens))} · ${lot.mode === 'mer' ? 'Bateau' : 'Avion'} · ${esc(lot.reference || '')} ${esc(lot.transporteur || '')} · ${stats.nb} colis · ${kg(stats.poids)} · imprimé le ${esc(date(new Date()))}</p>
+      <p>${esc(libSens(lot.sens))} · ${K.libMode(lot.mode).replace(/^./, x => x.toUpperCase())} · ${esc(lot.reference || '')} ${esc(lot.transporteur || '')} · ${stats.nb} colis · ${kg(stats.poids)} · imprimé le ${esc(date(new Date()))}</p>
       <table><thead><tr><th>#</th><th>N° de suivi</th><th>Expéditeur</th><th>Destinataire</th><th>Téléphone</th><th>Contenu</th><th>Cartons</th><th>Poids</th><th>Valeur (€)</th></tr></thead><tbody>
       ${manifeste.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.numeroSuivi)}</td><td>${esc(c.expediteur.nom)}</td><td>${esc(c.destinataire.nom)}</td><td>${esc(c.destinataire.telephone)}</td><td>${esc(c.description || c.typeColis)}</td><td>${c.nbCartons}</td><td>${kg(c.poids)}</td><td>${c.valeurDeclaree || ''}</td></tr>`).join('')}
       </tbody></table><div class="pied"><span>Signature dépôt :</span><span>Signature réception :</span></div>
@@ -339,7 +339,7 @@
           <div class="ligne-info"><span>Destinataire</span><span>${esc(c.destinataire.nom)} · ${esc(c.destinataire.telephone)}</span></div>
           ${c.tiersAutorise?.nom ? `<div class="ligne-info"><span>Autorisé à retirer</span><span>${esc(c.tiersAutorise.nom)} · ${esc(c.tiersAutorise.telephone)}</span></div>` : ''}
           <div class="ligne-info"><span>Trajet</span><span>${esc(nomLieu(c.depot))} → ${esc(nomLieu(c.guichet))}</span></div>
-          <div class="ligne-info"><span>Transport</span><span>${esc(libSens(c.sens))} · ${c.mode === 'mer' ? 'bateau' : 'avion'} · lot ${esc(c.lotCode || '—')}</span></div>
+          <div class="ligne-info"><span>Transport</span><span>${esc(libSens(c.sens))} · ${K.libMode(c.mode)} · lot ${esc(c.lotCode || '—')}</span></div>
           <div class="ligne-info"><span>Poids</span><span>${c.poidsReel ? kg(c.poidsReel) : '—'} pesé${c.poidsEstime ? ` · ${kg(c.poidsEstime)} annoncé` : ''} · ${c.nbCartons} carton(s)</span></div>
           <div class="ligne-info"><span>Prix transport</span><span>${eur(c.tarif?.totalEur)} · ${gnf(c.tarif?.totalGnf)} (taux ${gnf(c.tarif?.taux)})${c.tarif?.estime ? ' · estimé' : ''}</span></div>
           <div class="ligne-info"><span>Douane · garde</span><span>${gnf(c.fraisDouaneGnf)} · ${gnf(c.solde.magasinage.fraisGnf)}</span></div>
@@ -782,6 +782,8 @@
       <section class="panneau"><div class="panneau-tete"><h2>${esc(x.label)}</h2>
         <label class="ligne" style="--gap:8px">Devise <select class="saisie" name="${x.key}_devise" style="width:auto"><option value="EUR" ${t.devise === 'EUR' ? 'selected' : ''}>€</option><option value="GNF" ${t.devise === 'GNF' ? 'selected' : ''}>GNF</option></select></label></div>
         <div class="panneau-corps formulaire-grille">
+          <label class="champ">Express (2-3 j) : prix par kg <input class="saisie" name="${x.key}_express_prixKg" type="number" step="0.01" min="0" value="${t.express?.prixKg ?? ''}"></label>
+          <label class="champ">Express : poids minimum (kg) <input class="saisie" name="${x.key}_express_poidsMin" type="number" step="0.1" min="0" value="${t.express?.poidsMin ?? ''}"></label>
           <label class="champ">Avion : prix par kg <input class="saisie" name="${x.key}_air_prixKg" type="number" step="0.01" min="0" value="${t.air?.prixKg ?? ''}"></label>
           <label class="champ">Avion : poids minimum (kg) <input class="saisie" name="${x.key}_air_poidsMin" type="number" step="0.1" min="0" value="${t.air?.poidsMin ?? ''}"></label>
           <label class="champ">Bateau : prix par kg <input class="saisie" name="${x.key}_mer_prixKg" type="number" step="0.01" min="0" value="${t.mer?.prixKg ?? ''}"></label>
@@ -808,7 +810,7 @@
             <p class="petit muet" style="align-self:end">Dernière mise à jour : ${esc(date(c.tauxMisAJourLe))}</p>
           </div></section>
         ${CONFIG.sens.map(blocTarif).join('')}
-        <section class="panneau"><div class="panneau-tete"><div><h2>Articles à la pièce</h2><p class="petit muet" style="margin-top:4px">Prix fixe par article (chaussures, téléphone…) au lieu du prix au kilo. « Compte » : kilos retirés de la pesée pour chaque article, le surplus est payé au kilo. Laissez un prix vide pour ne pas proposer l'article dans ce sens ou ce mode.</p></div><button type="button" class="btn btn-petit" data-ajout-article>${ic('plus', 'ic-sm')} Ajouter un article</button></div>
+        <section class="panneau"><div class="panneau-tete"><div><h2>Articles à la pièce</h2><p class="petit muet" style="margin-top:4px">Prix fixe par article (chaussures, téléphone…) au lieu du prix au kilo. « Compte » : kilos retirés de la pesée pour chaque article, le surplus est payé au kilo. Laissez un prix vide pour ne pas proposer l'article dans ce sens ou ce mode. En express, le prix avion s'applique.</p></div><button type="button" class="btn btn-petit" data-ajout-article>${ic('plus', 'ic-sm')} Ajouter un article</button></div>
           <div class="panneau-corps pile" data-liste-articles>${(c.articles || []).map(articleHtml).join('')}</div></section>
         <section class="panneau"><div class="panneau-tete"><h2>Suppléments et assurance</h2></div>
           <div class="panneau-corps formulaire-grille">
@@ -934,6 +936,7 @@
       }).filter(a => a.code && a.nom);
       const tarifs = Object.fromEntries(CONFIG.sens.map(x => [x.key, {
         devise: v(`${x.key}_devise`),
+        express: { prixKg: v(`${x.key}_express_prixKg`), poidsMin: v(`${x.key}_express_poidsMin`) },
         air: { prixKg: v(`${x.key}_air_prixKg`), poidsMin: v(`${x.key}_air_poidsMin`) },
         mer: { prixKg: v(`${x.key}_mer_prixKg`), poidsMin: v(`${x.key}_mer_poidsMin`) },
       }]));
