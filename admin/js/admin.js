@@ -32,23 +32,59 @@
     [/^\/equipe$/, equipe, 'equipe'],
   ];
 
-  async function router() {
+  // ── Menu en tiroir (téléphone) ──
+  const menu = document.querySelector('[data-menu]');
+  const voile = document.querySelector('[data-voile]');
+  const boutonMenu = document.querySelector('[data-ouvrir-menu]');
+  const basculerMenu = (ouvrir) => {
+    menu.classList.toggle('ouvert', ouvrir); voile.classList.toggle('ouvert', ouvrir);
+    boutonMenu.setAttribute('aria-expanded', ouvrir);
+  };
+  boutonMenu.addEventListener('click', () => basculerMenu(!menu.classList.contains('ouvert')));
+  voile.addEventListener('click', () => basculerMenu(false));
+  menu.addEventListener('click', (e) => { if (e.target.closest('a, button')) basculerMenu(false); });
+
+  // ── Tableaux lisibles sur téléphone : chaque cellule reçoit le nom de sa colonne ──
+  function etiqueterTableaux(racine = main) {
+    racine.querySelectorAll('table.tableau').forEach(t => {
+      const libs = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
+      t.querySelectorAll('tbody tr').forEach(tr => [...tr.children].forEach((td, i) => { if (!td.hasAttribute('data-lib') && !td.hasAttribute('colspan')) td.setAttribute('data-lib', libs[i] || ''); }));
+    });
+  }
+  new MutationObserver(() => etiqueterTableaux()).observe(main, { childList: true, subtree: true });
+
+  // ── Rafraîchissement automatique des pages « vivantes » ──
+  // Toutes les 45 s si la page est visible et que personne n'est en train de saisir.
+  const VIVANTES = new Set(['bord', 'lots', 'courses', 'reclamations']);
+  let pageActuelle = null;
+  setInterval(() => {
+    if (document.hidden || !VIVANTES.has(pageActuelle) || document.querySelector('.modale-fond')) return;
+    const actif = document.activeElement;
+    if (actif && main.contains(actif) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
+    if (/^#\/(lots|reclamations)\/./.test(location.hash)) return; // fiche ouverte : on ne bouge pas
+    const y = window.scrollY;
+    router({ silencieux: true }).then(() => window.scrollTo(0, y));
+  }, 45000);
+
+  async function router({ silencieux = false } = {}) {
     if (!session.connecte()) return connexion();
     const u = session.utilisateur();
     if (u.role !== 'admin') {
-      document.querySelector('[data-menu]').classList.add('cache');
+      document.querySelector('[data-menu]').classList.add('cache'); document.body.classList.add('hors-session');
       main.innerHTML = `<div class="pile" style="max-width:420px"><h1>Accès réservé</h1><p class="muet">Ce compte n'est pas administrateur.</p><button class="btn" data-sortir2>Se déconnecter</button></div>`;
       main.querySelector('[data-sortir2]').onclick = () => { session.fermer(); router(); };
       return;
     }
-    document.querySelector('[data-menu]').classList.remove('cache');
+    document.querySelector('[data-menu]').classList.remove('cache'); document.body.classList.remove('hors-session');
     if (!router.pastille) { router.pastille = true; majPastilleRec(); }
     const chemin = location.hash.replace(/^#/, '').split('?')[0] || '/';
     for (const [re, vue, nav] of routes) {
       const m = chemin.match(re);
       if (!m) continue;
       document.querySelectorAll('[data-nav]').forEach(a => a.dataset.nav === nav ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
-      main.innerHTML = '<div class="chargement"></div>';
+      pageActuelle = nav;
+      document.querySelector('[data-titre-mobile]').textContent = document.querySelector(`[data-nav="${nav}"]`)?.textContent.replace(/\d+$/, '').trim() || 'Back-office';
+      if (!silencieux) main.innerHTML = '<div class="chargement"></div>';
       try { await vue(...m.slice(1)); }
       catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
       return;
@@ -57,7 +93,7 @@
   }
 
   function connexion() {
-    document.querySelector('[data-menu]').classList.add('cache');
+    document.querySelector('[data-menu]').classList.add('cache'); document.body.classList.add('hors-session');
     main.innerHTML = '<div style="max-width:420px;margin:40px auto" data-zone></div>';
     K.vueConnexion(main.querySelector('[data-zone]'), { titre: 'Back-office', surSucces: () => router() });
   }
@@ -481,8 +517,7 @@
     try {
       const { reclamations: tout } = await api.get('/reclamations');
       const l = tout.filter(x => ['ouverte', 'en_cours'].includes(x.statut));
-      const b = document.querySelector('[data-nb-rec]');
-      b.textContent = l.length; b.classList.toggle('cache', !l.length);
+      document.querySelectorAll('[data-nb-rec], [data-nb-rec-mobile]').forEach(b => { b.textContent = l.length; b.classList.toggle('cache', !l.length); });
     } catch {}
   }
 

@@ -12,17 +12,27 @@
   <link rel="stylesheet" href="css/admin.css">
 </head>
 <body>
+  <header class="barre-mobile" data-barre-mobile>
+    <button class="btn btn-rond" type="button" data-ouvrir-menu aria-label="Ouvrir le menu" aria-expanded="false"><span data-ic="liste"></span></button>
+    <span class="titre-mobile" data-titre-mobile>Back-office</span>
+    <span class="pastille-nb cache" data-nb-rec-mobile></span>
+  </header>
+  <div class="voile-menu" data-voile></div>
   <div class="cadre-admin">
-    <aside class="menu" data-menu>
+    <aside class="menu" data-menu id="menu">
       <a href="#/" class="logo-admin" aria-label="Talib Multi Services — tableau de bord"><img src="commun/logo.png" alt="Talib Multi Services" width="180" height="123"></a>
       <nav class="pile" style="--gap:2px" aria-label="Menu">
+        <div class="groupe-menu">Activité</div>
         <a href="#/" data-nav="bord"><span data-ic="grille"></span>Tableau de bord</a>
-        <a href="#/lots" data-nav="lots"><span data-ic="lot"></span>Lots &amp; manifestes</a>
         <a href="#/colis" data-nav="colis"><span data-ic="colis"></span>Colis</a>
+        <a href="#/lots" data-nav="lots"><span data-ic="lot"></span>Lots &amp; manifestes</a>
         <a href="#/courses" data-nav="courses"><span data-ic="moto"></span>Courses à domicile</a>
+        <div class="groupe-menu">Clients</div>
         <a href="#/reclamations" data-nav="reclamations"><span data-ic="alerte"></span>Réclamations <span class="pastille-nb cache" data-nb-rec></span></a>
-        <a href="#/factures" data-nav="factures"><span data-ic="liste"></span>Factures</a>
+        <div class="groupe-menu">Argent</div>
         <a href="#/caisses" data-nav="caisses"><span data-ic="billet"></span>Caisses</a>
+        <a href="#/factures" data-nav="factures"><span data-ic="liste"></span>Factures</a>
+        <div class="groupe-menu">Réglages</div>
         <a href="#/reglages" data-nav="reglages"><span data-ic="prix"></span>Tarifs &amp; agences</a>
         <a href="#/equipe" data-nav="equipe"><span data-ic="equipe"></span>Équipe</a>
       </nav>

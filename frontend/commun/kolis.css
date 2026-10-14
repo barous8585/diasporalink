@@ -254,3 +254,8 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
   .modale-carte .modale { border-radius: 0; min-height: 100%; padding: 14px; }
   .carte-zone { height: auto; flex: 1; min-height: 50vh; }
 }
+
+/* Liens faciles à toucher */
+.liens-legaux a { display: inline-block; padding: 10px 4px; }
+.case a { display: inline-block; padding: 4px 0; }
+a.tres-petit { display: inline-block; padding: 6px 0; }

@@ -123,6 +123,15 @@
     return CTX;
   }
   setInterval(() => { if (navigator.onLine) rafraichirContexte().catch(() => {}); }, 120000);
+  // Écrans « liste » redessinés seuls toutes les 60 s (courses du livreur, colis prêts au guichet)
+  setInterval(async () => {
+    if (document.hidden || !navigator.onLine || document.querySelector('.modale-fond') || arreterCamera) return;
+    const onglet = location.hash.replace(/^#\/?/, '').split('/')[0];
+    const actif = document.activeElement;
+    if (actif && main.contains(actif) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
+    if (onglet === 'courses' && main.querySelector('[data-seg]')) { const y = window.scrollY; await vueCourses(); window.scrollTo(0, y); }
+    if (onglet === 'remise' && main.querySelector('[data-liste]')) { await rafraichirContexte().catch(() => {}); main.querySelector('[data-filtre]')?.dispatchEvent(new Event('input')); }
+  }, 60000);
 
   // ══════════════════════════════════════════════════════════
   //  NAVIGATION
@@ -673,7 +682,7 @@
         </div>
         <div class="ligne entre"><h3>Colis prêts ici</h3><span class="petit muet">${(CTX?.colisPrets || []).length}</span></div>
         <input class="saisie" data-filtre placeholder="Filtrer par nom ou téléphone" aria-label="Filtrer">
-        <div class="pile" style="--gap:8px" data-liste></div>
+        <div class="pile grille-cartes" style="--gap:8px" data-liste></div>
       </div>`;
     const liste = main.querySelector('[data-liste]');
     const dessiner = (f = '') => {
@@ -962,7 +971,7 @@
           <button type="button" data-seg="libres" aria-pressed="${onglet === 'libres'}">À prendre (${libres.length})</button>
         </div>
         ${CTX?.majLe && !navigator.onLine ? `<p class="bandeau bandeau-ocre">${ic('horsligne', 'ic-sm')} Hors ligne : liste du ${esc(date(CTX.majLe))}.</p>` : ''}
-        <div class="pile" style="--gap:12px">${liste.length ? liste.map(carteCourse).join('') : `<p class="vide petit">${onglet === 'miennes' ? 'Aucune course pour vous. Regardez « À prendre ».' : 'Aucune course en attente.'}</p>`}</div>
+        <div class="pile grille-cartes" style="--gap:12px">${liste.length ? liste.map(carteCourse).join('') : `<p class="vide petit">${onglet === 'miennes' ? 'Aucune course pour vous. Regardez « À prendre ».' : 'Aucune course en attente.'}</p>`}</div>
       </div>`;
     main.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { stock.ecrire('onglet_courses', b.dataset.seg); vueCourses(); }));
     main.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => actionCourse(b.dataset.act, toutes.find(c => c.numeroSuivi === b.dataset.num && c.type === b.dataset.type), b)));

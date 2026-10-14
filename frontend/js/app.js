@@ -57,7 +57,17 @@
     [/^\/reclamation\/([\w-]+)$/, reclamation, null],
   ];
 
-  async function router() {
+  // Suivi et « Mes colis » se mettent à jour seuls (toutes les 60 s, page visible, rien en cours de saisie)
+  setInterval(() => {
+    if (document.hidden || document.querySelector('.modale-fond')) return;
+    if (!/^#\/(suivi\/|mes-colis$)/.test(location.hash) && !(session.connecte() && /^#?\/?$/.test(location.hash))) return;
+    const actif = document.activeElement;
+    if (actif && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
+    const y = window.scrollY;
+    router({ silencieux: true }).then(() => window.scrollTo(0, y));
+  }, 60000);
+
+  async function router({ silencieux = false } = {}) {
     const chemin = location.hash.replace(/^#/, '') || '/';
     bandeauReseau(null);
     for (const [re, vue, nav] of routes) {
@@ -65,10 +75,9 @@
       if (m) {
         document.querySelectorAll('[data-nav]').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === nav) || a.removeAttribute('aria-current'));
         document.querySelectorAll('[data-nav]').forEach(a => { if (a.dataset.nav === nav) a.setAttribute('aria-current', 'page'); });
-        main.innerHTML = '<div class="chargement" aria-label="Chargement"></div>';
-        try { await vue(...m.slice(1)); } catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
-        main.focus({ preventScroll: true });
-        window.scrollTo(0, 0);
+        if (!silencieux) main.innerHTML = '<div class="chargement" aria-label="Chargement"></div>';
+        try { await vue(...m.slice(1)); } catch (e) { if (!silencieux) main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
+        if (!silencieux) { main.focus({ preventScroll: true }); window.scrollTo(0, 0); }
         majBoutonCompte();
         return;
       }
@@ -100,7 +109,7 @@
           <button class="btn btn-noir btn-carre" type="submit" aria-label="Rechercher">${ic('suivant')}</button>
         </form>
         <div data-vedette></div>
-        <div class="grille-2">
+        <div class="grille-2 tuiles-accueil">
           <a class="tuile ocre" href="#/envoyer">${ic('colis', 'ic-lg')}Envoyer un colis</a>
           <a class="tuile" href="#/envoyer">${ic('prix', 'ic-lg')}Calculer le prix</a>
           <a class="tuile" href="#/guichets">${ic('lieu', 'ic-lg')}Nos agences</a>
@@ -567,7 +576,7 @@
     };
 
     main.innerHTML = `
-      <div class="pile">
+      <div class="pile envoyer-grille">
         <div class="ligne"><a href="#/" class="btn btn-rond" aria-label="Retour">${ic('retour')}</a><h1 style="font-size:24px">Envoyer un colis</h1></div>
 
         <section class="pile" style="--gap:8px" aria-labelledby="q0">
@@ -616,7 +625,7 @@
           </label>
         </section>
 
-        <div class="carte-noire pile" style="--gap:4px" aria-live="polite">
+        <div class="carte-noire pile colonne-prix" style="--gap:4px" aria-live="polite">
           <div class="petit" style="color: var(--gris)">Prix estimé</div>
           <div class="prix-gnf" data-prix-principal></div>
           <div data-prix-autre></div>
@@ -836,7 +845,7 @@
   const mentions = () => {
     const e = CONFIG?.entreprise;
     if (!e) return '';
-    return `<p class="petit centre" style="margin-top:8px"><a href="#/cgv">Conditions générales</a> · <a href="#/interdits">Objets interdits</a> · <a href="#/confidentialite">Confidentialité</a></p>
+    return `<p class="petit centre liens-legaux" style="margin-top:8px"><a href="#/cgv">Conditions générales</a> · <a href="#/interdits">Objets interdits</a> · <a href="#/confidentialite">Confidentialité</a></p>
       <p class="tres-petit muet centre" style="line-height:1.6;margin-top:8px">${esc(e.nomCommercial)} · ${esc(e.forme)}<br>${esc(e.adresse)}<br>SIREN ${esc(e.siren)} · ${esc(e.rcs)} · TVA ${esc(e.tva)}</p>`;
   };
 

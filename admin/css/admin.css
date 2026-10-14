@@ -83,3 +83,41 @@ table.tableau { border-collapse: collapse; width: 100%; font-size: 14px; }
 .segments { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; background: var(--creme-2); padding: 4px; border-radius: 16px; }
 .segments button { min-height: 44px; padding: 0 4px; border-radius: 12px; border: none; background: transparent; color: var(--gris); font: inherit; font-size: 13px; line-height: 1.15; font-weight: 600; cursor: pointer; }
 .segments button[aria-pressed="true"] { background: var(--marine); color: #fff; font-weight: 700; }
+
+/* ── Menu groupé ── */
+.groupe-menu { font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--sur-surface-2); opacity: .7; padding: 14px 12px 4px; }
+.groupe-menu:first-child { padding-top: 0; }
+.menu { overflow-y: auto; }
+.barre-mobile, .voile-menu { display: none; }
+
+/* ── Téléphone : menu en tiroir, tableaux en cartes ── */
+@media (max-width: 760px) {
+  .barre-mobile { display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 60; background: var(--marine); color: #fff; padding: 10px 14px; }
+  .barre-mobile .btn-rond { background: var(--marine-clair); color: #fff; border-color: transparent; }
+  .titre-mobile { font-weight: 800; font-size: 17px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cadre-admin { display: block; }
+  .menu { position: fixed !important; top: 0; left: 0; bottom: 0; width: min(300px, 86vw) !important; height: 100% !important; flex-direction: column !important; align-items: stretch !important;
+    padding: 20px 14px !important; z-index: 80; transform: translateX(-102%); transition: transform .22s ease; overflow-y: auto; overflow-x: hidden !important; }
+  .menu.ouvert { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.35); }
+  .menu nav { flex-direction: column !important; }
+  .menu nav a { font-size: 16px !important; min-height: 48px; }
+  .menu nav a .ic { display: inline-block !important; }
+  .logo-admin { padding: 10px !important; margin: 0 0 12px !important; }
+  .logo-admin img { max-width: 150px !important; }
+  .encart-taux { display: block !important; }
+  .voile-menu.ouvert { display: block; position: fixed; inset: 0; background: rgba(2, 23, 51, .45); z-index: 70; }
+  .tableau thead { display: none; }
+  .tableau, .tableau tbody, .tableau tr, .tableau td { display: block; width: 100%; }
+  .tableau tr { border: 1px solid var(--ligne, #DCE2EC); border-radius: 14px; padding: 8px 12px; margin-bottom: 10px; background: var(--fond); }
+  .tableau td { border: none !important; padding: 5px 0 !important; display: flex; justify-content: space-between; gap: 12px; text-align: right; }
+  .tableau td::before { content: attr(data-lib); color: var(--gris); font-size: 13px; font-weight: 600; text-align: left; flex-shrink: 0; }
+  .tableau td:not([data-lib])::before, .tableau td[data-lib=""]::before { content: none; }
+  .tableau td[data-lib=""] { justify-content: flex-end; }
+  .tableau td[colspan] { justify-content: center; text-align: center; }
+  .defile { overflow: visible; }
+  .entete-page h1 { font-size: 24px; }
+}
+/* Équipe : la liste d'agences ne doit pas être écrasée */
+.tableau select.saisie { min-width: 150px; }
+.tableau .case { white-space: nowrap; }
+.hors-session .barre-mobile { display: none !important; }
