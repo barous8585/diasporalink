@@ -23,7 +23,8 @@ const corsOptions = {
     const allowed = [
       process.env.FRONTEND_URL,
       process.env.ADMIN_URL,
-      process.env.LIVREUR_URL,
+      process.env.AGENT_URL,
+      'http://localhost:5000',
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',
@@ -49,21 +50,22 @@ connectDB();
 app.post(
   '/api/paiements/webhook',
   express.raw({ type: 'application/json' }),
-  require('./controllers/paiementController').webhookStripe
+  (req, res, next) => require('./controllers/paiementController').webhookStripe(req, res).catch(next)
 );
 
 // ── Middlewares ───────────────────────────
-app.use(helmet());
+// L'API ne sert que du JSON ; la CSP est gérée par les apps (Netlify).
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ── Rate limiting ─────────────────────────
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 600, // les agents scannent beaucoup
   message: { succes: false, message: 'Trop de requêtes. Réessayez dans 15 minutes.' },
 });
 const authLimiter = rateLimit({
@@ -75,44 +77,62 @@ app.use('/api/', limiter);
 app.use('/api/auth/', authLimiter);
 
 // ── Routes ────────────────────────────────
-app.use('/api/auth',           require('./routes/auth'));
-app.use('/api/colis',          require('./routes/colis'));
-app.use('/api/paiements',      require('./routes/paiements'));
-app.use('/api/messages',       require('./routes/messages'));
-app.use('/api/utilisateurs',   require('./routes/utilisateurs'));
-app.use('/api/config',         require('./routes/config'));
-app.use('/api/remboursements', require('./routes/remboursements'));
+app.use('/api/auth',         require('./routes/auth'));
+app.use('/api/config',       require('./routes/config'));
+app.use('/api/colis',        require('./routes/colis'));
+app.use('/api/paiements',    require('./routes/paiements'));
+app.use('/api/agent',        require('./routes/agent'));
+app.use('/api/lots',         require('./routes/lots'));
+app.use('/api/caisse',       require('./routes/caisse'));
+app.use('/api/admin',        require('./routes/admin'));
+app.use('/api/utilisateurs', require('./routes/utilisateurs'));
+
+// ── Apps statiques (pratique en local : un seul serveur) ──
+if (process.env.SERVIR_APPS === '1') {
+  const path = require('path');
+  app.use('/agent', express.static(path.join(__dirname, 'agent')));
+  app.use('/admin', express.static(path.join(__dirname, 'admin')));
+  app.use('/', express.static(path.join(__dirname, 'frontend')));
+}
 
 // ── Health check ──────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({
     succes: true,
-    message: 'DiasporaLink API opérationnelle',
+    message: `${require('./config/constants').APP_NOM} API opérationnelle`,
     version: '1.0.0',
     env: process.env.NODE_ENV,
   });
 });
 
 // ── 404 ───────────────────────────────────
-app.use('*', (req, res) => {
+app.use('/api', (req, res) => {
   res.status(404).json({ succes: false, message: 'Route introuvable.' });
 });
 
 // ── Erreurs globales ──────────────────────
 app.use((err, req, res, next) => {
+  // Erreurs métier (ErreurMetier) : message clair pour l'utilisateur
+  if (err.name === 'ErreurMetier' || (err.status && err.status < 500 && err.expose !== false && !err.type)) {
+    return res.status(err.status).json({ succes: false, message: err.message, code: err.code });
+  }
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ succes: false, message: Object.values(err.errors)[0]?.message || 'Données invalides.' });
+  }
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ succes: false, message: 'JSON invalide.' });
+  }
   console.error(err.stack);
   res.status(err.status || 500).json({
     succes: false,
-    message: process.env.NODE_ENV === 'production'
-      ? 'Erreur serveur interne.'
-      : err.message,
+    message: process.env.NODE_ENV === 'production' ? 'Erreur serveur interne.' : err.message,
   });
 });
 
 // ── Démarrage ─────────────────────────────
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 DiasporaLink API — port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
+  console.log(`🚀 API — port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
 });
 
 module.exports = app;

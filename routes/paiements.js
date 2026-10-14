@@ -1,15 +1,16 @@
 const router = require('express').Router();
-const { auth } = require('../middleware/auth');
-const {
-  creerSession,
-  verifierSession,
-} = require('../controllers/paiementController');
+const { creerSession, verifierSession } = require('../controllers/paiementController');
+const { ah } = require('../utils/http');
 
-// ⚠️ Le webhook est monté directement dans server.js
-// car il nécessite le raw body AVANT express.json
+// Le webhook Stripe est monté dans server.js (il lui faut le corps brut).
+// Payer le solde d'un colis ne demande pas de compte : le numéro de suivi suffit
+// (la famille peut payer pour le destinataire).
+router.post('/creer-session', ah(creerSession));
+router.get('/verifier/:sessionId', ah(verifierSession));
 
-// Routes protégées par JWT
-router.post('/creer-session',      auth, creerSession);
-router.get('/verifier/:sessionId', auth, verifierSession);
+// Mobile money : à brancher (Orange Money, MTN MoMo) via un agrégateur.
+router.post('/mobile-money', (req, res) => {
+  res.status(501).json({ succes: false, message: 'Paiement Orange Money / MTN MoMo bientôt disponible. Payez au guichet en attendant.' });
+});
 
 module.exports = router;
