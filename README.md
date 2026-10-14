@@ -1,8 +1,8 @@
-# Kolis : expédition de colis Europe → Guinée
+# Talib Multi Services (TMS) : expédition de colis Europe → Guinée
 
 Plateforme d'envoi de colis pensée pour le terrain : **dépôt à Paris → lot (avion ou bateau) → arrivée à Conakry → guichet → remise au destinataire avec un code**.
 
-« Kolis » est un nom provisoire : changez `APP_NOM` et `PREFIXE_SUIVI` dans `.env`.
+Nom affiché : `APP_NOM` (Talib Multi Services), nom court pour les SMS : `APP_NOM_COURT` (TMS), préfixe des numéros : `PREFIXE_SUIVI` (TMS). Mentions légales : `config/constants.js → ENTREPRISE`.
 
 ## Les 3 apps
 

@@ -29,7 +29,7 @@
     try { navigator.vibrate?.(ok ? 60 : [80, 60, 80]); } catch {}
   }
 
-  // Extrait le numéro d'un QR : accepte « KL-26-00012 » ou une URL de suivi
+  // Extrait le numéro d'un QR : accepte « TMS-26-00012 » ou une URL de suivi
   function extraireNumero(texte) {
     const t = String(texte || '').trim();
     const m = t.match(/[A-Z]{2,4}-\d{2}-\d{4,6}/i);

@@ -5,7 +5,7 @@
 .coque { max-width: 520px; margin: 0 auto; min-height: 100vh; padding-bottom: 110px; }
 .entete { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 8px; }
 .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--encre); }
-.logo .titre { font-size: 22px; font-weight: 800; }
+.logo .titre { font-size: 20px; font-weight: 800; }
 .logo-carre { width: 38px; height: 38px; border-radius: 11px; background: var(--vert); color: var(--fond); display: flex; align-items: center; justify-content: center; }
 #reseau { margin: 4px 20px 0; }
 main { padding: 12px 20px 0; outline: none; }

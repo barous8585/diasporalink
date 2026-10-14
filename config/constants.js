@@ -6,7 +6,22 @@
 //  l'admin les modifie dans le back-office (collection Config).
 // ─────────────────────────────────────────────────────────────
 
-const APP_NOM = process.env.APP_NOM || 'Kolis';
+// Nom affiché dans les apps, les étiquettes et les documents
+const APP_NOM = process.env.APP_NOM || 'Talib Multi Services';
+// Nom court : SMS (un SMS au-delà de 160 caractères coûte double), icônes
+const APP_NOM_COURT = process.env.APP_NOM_COURT || 'TMS';
+
+// Mentions légales
+const ENTREPRISE = {
+  raisonSociale: 'TALIB MULTI SERVICES',
+  nomCommercial: 'Talib Multi Services - TMS',
+  forme: 'SAS',
+  siren: '105005409',
+  siret: '10500540900013',
+  tva: 'FR09105005409',
+  rcs: 'RCS Paris 105 005 409',
+  adresse: '108 rue de Clignancourt, 75018 Paris',
+};
 
 // ── MODES DE TRANSPORT ────────────────────
 const MODES = {
@@ -43,7 +58,7 @@ const CONFIG_DEFAUT = {
     fraisJourGnf: 5000,      // frais par jour au-delà
   },
   depots: [
-    { code: 'PARIS', nom: 'Dépôt Paris', ville: 'Paris', pays: 'FR', adresse: '', telephone: '', horaires: '' },
+    { code: 'PARIS', nom: 'Dépôt Paris', ville: 'Paris', pays: 'FR', adresse: '108 rue de Clignancourt, 75018 Paris', telephone: '', horaires: '' },
   ],
   guichets: [
     { code: 'KALOUM', nom: 'Guichet Kaloum', ville: 'Conakry', pays: 'GN', adresse: '', telephone: '', horaires: '' },
@@ -104,6 +119,8 @@ const CODE_RETRAIT_ESSAIS_MAX = 5;
 
 module.exports = {
   APP_NOM,
+  APP_NOM_COURT,
+  ENTREPRISE,
   MODES,
   MODES_INFO,
   TYPES_COLIS,

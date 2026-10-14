@@ -102,13 +102,13 @@ colisSchema.virtual('statutLabel').get(function () {
   return STATUTS_LABELS[this.statut] || this.statut;
 });
 
-// Numéro de suivi : KL-26-00001 (préfixe, année, séquence)
+// Numéro de suivi : TMS-26-00001 (préfixe, année, séquence)
 colisSchema.pre('validate', async function (next) {
   try {
     if (!this.numeroSuivi) {
       const n = await Compteur.suivant('colis');
       const an = String(new Date().getFullYear()).slice(-2);
-      const prefixe = (process.env.PREFIXE_SUIVI || 'KL').toUpperCase();
+      const prefixe = (process.env.PREFIXE_SUIVI || 'TMS').toUpperCase();
       this.numeroSuivi = `${prefixe}-${an}-${String(n).padStart(5, '0')}`;
     }
     next();

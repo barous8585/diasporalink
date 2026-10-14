@@ -1,6 +1,6 @@
 {
-  "name": "Kolis Agent",
-  "short_name": "Kolis Agent",
+  "name": "TMS Agent",
+  "short_name": "TMS Agent",
   "description": "Dépôt, scans, remise des colis et caisse",
   "start_url": "./",
   "display": "standalone",

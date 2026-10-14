@@ -2,7 +2,7 @@
 //  Notifications : SMS (Twilio) + WhatsApp (à brancher en v2)
 //  En développement, tout est affiché dans la console.
 // ─────────────────────────────────────────────────────────────
-const { APP_NOM } = require('../config/constants');
+const { APP_NOM_COURT: APP_NOM } = require('../config/constants'); // nom court : SMS ≤ 160 caractères
 
 let twilioClient = null;
 const getTwilio = () => {

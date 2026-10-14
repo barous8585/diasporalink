@@ -3,7 +3,7 @@ const Config = require('../models/Config');
 const { auth, role } = require('../middleware/auth');
 const { ah } = require('../utils/http');
 const {
-  APP_NOM, MODES_INFO, TYPES_COLIS, METHODES_PAIEMENT, STATUTS_LABELS, ROLES,
+  APP_NOM, APP_NOM_COURT, ENTREPRISE, MODES_INFO, TYPES_COLIS, METHODES_PAIEMENT, STATUTS_LABELS, ROLES,
 } = require('../config/constants');
 
 // ── GET /api/config ── données publiques pour les 3 apps
@@ -12,6 +12,8 @@ router.get('/', ah(async (req, res) => {
   res.json({
     succes: true,
     app: APP_NOM,
+    appCourt: APP_NOM_COURT,
+    entreprise: ENTREPRISE,
     modes: MODES_INFO.map(m => ({ ...m, ...c.tarifs[m.key] })),
     typesColis: TYPES_COLIS.map(t => ({ ...t, surcharge: c.surcharges?.[t.key] ?? t.surcharge })),
     tauxAssurance: c.tauxAssurance,

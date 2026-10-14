@@ -166,7 +166,7 @@
 
   function connexion() {
     document.querySelector('[data-nav]').innerHTML = '';
-    document.querySelector('[data-titre]').textContent = 'Kolis Agent';
+    document.querySelector('[data-titre]').textContent = `${CONFIG?.appCourt || 'TMS'} Agent`;
     document.querySelector('[data-qui]').textContent = 'Espace équipe';
     K.vueConnexion(main, {
       titre: 'Connexion agent', inscription: false,
@@ -212,7 +212,7 @@
 
         <form class="ligne" data-saisie style="--gap:8px">
           <label class="grandit"><span class="cache">Numéro de suivi</span>
-            <input class="saisie saisie-forte" name="numero" placeholder="Taper ou douchette : KL-26-…" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase">
+            <input class="saisie saisie-forte" name="numero" placeholder="Taper ou douchette : TMS-26-…" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase">
           </label>
           <button class="btn btn-noir btn-carre" type="submit" aria-label="Valider">${ic('ok')}</button>
         </form>

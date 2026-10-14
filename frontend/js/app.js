@@ -84,7 +84,7 @@
           <h1 style="margin-top:4px">Où est mon colis ?</h1>
         </div>
         <form class="recherche" role="search" data-recherche>
-          <label>${ic('loupe', 'ic-sm')}<input name="numero" placeholder="N° de suivi (ex. KL-26-00012)" aria-label="Numéro de suivi" autocomplete="off" autocapitalize="characters" required></label>
+          <label>${ic('loupe', 'ic-sm')}<input name="numero" placeholder="N° de suivi (ex. TMS-26-00012)" aria-label="Numéro de suivi" autocomplete="off" autocapitalize="characters" required></label>
           <button class="btn btn-noir btn-carre" type="submit" aria-label="Rechercher">${ic('suivant')}</button>
         </form>
         <div data-vedette></div>
@@ -495,6 +495,13 @@
       </div>`;
   }
 
+  // Mentions légales (pied des pages Guichets et Compte)
+  const mentions = () => {
+    const e = CONFIG?.entreprise;
+    if (!e) return '';
+    return `<p class="tres-petit muet centre" style="line-height:1.6;margin-top:8px">${esc(e.nomCommercial)} · ${esc(e.forme)}<br>${esc(e.adresse)}<br>SIREN ${esc(e.siren)} · ${esc(e.rcs)} · TVA ${esc(e.tva)}</p>`;
+  };
+
   // ════════════════════════════════════════════════════════
   //  GUICHETS
   // ════════════════════════════════════════════════════════
@@ -502,7 +509,7 @@
     const lieu = (l) => `
       <div class="carte pile" style="--gap:6px">
         <h3>${esc(l.nom)}</h3>
-        ${l.adresse ? `<p class="petit">${esc(l.adresse)}${l.ville ? `, ${esc(l.ville)}` : ''}</p>` : `<p class="petit muet">${esc(l.ville || '')}</p>`}
+        ${l.adresse ? `<p class="petit">${esc(l.adresse)}${l.ville && !l.adresse.toLowerCase().includes(l.ville.toLowerCase()) ? `, ${esc(l.ville)}` : ''}</p>` : `<p class="petit muet">${esc(l.ville || '')}</p>`}
         ${l.horaires ? `<p class="petit muet">${ic('horloge', 'ic-sm')} ${esc(l.horaires)}</p>` : ''}
         ${l.telephone ? `<div class="ligne" style="--gap:8px;margin-top:6px">
           <a class="btn btn-petit" href="tel:${esc(l.telephone)}">${ic('tel', 'ic-sm')} Appeler</a>
@@ -513,6 +520,7 @@
         <h1>Guichets &amp; horaires</h1>
         <h2>Déposer un colis</h2>${CONFIG.depots.map(lieu).join('')}
         <h2>Retirer un colis</h2>${CONFIG.guichets.map(lieu).join('')}
+        ${mentions()}
       </div>`;
   }
 
@@ -540,6 +548,7 @@
         <div class="carte pile" style="--gap:4px"><div class="gras">${esc(u.prenom)} ${esc(u.nom)}</div><div class="muet">${esc(u.telephone)}</div></div>
         <p class="petit muet">Les colis envoyés à ce numéro apparaissent dans « Mes colis », avec leur code de retrait.</p>
         <button class="btn btn-plein" data-sortir>${ic('sortie', 'ic-sm')} Se déconnecter</button>
+        ${mentions()}
       </div>`;
     main.querySelector('[data-sortir]').addEventListener('click', () => {
       session.fermer(); stock.suppr('mes_colis'); location.hash = '#/';
@@ -554,7 +563,7 @@
     }
     document.querySelectorAll('[data-nom-app]').forEach(el => { el.textContent = CONFIG.app; });
     document.title = `${CONFIG.app} — Suivi de colis`;
-    // Lien de suivi reçu par SMS : /?suivi=KL-…
+    // Lien de suivi reçu par SMS : /?suivi=TMS-…
     const q = new URLSearchParams(location.search).get('suivi');
     if (q) { history.replaceState(null, '', location.pathname + `#/suivi/${encodeURIComponent(q)}`); }
     window.addEventListener('hashchange', router);

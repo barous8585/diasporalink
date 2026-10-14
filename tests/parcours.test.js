@@ -78,7 +78,7 @@ test('parcours complet : réservation → dépôt → lot → guichet → remise
   }, client);
   assert.strictEqual(resa.status, 201, resa.message);
   const numero = resa.colis.numeroSuivi;
-  assert.match(numero, /^KL-\d{2}-\d{5}$/);
+  assert.match(numero, /^TMS-\d{2}-\d{5}$/);
   assert.strictEqual(resa.colis.statut, 'reserve');
 
   // Dépôt : pesée (6,4 kg), paiement espèces en euros
@@ -112,7 +112,7 @@ test('parcours complet : réservation → dépôt → lot → guichet → remise
     { opId: 's1', numero, action: 'charger', lot: lotAir.code },
     { opId: 's1', numero, action: 'charger', lot: lotAir.code },               // doublon hors-ligne
     { opId: 's2', numero: numeroMer, action: 'charger', lot: lotAir.code },    // mauvais mode
-    { opId: 's3', numero: 'KL-00-99999', action: 'charger', lot: lotAir.code },
+    { opId: 's3', numero: 'TMS-00-99999', action: 'charger', lot: lotAir.code },
   ] }, agentParis);
   const [r1, r1bis, r2, r3] = scans.resultats;
   assert.ok(r1.ok && r1.statut === 'charge');

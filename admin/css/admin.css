@@ -2,7 +2,7 @@
 .cadre-admin { display: flex; min-height: 100vh; }
 .menu { width: 240px; flex-shrink: 0; background: var(--encre); color: var(--fond); padding: 24px 16px; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; height: 100vh; }
 .logo-admin { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; color: var(--fond); text-decoration: none; }
-.logo-admin .titre { font-size: 22px; font-weight: 800; }
+.logo-admin .titre { font-size: 18px; font-weight: 800; line-height: 1.15; }
 .logo-admin .logo-carre { width: 36px; height: 36px; border-radius: 10px; background: var(--ocre); color: var(--encre); display: flex; align-items: center; justify-content: center; }
 .menu nav a { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 12px; color: #D6CFC0; text-decoration: none; font-size: 15px; }
 .menu nav a:hover { background: #2A2822; }
