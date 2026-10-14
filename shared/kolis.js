@@ -493,9 +493,46 @@
     };
   }
 
+  // ── Factures : page publique de l'app client (lien avec jeton, partageable) ──
+  function lienFacture(f) {
+    const q = `facture.html?n=${encodeURIComponent(f.numero)}&t=${encodeURIComponent(f.jeton)}`;
+    if (APP === 'client') return q;
+    if (local) return `${location.port === '5000' ? '' : `${location.protocol}//${location.hostname}:5000`}/${q}`;
+    const base = (stock.lire('config')?.frontendUrl || 'https://tms-colis.netlify.app').replace(/\/$/, '');
+    return `${base}/${q}`;
+  }
+  const ETATS_FACTURE = { payee: 'Payée', partielle: 'Partiellement payée', a_payer: 'À payer', avoir: 'Avoir' };
+
+  // ── Photos : réduites sur le téléphone avant l'envoi (réseau faible) ──
+  function photoReduite(fichier, { max = 1280, qualite = 0.7 } = {}) {
+    return new Promise((ok, ko) => {
+      const img = new Image();
+      const url = URL.createObjectURL(fichier);
+      img.onload = () => {
+        const r = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        ok(c.toDataURL('image/jpeg', qualite));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('Photo illisible.')); };
+      img.src = url;
+    });
+  }
+  // Affiche une photo protégée (l'API demande le jeton : pas de simple <img src>)
+  async function afficherPhoto(img, id) {
+    try {
+      const r = await fetch(`${API_URL}/photos/${id}`, { headers: { Authorization: `Bearer ${stock.lire('jeton')}` } });
+      if (!r.ok) throw new Error();
+      img.src = URL.createObjectURL(await r.blob());
+    } catch { img.alt = 'Photo indisponible'; }
+  }
+
   window.K = {
     API_URL, api, session, stock, config, ErreurReseau,
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
     positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse,
+    lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto,
   };
 })();

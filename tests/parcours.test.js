@@ -83,7 +83,7 @@ test('parcours complet : réservation → dépôt → lot → guichet → remise
   const client = await connexion('0611223344', 'Mariama', 'Diallo');
   const est = await appel('GET', '/colis/tarif?mode=air&poids=6&type=vetements');
   assert.strictEqual(est.tarif.totalEur, 72);
-  const resa = await appel('POST', '/colis', {
+  const resa = await appel('POST', '/colis', { cgvAcceptees: true,
     mode: 'air', typeColis: 'vetements', poidsEstime: 6, depot: 'PARIS', guichet: 'KALOUM',
     destinataire: { nom: 'Alpha Barry', telephone: '621000111' },
   }, client);
@@ -93,7 +93,7 @@ test('parcours complet : réservation → dépôt → lot → guichet → remise
   assert.strictEqual(resa.colis.statut, 'reserve');
 
   // Dépôt : pesée (6,4 kg), paiement espèces en euros
-  const dep = await appel('POST', '/agent/depot', {
+  const dep = await appel('POST', '/agent/depot', { cgvAcceptees: true,
     numeroSuivi: numero, poidsReel: 6.4,
     paiement: { montant: 76.8, devise: 'EUR', methode: 'especes', objet: 'transport' }, opId: 'dep-1',
   }, agentParis);
@@ -103,11 +103,11 @@ test('parcours complet : réservation → dépôt → lot → guichet → remise
   assert.strictEqual(dep.colis.solde.soldeGnf, 0);
   assert.strictEqual(dep.ecartPoids, 0.4);
   // Rejouer la même opération ne crée pas de doublon
-  const dep2 = await appel('POST', '/agent/depot', { numeroSuivi: numero, poidsReel: 6.4, opId: 'dep-1' }, agentParis);
+  const dep2 = await appel('POST', '/agent/depot', { cgvAcceptees: true, numeroSuivi: numero, poidsReel: 6.4, opId: 'dep-1' }, agentParis);
   assert.ok(dep2.rejoue);
 
   // Dépôt sans réservation, en bateau, payé à l'arrivée
-  const dep3 = await appel('POST', '/agent/depot', {
+  const dep3 = await appel('POST', '/agent/depot', { cgvAcceptees: true,
     poidsReel: 12, mode: 'mer', typeColis: 'alimentaire', guichet: 'KALOUM', payeurArrivee: true,
     expediteur: { nom: 'Oumar Sow', telephone: '0699887766' },
     destinataire: { nom: 'Fanta Kourouma', telephone: '622334455' },
@@ -261,7 +261,7 @@ test('redistribution vers une autre agence, et envoi Guinée → France payé en
   const agentLabe = await connexion('620000004');
 
   // ── France → Labé : arrivée à la plateforme de Kaloum, puis acheminement ──
-  const dep = await appel('POST', '/agent/depot', {
+  const dep = await appel('POST', '/agent/depot', { cgvAcceptees: true,
     poidsReel: 4, mode: 'air', typeColis: 'vetements', guichet: 'LABE',
     expediteur: { nom: 'Saliou Diallo', telephone: '0611111111' },
     destinataire: { nom: 'Kadiatou Bah', telephone: '625555555' },
@@ -272,7 +272,7 @@ test('redistribution vers une autre agence, et envoi Guinée → France payé en
   const numero = dep.colis.numeroSuivi;
 
   // Une agence de retrait dans le même pays que le départ est refusée
-  const memePays = await appel('POST', '/agent/depot', {
+  const memePays = await appel('POST', '/agent/depot', { cgvAcceptees: true,
     poidsReel: 2, mode: 'air', typeColis: 'vetements', guichet: 'PARIS',
     expediteur: { nom: 'A', telephone: '0611111112' }, destinataire: { nom: 'B', telephone: '0611111113' },
   }, agentParis);
@@ -304,7 +304,7 @@ test('redistribution vers une autre agence, et envoi Guinée → France payé en
   assert.strictEqual(remise.status, 200, remise.message);
 
   // ── Guinée → France : déposé à Kaloum, payé en GNF, retiré à Paris ──
-  const retour = await appel('POST', '/agent/depot', {
+  const retour = await appel('POST', '/agent/depot', { cgvAcceptees: true,
     poidsReel: 3, mode: 'air', typeColis: 'alimentaire', guichet: 'PARIS',
     expediteur: { nom: 'Aminata Camara', telephone: '626666666' },
     destinataire: { nom: 'Ibrahima Camara', telephone: '0622222222' },
@@ -377,7 +377,7 @@ test('ramassage et livraison à domicile, prix au kilomètre', async () => {
 
   // Réservation : ramassage à 3 km de l'agence de Paris, livraison sans position (le destinataire l'enverra)
   const client = await connexion('0622334455', 'Fanta', 'Camara');
-  r = await appel('POST', '/colis', {
+  r = await appel('POST', '/colis', { cgvAcceptees: true,
     mode: 'air', typeColis: 'vetements', poidsEstime: 5, depot: 'PARIS', guichet: 'KALOUM',
     destinataire: { nom: 'Oumar Camara', telephone: '622111222' },
     ramassage: { demande: true, adresse: { ville: 'Paris', quartier: 'Barbès', repere: '3e étage, interphone Camara', position: { lat: 48.8925 + 0.027, lng: 2.3484 } }, moment: 'matin' },
@@ -389,7 +389,7 @@ test('ramassage et livraison à domicile, prix au kilomètre', async () => {
   assert.strictEqual(r.colis.ramassage.devise, 'EUR');
   assert.strictEqual(r.colis.livraison.prix, undefined);
   // Ramassage sans position refusé
-  const sansPos = await appel('POST', '/colis', {
+  const sansPos = await appel('POST', '/colis', { cgvAcceptees: true,
     mode: 'air', typeColis: 'vetements', poidsEstime: 5, depot: 'PARIS', guichet: 'KALOUM',
     destinataire: { nom: 'X', telephone: '622111223' },
     ramassage: { demande: true, adresse: { quartier: 'Barbès', repere: 'x' } },
@@ -412,7 +412,7 @@ test('ramassage et livraison à domicile, prix au kilomètre', async () => {
   assert.strictEqual((await appel('POST', '/livreur/ramasse', { numero, opId: 'ram-1' }, livParis)).rejoue, true);
 
   // Dépôt à l'agence : transport + ramassage à payer (la livraison n'a pas encore de prix)
-  r = await appel('POST', '/agent/depot', { numeroSuivi: numero, poidsReel: 5 }, agentParis);
+  r = await appel('POST', '/agent/depot', { cgvAcceptees: true, numeroSuivi: numero, poidsReel: 5 }, agentParis);
   assert.strictEqual(r.status, 201, r.message);
   const taux = r.colis.tarif.taux;
   assert.strictEqual(r.colis.solde.domicileGnf, 12 * taux);
@@ -475,7 +475,7 @@ test('ramassage et livraison à domicile, prix au kilomètre', async () => {
   assert.strictEqual(caisse.totaux.GNF.especes, 23000);
 
   // ── Échec de livraison : le colis revient en rayon ──
-  r = await appel('POST', '/agent/depot', {
+  r = await appel('POST', '/agent/depot', { cgvAcceptees: true,
     poidsReel: 2, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM',
     expediteur: { nom: 'Ali Sow', telephone: '0633333333' }, destinataire: { nom: 'Binta Sow', telephone: '623333333' },
     livraison: { demande: true, adresse: { quartier: 'Taouyah', repere: 'Portail bleu', position: { lat: 9.53, lng: -13.69 } } },
@@ -503,4 +503,122 @@ test('ramassage et livraison à domicile, prix au kilomètre', async () => {
   assert.strictEqual(r.status, 200, r.message);
   assert.strictEqual(r.colis.livraison, null);
   assert.strictEqual(r.colis.soldeGnf, 0);
+});
+
+test('conditions, factures conformes, photo au dépôt et réclamation', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');
+  const agentKaloum = await connexion('620000003');
+  const client = await connexion('0644444444', 'Kadiatou', 'Bah');
+  const PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQ==';
+
+  // Conditions obligatoires, en ligne et au comptoir
+  let r = await appel('POST', '/colis', { mode: 'air', typeColis: 'vetements', poidsEstime: 2, depot: 'PARIS', guichet: 'KALOUM', destinataire: { nom: 'X', telephone: '620000077' } }, client);
+  assert.strictEqual(r.status, 400);
+  assert.match(r.message, /conditions/);
+  const base = { poidsReel: 5, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM', expediteur: { nom: 'Kadiatou Bah', telephone: '0644444444' }, destinataire: { nom: 'Mamadou Bah', telephone: '624444444' } };
+  r = await appel('POST', '/agent/depot', base, agentParis);
+  assert.strictEqual(r.status, 400);
+
+  // TVA 20 % en France, mentions de la société
+  await appel('PATCH', '/config/admin', { facturation: { capital: '1 000 €', email: 'contact@tms.test', tva: { FR: { taux: 0.2 }, GN: { taux: 0, mention: 'TVA non applicable' } } } }, admin);
+  r = await appel('POST', '/agent/depot', { ...base, cgvAcceptees: true, photo: PHOTO, paiement: { montant: 60, devise: 'EUR', methode: 'carte' } }, agentParis);
+  assert.strictEqual(r.status, 201, r.message);
+  const numero = r.colis.numeroSuivi;
+  assert.strictEqual(r.colis.cgv.par, 'comptoir');
+  assert.ok(r.colis.photoDepot);
+
+  let fs = (await appel('GET', `/factures/colis/${numero}`, null, client)).factures;
+  assert.strictEqual(fs.length, 1);
+  const fa = fs[0];
+  assert.match(fa.numero, /^FA-\d{4}-\d{5}$/);
+  assert.strictEqual(fa.devise, 'EUR');
+  assert.strictEqual(fa.totalTTC, 60);
+  assert.strictEqual(fa.totalHT, 50);
+  assert.strictEqual(fa.totalTVA, 10);
+  assert.strictEqual(fa.emetteur.siren, '105005409');
+  assert.strictEqual(fa.emetteur.capital, '1 000 €');
+  assert.strictEqual(fa.client.nom, 'Kadiatou Bah');
+  assert.strictEqual(fa.etat, 'payee');
+  // Lien partageable : seulement avec le jeton
+  assert.strictEqual((await appel('GET', `/factures/public/${fa.numero}?t=faux`)).status, 404);
+  assert.strictEqual((await appel('GET', `/factures/public/${fa.numero}?t=${fa.jeton}`)).facture.numero, fa.numero);
+  // Rien à refacturer
+  assert.strictEqual((await appel('POST', `/factures/colis/${numero}/emettre`, null, agentParis)).status, 409);
+
+  // Photo : visible par le client du colis, pas par un inconnu
+  const resPhoto = await fetch(`${API}/photos/${r.colis.photoDepot}`, { headers: { Authorization: `Bearer ${client}` } });
+  assert.strictEqual(resPhoto.headers.get('content-type'), 'image/jpeg');
+  const intrus = await connexion('+33600000098', 'Intrus', 'Y');
+  assert.strictEqual((await fetch(`${API}/photos/${r.colis.photoDepot}`, { headers: { Authorization: `Bearer ${intrus}` } })).status, 403);
+
+  // Arrivée, douane, remise → facture complémentaire en GNF au destinataire, douane en débours
+  const lot = (await appel('POST', '/lots', { mode: 'air' }, admin)).lot;
+  await appel('POST', '/agent/scans', { scans: [{ opId: 'f1', numero, action: 'charger', lot: lot.code }] }, agentParis);
+  await appel('POST', `/lots/${lot.code}/statut`, { statut: 'parti' }, admin);
+  await appel('POST', '/agent/scans', { scans: [{ opId: 'f2', numero, action: 'arrivee', lot: lot.code }, { opId: 'f3', numero, action: 'guichet' }] }, agentKaloum);
+  await appel('PATCH', `/agent/colis/${numero}/douane`, { montant: 30000, devise: 'GNF' }, agentKaloum);
+  const code = (await appel('GET', `/admin/colis/${numero}`, null, admin)).colis.codeRetrait;
+  r = await appel('POST', '/agent/remise', { numero, code, pieceVerifiee: true, paiement: { montant: 30000, devise: 'GNF', methode: 'especes' } }, agentKaloum);
+  assert.strictEqual(r.status, 200, r.message);
+  fs = (await appel('GET', `/factures/colis/${numero}`, null, admin)).factures;
+  assert.strictEqual(fs.length, 2);
+  const fc = fs[1];
+  assert.strictEqual(fc.devise, 'GNF');
+  assert.strictEqual(fc.client.nom, 'Mamadou Bah');
+  assert.deepStrictEqual(fc.lignes.map(l => l.cle), ['douane']);
+  assert.strictEqual(fc.lignes[0].debours, true);
+  assert.strictEqual(fc.totalTTC, 30000);
+  assert.strictEqual(fc.mentionTva, 'TVA non applicable');
+  assert.strictEqual(fc.etat, 'payee');
+
+  // Le destinataire paie tout : une seule facture, à la remise, en GNF
+  r = await appel('POST', '/agent/depot', { ...base, cgvAcceptees: true, poidsReel: 2, payeurArrivee: true, destinataire: { nom: 'Fanta Bah', telephone: '624444445' } }, agentParis);
+  const num2 = r.colis.numeroSuivi;
+  assert.strictEqual((await appel('GET', `/factures/colis/${num2}`, null, admin)).factures.length, 0);
+
+  // Réclamation du client : colis abîmé, avec photo
+  r = await appel('POST', '/reclamations', { numero, motif: 'abime', description: 'Le carton est arrivé écrasé, deux assiettes cassées.', montantDemande: 40, deviseDemande: 'EUR', photos: [PHOTO] }, client);
+  assert.strictEqual(r.status, 201, r.message);
+  const rec = r.reclamation;
+  assert.match(rec.numero, /^R-\d{4}-\d{4}$/);
+  assert.strictEqual(rec.photos.length, 1);
+  assert.strictEqual((await appel('POST', '/reclamations', { numero, motif: 'abime', description: 'Encore une fois la même chose.' }, client)).status, 409);
+  assert.strictEqual((await appel('POST', '/reclamations', { numero, motif: 'abime', description: 'Je ne suis pas concerné du tout.' }, intrus)).status, 404);
+
+  // L'admin instruit : note interne invisible du client, plafond indicatif, avoir de 20 €
+  await appel('POST', `/reclamations/${rec.numero}/message`, { texte: 'Vérifier avec Ibrahima', interne: true }, admin);
+  await appel('POST', `/reclamations/${rec.numero}/message`, { texte: 'Nous regardons la photo du dépôt.' }, admin);
+  const vueAdmin = await appel('GET', `/reclamations/${rec.numero}`, null, admin);
+  assert.strictEqual(vueAdmin.plafond.montantEur, 100); // 5 kg × 20 €
+  assert.ok(vueAdmin.colis.photoDepot);
+  const vueClient = (await appel('GET', `/reclamations/${rec.numero}`, null, client)).reclamation;
+  assert.ok(!vueClient.suivi.some(s => s.interne), 'notes internes cachées');
+  assert.strictEqual(vueClient.statut, 'en_cours');
+
+  r = await appel('POST', `/reclamations/${rec.numero}/decision`, { decision: 'avoir', montant: 20, motif: 'Geste commercial pour la casse', methode: 'virement', reference: 'VIR-1' }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.match(r.reclamation.decision.avoir, /^AV-\d{4}-\d{5}$/);
+  fs = (await appel('GET', `/factures/colis/${numero}`, null, admin)).factures;
+  const av = fs.find(f => f.type === 'avoir');
+  assert.strictEqual(av.totalTTC, 20);
+  assert.strictEqual(av.factureOrigine, fa.numero);
+  assert.strictEqual((await appel('POST', `/reclamations/${rec.numero}/decision`, { decision: 'refus', motif: 'non' }, admin)).status, 409);
+  const caisse = await appel('GET', '/caisse/moi', null, admin);
+  assert.strictEqual(caisse.totaux.EUR.virement, -20);
+
+  // Registre pour le comptable
+  const csv = await (await fetch(`${API}/factures/export.csv`, { headers: { Authorization: `Bearer ${admin}` } })).text();
+  assert.ok(csv.includes(fa.numero) && csv.includes(av.numero) && csv.includes('-20'));
+
+  // Durées de conservation : un an après la remise, photos et signature disparaissent
+  const mongoose = require('mongoose');
+  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/kolis_test');
+  const { appliquerRetention } = require('../scripts/retention');
+  const bilan = await appliquerRetention(new Date(Date.now() + 400 * 86400000));
+  assert.ok(bilan.photos >= 2, JSON.stringify(bilan));
+  const apres = (await appel('GET', `/admin/colis/${numero}`, null, admin)).colis;
+  assert.ok(!apres.photoDepot && !apres.remise.signature);
+  assert.strictEqual((await appel('GET', `/factures/colis/${numero}`, null, admin)).factures.length, 3, 'les factures restent');
+  await mongoose.disconnect();
 });

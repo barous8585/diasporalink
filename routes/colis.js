@@ -10,7 +10,7 @@ const { auth } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
 const { calculerTarif } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
-const { STATUTS, MODES, TYPES_COLIS, ROLES, SENS } = require('../config/constants');
+const { STATUTS, MODES, TYPES_COLIS, ROLES, SENS, CGV_VERSION } = require('../config/constants');
 const { normTel, vuePublique, vueComplete, sensDepuisAgences } = require('../services/colisService');
 const dom = require('../services/domicileService');
 
@@ -81,6 +81,7 @@ router.post('/', auth, [
   body('destinataire.telephone').trim().notEmpty().withMessage('Téléphone du destinataire requis'),
   body('nbCartons').optional().isInt({ min: 1, max: 50 }),
   body('valeurDeclaree').optional().isFloat({ min: 0 }),
+  body('cgvAcceptees').equals('true').withMessage('Acceptez les conditions générales et confirmez qu\'aucun objet interdit n\'est dans le colis'),
 ], valider, ah(async (req, res) => {
   const config = await Config.get();
   const b = req.body;
@@ -95,6 +96,7 @@ router.post('/', auth, [
     poidsEstime: parseFloat(b.poidsEstime),
     valeurDeclaree: b.valeurDeclaree || 0, assurance: !!b.assurance,
     payeurArrivee: !!b.payeurArrivee,
+    cgv: { version: CGV_VERSION, accepteesLe: new Date(), par: 'en_ligne' },
   });
   colis.tarif = { ...calculerTarif(config, {
     sens, mode: b.mode, poidsKg: b.poidsEstime, typeColis: b.typeColis, valeurDeclaree: b.valeurDeclaree, assurance: b.assurance,

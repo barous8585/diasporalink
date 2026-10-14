@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="fr" data-app="client">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#04244F">
+  <title>Facture — Talib Multi Services</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="commun/kolis.css">
+  <style>
+    body { background: var(--creme-2, #EEF1F6); padding: 16px; }
+    .barre { max-width: 820px; margin: 0 auto 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .feuille { max-width: 820px; margin: 0 auto; background: #fff; color: #0B1F3F; padding: 40px 44px; border-radius: 14px; box-shadow: 0 2px 18px rgba(4, 36, 79, .08); font-size: 13px; line-height: 1.45; }
+    .tete { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; border-bottom: 3px solid #04244F; padding-bottom: 18px; }
+    .tete img { width: 150px; height: auto; }
+    .titre-doc { text-align: right; }
+    .titre-doc h1 { font-size: 30px; letter-spacing: 2px; margin: 0; color: #04244F; }
+    .titre-doc .num { font-size: 15px; font-weight: 700; margin-top: 4px; }
+    .or { height: 3px; width: 64px; background: #C8982B; margin: 8px 0 0 auto; }
+    .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+    .bloc { border: 1px solid #DCE2EC; border-radius: 10px; padding: 12px 14px; }
+    .bloc h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: #5A6B85; margin: 0 0 6px; }
+    .bloc .nom { font-weight: 700; font-size: 14px; }
+    .ref { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-bottom: 14px; color: #33435E; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #04244F; color: #fff; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; padding: 8px 10px; }
+    th.n, td.n { text-align: right; white-space: nowrap; }
+    td { padding: 9px 10px; border-bottom: 1px solid #E6EAF1; vertical-align: top; }
+    td .det { color: #5A6B85; font-size: 12px; }
+    .totaux { margin-left: auto; width: 320px; margin-top: 14px; }
+    .totaux div { display: flex; justify-content: space-between; padding: 5px 10px; }
+    .totaux .ttc { background: #04244F; color: #fff; font-weight: 800; font-size: 16px; border-radius: 8px; margin-top: 4px; padding: 10px; }
+    .etat { display: inline-block; margin-top: 16px; padding: 6px 14px; border: 2px solid; border-radius: 8px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; transform: rotate(-2deg); }
+    .etat.payee { color: #1E6B3A; border-color: #1E6B3A; }
+    .etat.a_payer, .etat.partielle { color: #9A2A20; border-color: #9A2A20; }
+    .mentions { margin-top: 22px; padding-top: 12px; border-top: 1px solid #E6EAF1; font-size: 11px; color: #5A6B85; }
+    .mentions p { margin: 3px 0; }
+    .pied { margin-top: 18px; text-align: center; font-size: 10.5px; color: #5A6B85; }
+    @media (max-width: 640px) {
+      .feuille { padding: 22px 16px; }
+      .parties { grid-template-columns: 1fr; }
+      .totaux { width: 100%; }
+      .tete img { width: 110px; }
+      .titre-doc h1 { font-size: 22px; }
+      th:nth-child(2), td:nth-child(2), th:nth-child(4), td:nth-child(4) { display: none; }
+    }
+    @media print {
+      @page { size: A4; margin: 14mm; }
+      body { background: #fff; padding: 0; }
+      .barre { display: none; }
+      .feuille { box-shadow: none; border-radius: 0; padding: 0; max-width: none; }
+      th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .totaux .ttc { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="barre" data-barre></div>
+  <main class="feuille" id="zone"><div class="chargement" aria-label="Chargement"></div></main>
+  <script src="commun/kolis.js"></script>
+  <script>
+    (async () => {
+      const { esc, montant, date } = K;
+      const zone = document.getElementById('zone');
+      const q = new URLSearchParams(location.search);
+      const numero = q.get('n'), jeton = q.get('t');
+      let f;
+      try { f = (await K.api.get(`/factures/public/${encodeURIComponent(numero || '')}?t=${encodeURIComponent(jeton || '')}`)).facture; }
+      catch (e) { zone.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.reseau ? 'Pas de connexion. Réessayez.' : 'Facture introuvable. Vérifiez le lien reçu.')}</p>`; return; }
+
+      const avoir = f.type === 'avoir';
+      const m = (n) => montant(n, f.devise);
+      const pct = (t) => `${(Math.round(t * 1000) / 10).toLocaleString('fr-FR')} %`;
+      const s = f.emetteur || {};
+      document.title = `${avoir ? 'Avoir' : 'Facture'} ${f.numero} — ${s.marque || 'TMS'}`;
+      const ETAT = { payee: 'Acquittée', partielle: `Reste à payer : ${m(f.reste)}`, a_payer: `À payer : ${m(f.reste)}` };
+
+      zone.innerHTML = `
+        <div class="tete">
+          <div>
+            <img src="commun/logo.png" alt="${esc(s.marque || 'Talib Multi Services')}" width="150" height="102">
+          </div>
+          <div class="titre-doc">
+            <h1>${avoir ? 'AVOIR' : 'FACTURE'}</h1>
+            <div class="num">N° ${esc(f.numero)}</div>
+            <div>Date : ${esc(new Date(f.date).toLocaleDateString('fr-FR'))}</div>
+            ${avoir ? `<div>Sur la facture ${esc(f.factureOrigine)}</div>` : ''}
+            <div class="or"></div>
+          </div>
+        </div>
+
+        <div class="parties">
+          <div class="bloc">
+            <h3>Émetteur</h3>
+            <div class="nom">${esc(s.raisonSociale)}</div>
+            <div>${esc(s.nomCommercial || '')}</div>
+            <div>${esc(s.forme)}${s.capital ? ` au capital de ${esc(s.capital)}` : ''}</div>
+            <div>${esc(s.adresse)}</div>
+            <div>SIRET ${esc(s.siret)} · ${esc(s.rcs)}</div>
+            <div>N° TVA intracommunautaire : ${esc(s.tva)}</div>
+            ${s.telephone || s.email ? `<div>${[s.telephone, s.email].filter(Boolean).map(esc).join(' · ')}</div>` : ''}
+          </div>
+          <div class="bloc">
+            <h3>Client${f.client?.role ? ` · ${esc(f.client.role)}` : ''}</h3>
+            <div class="nom">${esc(f.client?.nom || '')}</div>
+            ${f.client?.telephone ? `<div>Tél. ${esc(f.client.telephone)}</div>` : ''}
+            ${f.agence?.nom ? `<h3 style="margin-top:10px">Agence</h3><div>${esc(f.agence.nom)}</div><div>${esc(f.agence.adresse || '')}</div>` : ''}
+          </div>
+        </div>
+
+        <div class="ref">
+          <span>Colis : <b>${esc(f.numeroSuivi)}</b></span>
+          <span>Devise : <b>${f.devise === 'EUR' ? 'euro (€)' : 'franc guinéen (GNF)'}</b></span>
+          ${f.taux ? `<span>Taux appliqué : <b>1 € = ${esc(Number(f.taux).toLocaleString('fr-FR'))} GNF</b></span>` : ''}
+        </div>
+
+        <table>
+          <thead><tr><th>Désignation</th><th class="n">Qté</th><th class="n">Prix unit. TTC</th><th class="n">TVA</th><th class="n">Montant TTC</th></tr></thead>
+          <tbody>${f.lignes.map(l => `
+            <tr>
+              <td><b>${esc(l.designation)}</b>${l.detail ? `<div class="det">${esc(l.detail)}</div>` : ''}</td>
+              <td class="n">${esc(String(l.quantite ?? 1).replace('.', ','))}${l.unite ? ` ${esc(l.unite)}` : ''}</td>
+              <td class="n">${m(l.prixUnitaire)}</td>
+              <td class="n">${l.debours ? 'débours' : pct(l.tauxTva)}</td>
+              <td class="n">${m(l.montantTTC)}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+
+        <div class="totaux">
+          <div><span>Total HT</span><b>${m(f.totalHT)}</b></div>
+          ${(f.parTaux || []).filter(p => p.taux > 0).map(p => `<div><span>TVA ${pct(p.taux)} sur ${m(p.baseHT)}</span><b>${m(p.tva)}</b></div>`).join('')}
+          ${(f.parTaux || []).every(p => !p.taux) ? `<div><span>TVA</span><b>${m(0)}</b></div>` : ''}
+          <div class="ttc"><span>${avoir ? 'Montant de l\'avoir' : 'Total TTC'}</span><span>${m(f.totalTTC)}</span></div>
+        </div>
+        ${!avoir && ETAT[f.etat] ? `<div style="text-align:right"><span class="etat ${esc(f.etat)}">${esc(ETAT[f.etat])}</span></div>` : ''}
+        ${avoir && f.motif ? `<p style="margin-top:14px"><b>Motif :</b> ${esc(f.motif)}</p>` : ''}
+
+        <div class="mentions">
+          ${f.mentionTva ? `<p><b>${esc(f.mentionTva)}</b></p>` : ''}
+          ${f.lignes.some(l => l.debours) ? '<p>Droits de douane : débours payés pour le compte du client et refacturés à l\'identique, hors TVA.</p>' : ''}
+          ${!avoir && f.conditionsPaiement ? `<p>${esc(f.conditionsPaiement)}</p>` : ''}
+          ${!avoir ? '<p>Clients professionnels : en cas de retard de paiement, pénalités au taux de 3 fois le taux d\'intérêt légal et indemnité forfaitaire de 40 € pour frais de recouvrement.</p>' : ''}
+          <p>Prestation soumise à nos conditions générales de vente, acceptées lors de la réservation ou du dépôt.</p>
+        </div>
+        <div class="pied">${esc(s.nomCommercial || s.raisonSociale)} · ${esc(s.forme)} · ${esc(s.adresse)} · SIREN ${esc(s.siren)}${s.site ? ` · ${esc(s.site)}` : ''}</div>`;
+
+      const lien = location.href;
+      document.querySelector('[data-barre]').innerHTML = `
+        <button class="btn btn-principal" data-pdf>${K.ic('imprimer', 'ic-sm')} Télécharger en PDF</button>
+        <a class="btn" href="https://wa.me/?text=${encodeURIComponent(`${avoir ? 'Avoir' : 'Facture'} ${f.numero} (colis ${f.numeroSuivi}) : ${lien}`)}" target="_blank" rel="noopener">${K.ic('bulle', 'ic-sm')} Envoyer par WhatsApp</a>`;
+      document.querySelector('[data-pdf]').addEventListener('click', () => window.print());
+    })();
+  </script>
+</body>
+</html>

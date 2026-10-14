@@ -450,11 +450,40 @@
           <p class="petit" data-rendu></p>
         </div>
 
+        <h3>Photo du colis</h3>
+        <div class="carte pile" style="--gap:8px">
+          <p class="petit muet">Photographiez le colis fermé, étiquette visible. C'est la preuve de son état en cas de réclamation.</p>
+          <div class="vignettes" data-photo-apercu></div>
+          <label class="btn btn-plein">${ic('scan', 'ic-sm')} <span data-lib-photo>Prendre la photo</span><input type="file" accept="image/*" capture="environment" data-photo-colis hidden></label>
+        </div>
+
+        <h3>Conditions d'envoi</h3>
+        ${r.cgv?.version ? `<p class="bandeau bandeau-vert petit">${ic('ok', 'ic-sm')} Conditions acceptées en ligne le ${esc(date(r.cgv.accepteesLe, false))}.</p>` : `
+        <div class="carte pile" style="--gap:8px">
+          <button type="button" class="btn btn-petit" data-voir-interdits>${ic('alerte', 'ic-sm')} Montrer la liste des objets interdits</button>
+          <label class="case" style="align-items:flex-start"><input type="checkbox" name="cgvAcceptees" style="margin-top:2px"> <span>Le client a vu la liste des objets interdits, confirme que son colis n'en contient pas et accepte les conditions générales.</span></label>
+        </div>`}
+
         <button class="btn btn-principal btn-grand btn-plein" type="submit">Enregistrer et imprimer l'étiquette</button>
       </form>`;
 
     const form = main.querySelector('[data-depot]');
     const $ = (s) => form.querySelector(s);
+    let photoColis = null;
+    $('[data-photo-colis]').addEventListener('change', async (e) => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      try {
+        photoColis = await K.photoReduite(f, { max: 1280, qualite: 0.65 });
+        $('[data-photo-apercu]').innerHTML = `<img src="${photoColis}" alt="Photo du colis">`;
+        $('[data-lib-photo]').textContent = 'Reprendre la photo';
+      } catch (err) { toast(err.message, 'erreur'); }
+    });
+    $('[data-voir-interdits]')?.addEventListener('click', () => modale(`
+      <div class="pile texte-legal" style="--gap:8px">
+        <div class="ligne entre"><h2>Objets interdits</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+        ${KolisLegal.listeInterdits()}
+      </div>`));
     let tarif = null, paysAffiche = null;
     const adrLiv = K.brancherAdresse(form, 'liv', { valeur: livPrevue?.adresse || {}, agence: () => agenceDe(form.guichet.value), config: CONFIG, surChange: () => tarif && calc() });
     // Courses à domicile en GNF au taux du colis : ramassage fait + livraison si son prix est connu
@@ -525,6 +554,8 @@
       if (!form.guichet.value) { toast('Choisissez l\'agence de retrait.', 'erreur'); form.guichet.focus(); return; }
       const manque = ['expNom', 'expTel', 'destNom', 'destTel'].find(k => !form[k].value.trim());
       if (manque) { toast('Complétez les noms et téléphones.', 'erreur'); form[manque].focus(); return; }
+      if (form.cgvAcceptees && !form.cgvAcceptees.checked) { toast('Faites confirmer au client les conditions et l\'absence d\'objet interdit.', 'erreur'); form.cgvAcceptees.focus(); return; }
+      if (!photoColis && !confirm('Pas de photo du colis : en cas de réclamation, il n\'y aura aucune preuve de son état au dépôt. Enregistrer quand même ?')) return;
       let livraison;
       if (form.livraisonDom.checked) {
         const a = adrLiv.lire();
@@ -550,13 +581,38 @@
           destinataire: { nom: form.destNom.value.trim(), telephone: normTel(form.destTel.value) },
           livraison,
           paiement,
-        });
+          cgvAcceptees: form.cgvAcceptees ? form.cgvAcceptees.checked : undefined,
+          photo: photoColis || undefined,
+        }, { delai: 45000 });
         depotTermine(res.colis);
       } catch (err) {
         toast(err.reseau ? 'Pas de réseau : le dépôt a besoin de la connexion pour créer le numéro. Réessayez.' : err.message, 'erreur');
         btn.disabled = false;
       }
     });
+  }
+
+  // Factures du colis : ouvrir (imprimer / PDF) ou envoyer au client par WhatsApp
+  async function blocFactures(zone, numero, { tel, filtre } = {}) {
+    if (!zone) return;
+    try {
+      let { factures } = await api.get(`/factures/colis/${numero}`);
+      if (filtre) factures = factures.filter(filtre);
+      if (!factures.length) { zone.innerHTML = ''; return; }
+      const wa = String(tel || '').replace(/[^\d]/g, '');
+      zone.innerHTML = factures.map(f => {
+        const lien = K.lienFacture(f);
+        const texte = `${CONFIG.app} : votre ${f.type === 'avoir' ? 'avoir' : 'facture'} ${f.numero} pour le colis ${numero} (${montant(f.totalTTC, f.devise)}) : ${lien}`;
+        return `
+          <div class="carte pile" style="--gap:8px">
+            <div class="ligne entre"><span class="gras">${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${esc(f.numero)}</span><span class="gras chiffres">${montant(f.totalTTC, f.devise)}</span></div>
+            <div class="grille-2">
+              <a class="btn" href="${esc(lien)}" target="_blank" rel="noopener">${ic('imprimer', 'ic-sm')} Ouvrir / imprimer</a>
+              <a class="btn" href="https://wa.me/${esc(wa)}?text=${encodeURIComponent(texte)}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} WhatsApp au client</a>
+            </div>
+          </div>`;
+      }).join('');
+    } catch { zone.innerHTML = '<p class="petit muet centre">Facture consultable plus tard dans la fiche du colis.</p>'; }
   }
 
   function depotTermine(c) {
@@ -570,10 +626,12 @@
         </div>
         <div class="carte centre qr-apercu" data-qr><div class="chargement"></div></div>
         <button class="btn btn-noir btn-grand btn-plein" data-imprimer>${ic('imprimer')} Imprimer ${c.nbCartons > 1 ? `${c.nbCartons} étiquettes` : 'l\'étiquette'}</button>
+        <div class="pile" style="--gap:8px" data-factures-depot></div>
         <p class="petit muet centre">Le client a reçu un SMS avec le numéro de suivi.</p>
         <button class="btn btn-principal btn-grand btn-plein" data-suivant>${ic('plus')} Colis suivant</button>
       </div>`;
     Etiquette.apercu(main.querySelector('[data-qr]'), c.numeroSuivi);
+    blocFactures(main.querySelector('[data-factures-depot]'), c.numeroSuivi, { tel: c.expediteur?.telephone });
     main.querySelector('[data-imprimer]').addEventListener('click', () => Etiquette.imprimer(c, CONFIG));
     main.querySelector('[data-suivant]').addEventListener('click', vueDepot);
   }
@@ -776,10 +834,15 @@
           <p>${esc(c.numeroSuivi)} · ${esc(c.destinataire.nom)}</p>
         </div>
         ${horsLigne ? `<p class="bandeau bandeau-ocre">${ic('horsligne', 'ic-sm')} Pas de réseau : la remise est gardée sur ce téléphone et sera envoyée automatiquement.</p>` : ''}
+        <div class="pile" style="--gap:8px" data-factures-remise></div>
         <a class="btn btn-principal btn-grand btn-plein" href="#/remise" data-suivant>Colis suivant</a>
       </div>`;
     main.querySelector('[data-suivant]').addEventListener('click', (e) => { e.preventDefault(); router(); });
-    if (!horsLigne) rafraichirContexte().catch(() => {});
+    if (!horsLigne) {
+      rafraichirContexte().catch(() => {});
+      // Facture complémentaire émise à la remise (douane, garde…), ou facture complète si le destinataire paie
+      blocFactures(main.querySelector('[data-factures-remise]'), c.numeroSuivi, { tel: c.destinataire?.telephone, filtre: (f) => Date.now() - new Date(f.date) < 10 * 60000 });
+    }
   }
 
   // Zone de signature au doigt
@@ -1028,9 +1091,11 @@
           <div class="pile centre">
             <div class="carte-vert pile" style="--gap:8px"><h1>Colis livré</h1><p>${esc(c.numeroSuivi)} · ${esc(c.contact?.nom || '')}</p></div>
             ${horsLigne ? `<p class="bandeau bandeau-ocre">${ic('horsligne', 'ic-sm')} Pas de réseau : la livraison est gardée sur ce téléphone et sera envoyée automatiquement.</p>` : ''}
+            <div class="pile" style="--gap:8px" data-factures-livraison></div>
             <a class="btn btn-principal btn-grand btn-plein" href="#/courses" data-suivant>Course suivante</a>
           </div>`;
         main.querySelector('[data-suivant]').addEventListener('click', (ev) => { ev.preventDefault(); router(); });
+        if (!horsLigne) blocFactures(main.querySelector('[data-factures-livraison]'), c.numeroSuivi, { tel: c.adresse?.telephone || c.contact?.telephone, filtre: (f) => Date.now() - new Date(f.date) < 10 * 60000 });
       };
       try { await api.post('/livreur/livre', payload); fini(false); }
       catch (err) {
@@ -1092,6 +1157,7 @@
             <div class="ligne" style="--gap:8px"><input class="saisie grandit" name="douane" type="number" inputmode="decimal" min="0" step="${deviseDouane === 'EUR' ? '0.01' : '500'}" value="${c.fraisDouaneGnf ? (deviseDouane === 'EUR' ? Math.round(c.fraisDouaneGnf / taux * 100) / 100 : c.fraisDouaneGnf) : ''}" placeholder="Montant en ${deviseDouane === 'EUR' ? '€' : 'GNF'}"><button class="btn btn-noir">Enregistrer</button></div>
           </form>` : ''}
           <button class="btn btn-plein" data-reimprimer>${ic('imprimer', 'ic-sm')} Réimprimer l'étiquette</button>
+          ${c.tarif && !c.tarif.estime ? `<h3>Factures</h3><div class="pile" style="--gap:8px" data-factures-fiche></div>` : ''}
           <div class="carte"><h3 style="margin-bottom:12px">Historique</h3><div class="frise">${[...c.historique].reverse().map(h => `
             <div class="etape"><div class="rail"><div class="point"></div><div class="trait"></div></div><div class="texte"><div class="gras">${esc(h.label)}</div><div class="petit muet">${esc(date(h.le))}${h.detail ? ` · ${esc(h.detail)}` : ''}</div></div></div>`).join('')}</div></div>
         </div>`;
@@ -1101,6 +1167,11 @@
         catch (err) { toast(err.message, 'erreur'); }
       });
       zone.querySelector('[data-reimprimer]').addEventListener('click', () => Etiquette.imprimer(c, CONFIG));
+      const zf = zone.querySelector('[data-factures-fiche]');
+      if (zf) {
+        await blocFactures(zf, c.numeroSuivi, { tel: c.statut === 'remis' || c.payeurArrivee ? c.destinataire.telephone : c.expediteur.telephone });
+        if (!zf.innerHTML.trim()) zf.innerHTML = '<p class="petit muet">Aucune facture pour l\'instant (émise au dépôt, ou à la remise si le destinataire paie).</p>';
+      }
     } catch (e) { zone.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
   }
 

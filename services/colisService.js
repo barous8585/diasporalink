@@ -9,7 +9,7 @@ const { Mouvement } = require('../models/Mouvement');
 const { calculerTarif, calculerSolde, calculerMagasinage, enGnf } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
 const {
-  STATUTS, STATUTS_LABELS, STATUTS_LOT, CODE_RETRAIT_ESSAIS_MAX, METHODES_PAIEMENT, DEVISES, PAYS, sensEntre,
+  STATUTS, STATUTS_LABELS, STATUTS_LOT, CODE_RETRAIT_ESSAIS_MAX, METHODES_PAIEMENT, DEVISES, PAYS, sensEntre, CGV_VERSION,
 } = require('../config/constants');
 
 const paysArriveeDe = (sens) => String(sens || 'FR-GN').split('-')[1];
@@ -59,6 +59,14 @@ const prenomSeul = (nom) => (nom || '').trim().split(/\s+/)[0] || '';
 async function nomLieu(code) {
   const lieu = await Config.lieu(code);
   return lieu?.nom || code;
+}
+
+// Le colis concerne-t-il ce compte ? (réservé par lui, ou son numéro sur le colis)
+function lieAuCompte(colis, user) {
+  if (!colis || !user) return false;
+  if (['agent', 'admin', 'livreur'].includes(user.role)) return true;
+  if (String(colis.client) === String(user._id)) return true;
+  return [colis.expediteur?.telephone, colis.destinataire?.telephone, colis.tiersAutorise?.telephone].includes(user.telephone);
 }
 
 // ── Vues ────────────────────────────────────────────────────
@@ -197,9 +205,21 @@ async function deposer(agent, data) {
     `Pesé ${poidsReel} kg${colis.poidsEstime ? ` (déclaré ${colis.poidsEstime} kg)` : ''}`,
     { lieu: colis.depot, agent: agent._id });
 
+  // Conditions générales et objets interdits : confirmés par le client au comptoir
+  if (!colis.cgv?.version) {
+    if (!data.cgvAcceptees) throw new ErreurMetier('Faites confirmer au client les conditions d\'envoi et la liste des objets interdits.');
+    colis.cgv = { version: CGV_VERSION, accepteesLe: new Date(), par: 'comptoir' };
+  }
+  if (data.photo) {
+    const Photo = require('../models/Photo');
+    const photo = await Photo.depuisDataUrl(data.photo, { type: 'depot', colis, par: agent._id });
+    colis.photoDepot = photo._id;
+  }
+
   await colis.validate();
   await encaisser(colis, agent, data.paiement);
   await colis.save();
+  if (!colis.payeurArrivee) await require('./factureService').emettreSansBloquer(colis, { moment: 'depot', agent });
 
   notifier(colis.expediteur.telephone, MESSAGES.depose(colis));
   return { colis: await vueComplete(colis), ecartPoids: ecart };
@@ -341,7 +361,7 @@ async function remettre(agent, data) {
   const p = validerPaiement(data.paiement);
   const essai = {
     sens: colis.sens, paiements: [...colis.paiements, ...(p ? [p] : [])], tarif: colis.tarif, fraisDouaneGnf: colis.fraisDouaneGnf,
-    arriveGuichetLe: colis.arriveGuichetLe, ramassage: colis.ramassage, livraison: colis.livraison,
+    arriveGuichetLe: colis.arriveGuichetLe, ramassage: colis.ramassage, livraison: colis.livraison, avoirsGnf: colis.avoirsGnf,
   };
   const solde = calculerSolde(essai, config);
   if (solde.soldeGnf > 0) {
@@ -361,6 +381,7 @@ async function remettre(agent, data) {
   colis.ajouterEvenement(STATUTS.REMIS, `Remis à ${colis.remise.nomRetrait}${aDomicile ? ' à domicile' : ''}`, { lieu: agent.lieu, agent: agent._id });
   if (typeof data.avantSauvegarde === 'function') data.avantSauvegarde(colis);
   await colis.save();
+  await require('./factureService').emettreSansBloquer(colis, { moment: 'remise', agent });
   notifier(colis.expediteur.telephone, MESSAGES.remis(colis));
   if (colis.destinataire.telephone !== colis.expediteur.telephone) notifier(colis.destinataire.telephone, MESSAGES.remis(colis));
   return { colis: await vueComplete(colis) };
@@ -413,7 +434,7 @@ async function colisDuGuichet(guichet) {
 }
 
 module.exports = {
-  ErreurMetier, normTel, masquerTel, vuePublique, vueComplete, avecOperation,
+  ErreurMetier, normTel, masquerTel, lieAuCompte, vuePublique, vueComplete, avecOperation,
   encaisser, deposer, appliquerScan, sensDepuisAgences, paysArriveeDe, nomPays, remettre, changerStatutMasse, colisDuGuichet,
   mettrePret, calculerMagasinage,
 };

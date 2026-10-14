@@ -3,7 +3,7 @@ const Config = require('../models/Config');
 const { auth, role } = require('../middleware/auth');
 const { ah } = require('../utils/http');
 const {
-  APP_NOM, APP_NOM_COURT, ENTREPRISE, MODES_INFO, TYPES_COLIS, METHODES_PAIEMENT, STATUTS_LABELS, ROLES, PAYS, SENS, MOMENTS,
+  APP_NOM, APP_NOM_COURT, ENTREPRISE, MODES_INFO, TYPES_COLIS, METHODES_PAIEMENT, STATUTS_LABELS, ROLES, PAYS, SENS, MOMENTS, CGV_VERSION,
 } = require('../config/constants');
 
 // ── GET /api/config ── données publiques pour les 3 apps
@@ -26,6 +26,10 @@ router.get('/', ah(async (req, res) => {
     magasinage: c.magasinage,
     domicile: c.domicile,
     moments: MOMENTS,
+    facturation: { capital: c.facturation?.capital, email: c.facturation?.email, telephone: c.facturation?.telephone, site: c.facturation?.site, mediateur: c.facturation?.mediateur },
+    litiges: c.litiges,
+    cgvVersion: CGV_VERSION,
+    frontendUrl: process.env.FRONTEND_URL || '',
     agences: (c.agences || []).filter(a => a.actif !== false),
     methodesPaiement: METHODES_PAIEMENT,
     statuts: STATUTS_LABELS,
@@ -121,6 +125,32 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
     }
     doc.domicile = dom;
     doc.markModified('domicile');
+  }
+  if (b.facturation && typeof b.facturation === 'object') {
+    const f = JSON.parse(JSON.stringify(actuel.facturation || {}));
+    for (const k of ['capital', 'email', 'telephone', 'site', 'conditionsPaiement', 'mediateur']) {
+      if (typeof b.facturation[k] === 'string') f[k] = b.facturation[k].trim().slice(0, 300);
+    }
+    if (b.facturation.tva) {
+      f.tva = f.tva || {};
+      for (const p of Object.keys(PAYS)) {
+        const t = b.facturation.tva[p];
+        if (!t) continue;
+        const taux = nombre(t.taux);
+        f.tva[p] = { taux: taux !== undefined && taux < 1 ? taux : (f.tva[p]?.taux ?? 0), mention: typeof t.mention === 'string' ? t.mention.trim().slice(0, 200) : (f.tva[p]?.mention || '') };
+      }
+    }
+    doc.facturation = f;
+    doc.markModified('facturation');
+  }
+  if (b.litiges && typeof b.litiges === 'object') {
+    const l = { ...(actuel.litiges || {}) };
+    for (const k of ['indemnisationKgEur', 'delaiAbimeJours', 'delaiPerduJours']) {
+      const v = nombre(b.litiges[k]);
+      if (v !== undefined) l[k] = v;
+    }
+    doc.litiges = l;
+    doc.markModified('litiges');
   }
   if (Array.isArray(b.agences)) {
     const { positionDepuisLien } = require('../services/domicileService');

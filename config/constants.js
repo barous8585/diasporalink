@@ -87,7 +87,29 @@ const CONFIG_DEFAUT = {
     FR: { actif: true, base: 8,     parKm: 1,    plafond: 0, rayonMaxKm: 60 },
     GN: { actif: true, base: 10000, parKm: 2000, plafond: 0, rayonMaxKm: 40 },
   },
+  // Facturation : complète les mentions légales (ENTREPRISE). Prix affichés TTC.
+  // La TVA dépend du pays de l'agence qui encaisse — À FAIRE VALIDER PAR L'EXPERT-COMPTABLE.
+  facturation: {
+    capital: '',              // ex. « 1 000 € » (mention obligatoire pour une SAS)
+    email: '',
+    telephone: '',
+    site: '',
+    tva: {
+      FR: { taux: 0.20, mention: '' },
+      GN: { taux: 0, mention: 'TVA non applicable' },
+    },
+    conditionsPaiement: 'Payable comptant au dépôt ou à la remise du colis. Pas d\'escompte pour paiement anticipé.',
+  },
+  // Litiges
+  litiges: {
+    indemnisationKgEur: 20,   // plafond par kg sans assurance (€)
+    delaiAbimeJours: 3,       // réclamation pour colis abîmé / incomplet, après la remise
+    delaiPerduJours: 30,      // réclamation pour colis perdu ou en retard
+  },
 };
+
+// Version des conditions générales : changer la date quand le texte change
+const CGV_VERSION = '2026-10-14';
 
 // ── STATUTS COLIS (ordre du circuit) ──────
 const STATUTS = {
@@ -181,4 +203,5 @@ module.exports = {
   STATUTS_COURSE,
   MOMENTS,
   CODE_RETRAIT_ESSAIS_MAX,
+  CGV_VERSION,
 };

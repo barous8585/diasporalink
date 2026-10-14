@@ -136,7 +136,8 @@ function calculerSolde(colis, config, maintenant = new Date()) {
   const magasinage = calculerMagasinage(config, colis.arriveGuichetLe, maintenant, { pays: paysArrivee(colis.sens), taux });
   const domicileGnf = fraisDomicileGnf(colis);
   const du = (colis.tarif?.totalGnf || 0) + (colis.fraisDouaneGnf || 0) + magasinage.fraisGnf + domicileGnf;
-  const paye = (colis.paiements || []).reduce((s, p) => s + enGnf(p.montant, p.devise, taux), 0);
+  // Les avoirs (gestes commerciaux, remboursements) éteignent la dette comme un paiement
+  const paye = (colis.paiements || []).reduce((s, p) => s + enGnf(p.montant, p.devise, taux), 0) + (colis.avoirsGnf || 0);
   const soldeGnf = Math.max(0, du - paye);
   return {
     duGnf: du,
