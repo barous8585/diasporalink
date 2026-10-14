@@ -47,16 +47,18 @@ const envoyerOTP = (telephone, code) =>
 
 const MESSAGES = {
   depose: (c) => `${APP_NOM} : colis ${c.numeroSuivi} bien reçu au dépôt (${c.poidsReel} kg). Suivi : ${urlSuivi(c.numeroSuivi)}`,
-  en_transit: (c) => `${APP_NOM} : votre colis ${c.numeroSuivi} est parti vers la Guinée. Suivi : ${urlSuivi(c.numeroSuivi)}`,
-  arrive: (c) => `${APP_NOM} : le colis ${c.numeroSuivi} est arrivé en Guinée. Nous vous prévenons dès qu'il est au guichet.`,
-  pret: (c, code, guichet, solde) =>
-    `${APP_NOM} : le colis ${c.numeroSuivi} vous attend au ${guichet}. Code de retrait : ${code}. ` +
-    (solde > 0 ? `Reste à payer : ${solde.toLocaleString('fr-FR')} GNF. ` : '') +
+  en_transit: (c, pays = 'destination') => `${APP_NOM} : votre colis ${c.numeroSuivi} est parti, direction ${pays}. Suivi : ${urlSuivi(c.numeroSuivi)}`,
+  arrive: (c, pays = '') => `${APP_NOM} : le colis ${c.numeroSuivi} est arrivé${pays ? ` en ${pays}` : ''}. Nous vous prévenons dès qu'il est à votre agence.`,
+  acheminement: (c, agence) => `${APP_NOM} : le colis ${c.numeroSuivi} est en route vers ${agence}. Vous recevrez le code de retrait à son arrivée.`,
+  // reste : texte déjà formaté dans la devise du pays (« 45 000 GNF » ou « 12,50 € »), ou vide
+  pret: (c, code, agence, reste) =>
+    `${APP_NOM} : le colis ${c.numeroSuivi} vous attend à ${agence}. Code de retrait : ${code}. ` +
+    (reste ? `Reste à payer : ${reste}. ` : '') +
     `Venez avec une pièce d'identité.`,
   remis: (c) => `${APP_NOM} : le colis ${c.numeroSuivi} a été remis. Merci de votre confiance !`,
   tiers: (c, nom) => `${APP_NOM} : ${nom} est autorisé(e) à retirer le colis ${c.numeroSuivi}.`,
   relance: (c, guichet, jours) =>
-    `${APP_NOM} : le colis ${c.numeroSuivi} vous attend au ${guichet} depuis ${jours} jours. Des frais de garde s'appliquent.`,
+    `${APP_NOM} : le colis ${c.numeroSuivi} vous attend à ${guichet} depuis ${jours} jours. Des frais de garde s'appliquent.`,
 };
 
 module.exports = { envoyerSMS, envoyerWhatsApp, notifier, envoyerOTP, MESSAGES, urlSuivi };

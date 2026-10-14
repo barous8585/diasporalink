@@ -9,7 +9,7 @@ const Config = require('../models/Config');
 const { auth, role } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
 const { calculerSolde } = require('../utils/tarif');
-const { ROLES, MODES, STATUTS, STATUTS_LOT } = require('../config/constants');
+const { ROLES, MODES, STATUTS, STATUTS_LOT, SENS } = require('../config/constants');
 const { changerStatutMasse } = require('../services/colisService');
 
 router.use(auth);
@@ -48,11 +48,15 @@ router.get('/:code', role(ROLES.AGENT, ROLES.ADMIN), ah(async (req, res) => {
 // Créer un lot
 router.post('/', role(ROLES.ADMIN), [
   body('mode').isIn(Object.values(MODES)).withMessage('Mode invalide'),
+  body('sens').optional().isIn(SENS.map(s => s.key)).withMessage('Sens invalide'),
   body('dateDepartPrevue').optional({ values: 'falsy' }).isISO8601(),
   body('dateArriveePrevue').optional({ values: 'falsy' }).isISO8601(),
 ], valider, ah(async (req, res) => {
   const { mode, reference, transporteur, dateDepartPrevue, dateArriveePrevue, notes } = req.body;
+  const sens = SENS.find(s => s.key === (req.body.sens || 'FR-GN'));
+  const [depart, arrivee] = await Promise.all([Config.plateforme(sens.depart), Config.plateforme(sens.arrivee)]);
   const lot = await Lot.create({
+    sens: sens.key, depot: depart?.code, destination: arrivee?.code,
     mode, reference, transporteur, notes, creePar: req.user._id,
     dateDepartPrevue: dateDepartPrevue || undefined, dateArriveePrevue: dateArriveePrevue || undefined,
   });

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
-//  Constantes métier — expédition Europe → Guinée
-//  Circuit : dépôt (Paris) → lot (avion / bateau) → arrivée Conakry
-//            → guichet → remise au destinataire avec code
+//  Constantes métier — Talib Multi Services, France ⇄ Guinée
+//  Circuit : agence de départ → lot (avion / bateau) → plateforme d'arrivée
+//            → (redistribution) → agence de retrait → remise avec code
 //  Les valeurs chiffrées ci-dessous ne sont que des valeurs de départ :
 //  l'admin les modifie dans le back-office (collection Config).
 // ─────────────────────────────────────────────────────────────
@@ -44,49 +44,66 @@ const TYPES_COLIS = [
   { key: 'electronique', label: 'Électronique', surcharge: 0.15 },
 ];
 
+// ── PAYS ET SENS D'ENVOI ──────────────────
+const PAYS = {
+  FR: { code: 'FR', nom: 'France', devise: 'EUR', indicatif: '+33' },
+  GN: { code: 'GN', nom: 'Guinée', devise: 'GNF', indicatif: '+224' },
+};
+const SENS = [
+  { key: 'FR-GN', depart: 'FR', arrivee: 'GN', label: 'France → Guinée' },
+  { key: 'GN-FR', depart: 'GN', arrivee: 'FR', label: 'Guinée → France' },
+];
+const sensEntre = (paysDepart, paysArrivee) => SENS.find(s => s.depart === paysDepart && s.arrivee === paysArrivee) || null;
+
 // ── CONFIG PAR DÉFAUT (modifiable par l'admin) ──
+// Les montants sont des valeurs de départ, à remplacer par les vrais tarifs TMS.
 const CONFIG_DEFAUT = {
+  // Prix au kilo par sens, dans la devise du pays de départ
   tarifs: {
-    air: { prixKg: 12, poidsMin: 1 },
-    mer: { prixKg: 4,  poidsMin: 10 },
+    'FR-GN': { devise: 'EUR', air: { prixKg: 12, poidsMin: 1 }, mer: { prixKg: 4, poidsMin: 10 } },
+    'GN-FR': { devise: 'GNF', air: { prixKg: 120000, poidsMin: 1 }, mer: { prixKg: 40000, poidsMin: 10 } },
   },
   surcharges: Object.fromEntries(TYPES_COLIS.map(t => [t.key, t.surcharge])),
   tauxAssurance: 0.023,      // 2,3 % de la valeur déclarée (optionnel)
   tauxEurGnf: 10000,         // 1 € = X GNF — À METTRE À JOUR par l'admin
   magasinage: {
-    joursGratuits: 10,       // jours gratuits au guichet
-    fraisJourGnf: 5000,      // frais par jour au-delà
+    joursGratuits: 10,       // jours gratuits à l'agence de retrait
+    fraisJourGnf: 5000,      // frais par jour au-delà, agences en Guinée
+    fraisJourEur: 1,         // frais par jour au-delà, agences en France
   },
-  depots: [
-    { code: 'PARIS', nom: 'Dépôt Paris', ville: 'Paris', pays: 'FR', adresse: '108 rue de Clignancourt, 75018 Paris', telephone: '', horaires: '' },
-  ],
-  guichets: [
-    { code: 'KALOUM', nom: 'Guichet Kaloum', ville: 'Conakry', pays: 'GN', adresse: '', telephone: '', horaires: '' },
-    { code: 'MATOTO', nom: 'Guichet Matoto', ville: 'Conakry', pays: 'GN', adresse: '', telephone: '', horaires: '' },
+  // Agences TMS : chacune reçoit les colis à envoyer, remet les colis arrivés et encaisse.
+  // « plateforme » = l'agence où arrivent les lots dans ce pays, d'où les colis
+  // sont redistribués vers les autres agences.
+  agences: [
+    { code: 'PARIS', nom: 'Agence Paris 18e', pays: 'FR', ville: 'Paris', commune: '18e', adresse: '108 rue de Clignancourt, 75018 Paris', telephone: '', horaires: '', plateforme: true },
+    { code: 'KALOUM', nom: 'Agence Kaloum', pays: 'GN', ville: 'Conakry', commune: 'Kaloum', adresse: '', telephone: '', horaires: '', plateforme: true },
+    { code: 'MATOTO', nom: 'Agence Matoto', pays: 'GN', ville: 'Conakry', commune: 'Matoto', adresse: '', telephone: '', horaires: '', plateforme: false },
   ],
 };
 
 // ── STATUTS COLIS (ordre du circuit) ──────
 const STATUTS = {
-  RESERVE:    'reserve',     // réservé en ligne, pas encore déposé
-  DEPOSE:     'depose',      // pesé et enregistré au dépôt
-  CHARGE:     'charge',      // mis dans un lot, attend le départ
-  EN_TRANSIT: 'en_transit',  // lot parti
-  ARRIVE:     'arrive',      // arrivé en Guinée (aéroport / port)
-  PRET:       'pret',        // disponible au guichet, code envoyé
-  REMIS:      'remis',       // remis au destinataire
-  ANNULE:     'annule',
+  RESERVE:      'reserve',      // réservé en ligne, pas encore déposé
+  DEPOSE:       'depose',       // pesé et enregistré à l'agence de départ
+  CHARGE:       'charge',       // mis dans un lot, attend le départ
+  EN_TRANSIT:   'en_transit',   // lot parti
+  ARRIVE:       'arrive',       // arrivé dans le pays de destination (plateforme)
+  ACHEMINEMENT: 'acheminement', // en route vers l'agence de retrait
+  PRET:         'pret',         // disponible à l'agence de retrait, code envoyé
+  REMIS:        'remis',        // remis au destinataire
+  ANNULE:       'annule',
 };
 
 const STATUTS_LABELS = {
-  reserve:    'Réservé — à déposer',
-  depose:     'Déposé au dépôt',
-  charge:     'Chargé, en attente de départ',
-  en_transit: 'En route',
-  arrive:     'Arrivé en Guinée',
-  pret:       'Prêt au guichet',
-  remis:      'Remis au destinataire',
-  annule:     'Annulé',
+  reserve:      'Réservé — à déposer',
+  depose:       'Déposé en agence',
+  charge:       'Chargé, en attente de départ',
+  en_transit:   'En route',
+  arrive:       'Arrivé à destination',
+  acheminement: 'En route vers l\'agence',
+  pret:         'Prêt à l\'agence',
+  remis:        'Remis au destinataire',
+  annule:       'Annulé',
 };
 
 // ── STATUTS LOT ───────────────────────────
@@ -125,6 +142,9 @@ module.exports = {
   MODES_INFO,
   TYPES_COLIS,
   CONFIG_DEFAUT,
+  PAYS,
+  SENS,
+  sensEntre,
   STATUTS,
   STATUTS_LABELS,
   STATUTS_LOT,

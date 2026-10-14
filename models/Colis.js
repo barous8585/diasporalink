@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const Compteur = require('./Compteur');
 const {
-  STATUTS, STATUTS_LABELS, TYPES_COLIS, MODES, METHODES_PAIEMENT, DEVISES,
+  STATUTS, STATUTS_LABELS, TYPES_COLIS, MODES, METHODES_PAIEMENT, DEVISES, SENS,
 } = require('../config/constants');
 
 const personneSchema = new mongoose.Schema({
@@ -15,7 +15,7 @@ const paiementSchema = new mongoose.Schema({
   devise:   { type: String, enum: DEVISES, required: true },
   methode:  { type: String, enum: METHODES_PAIEMENT.map(m => m.key), required: true },
   objet:    { type: String, enum: ['transport', 'douane', 'magasinage', 'global'], default: 'global' },
-  lieu:     { type: String },          // code dépôt / guichet
+  lieu:     { type: String },          // code de l'agence
   agent:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   reference:{ type: String },          // ref. Orange Money, Stripe…
   opId:     { type: String },          // idempotence (hors-ligne)
@@ -34,7 +34,7 @@ const evenementSchema = new mongoose.Schema({
 const colisSchema = new mongoose.Schema({
   numeroSuivi: { type: String, unique: true, index: true },
 
-  // Compte client qui a réservé (absent si déposé directement au guichet)
+  // Compte client qui a réservé (absent si déposé directement en agence)
   client: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
   expediteur:   { type: personneSchema, required: true },
@@ -42,12 +42,13 @@ const colisSchema = new mongoose.Schema({
   tiersAutorise:{ nom: String, telephone: String, autoriseLe: Date },
 
   // Circuit
+  sens:        { type: String, enum: SENS.map(s => s.key), default: 'FR-GN', index: true },
   mode:        { type: String, enum: Object.values(MODES), required: true },
-  depot:       { type: String, default: 'PARIS' },     // code dépôt de départ
-  guichet:     { type: String, required: true },       // code guichet d'arrivée
+  depot:       { type: String, default: 'PARIS' },     // code de l'agence de départ
+  guichet:     { type: String, required: true },       // code de l'agence de retrait
   lot:         { type: mongoose.Schema.Types.ObjectId, ref: 'Lot' },
   lotCode:     { type: String, index: true },
-  emplacement: { type: String },                        // étagère au guichet
+  emplacement: { type: String },                        // étagère à l'agence de retrait
 
   // Contenu
   typeColis:      { type: String, enum: TYPES_COLIS.map(t => t.key), required: true },
@@ -60,7 +61,7 @@ const colisSchema = new mongoose.Schema({
 
   // Prix (taux EUR/GNF figé au moment de la pesée)
   tarif: {
-    mode: String, prixKg: Number, poidsFacture: Number, transport: Number,
+    sens: String, devise: String, total: Number, mode: String, prixKg: Number, poidsFacture: Number, transport: Number,
     surcharge: Number, assurance: Number, totalEur: Number, taux: Number, totalGnf: Number,
     estime: { type: Boolean, default: true },
   },

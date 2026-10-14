@@ -59,7 +59,7 @@ router.get('/stats', ah(async (req, res) => {
     compteurs: {
       reserves: nb.reserve || 0,
       auDepot: (nb.depose || 0) + (nb.charge || 0),
-      enRoute: (nb.en_transit || 0) + (nb.arrive || 0),
+      enRoute: (nb.en_transit || 0) + (nb.arrive || 0) + (nb.acheminement || 0),
       auxGuichets: nb.pret || 0,
       anciensGuichet: anciens.length,
       impayes,
@@ -143,7 +143,9 @@ router.patch('/colis/:numero', ah(async (req, res) => {
   if (b.destinataire?.telephone) colis.destinataire.telephone = svc.normTel(b.destinataire.telephone);
   if (b.guichet) {
     const config = await Config.get();
-    if (!config.guichets.some(g => g.code === b.guichet)) return res.status(400).json({ succes: false, message: 'Guichet inconnu.' });
+    const nouvelle = config.agences.find(g => g.code === b.guichet);
+    if (!nouvelle) return res.status(400).json({ succes: false, message: 'Agence inconnue.' });
+    if (nouvelle.pays !== svc.paysArriveeDe(colis.sens)) return res.status(400).json({ succes: false, message: 'L\'agence de retrait doit rester dans le pays de destination.' });
     colis.guichet = b.guichet;
   }
   if (b.notesAdmin !== undefined) colis.notesAdmin = b.notesAdmin;

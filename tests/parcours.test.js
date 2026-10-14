@@ -73,7 +73,7 @@ test('parcours complet : réservation → dépôt → lot → guichet → remise
   const est = await appel('GET', '/colis/tarif?mode=air&poids=6&type=vetements');
   assert.strictEqual(est.tarif.totalEur, 72);
   const resa = await appel('POST', '/colis', {
-    mode: 'air', typeColis: 'vetements', poidsEstime: 6, guichet: 'KALOUM',
+    mode: 'air', typeColis: 'vetements', poidsEstime: 6, depot: 'PARIS', guichet: 'KALOUM',
     destinataire: { nom: 'Alpha Barry', telephone: '621000111' },
   }, client);
   assert.strictEqual(resa.status, 201, resa.message);
@@ -221,4 +221,107 @@ test('parcours complet : réservation → dépôt → lot → guichet → remise
   const cfg = await appel('PATCH', '/config/admin', { tauxEurGnf: 9500 }, admin);
   assert.strictEqual(cfg.config.tauxEurGnf, 9500);
   assert.strictEqual((await appel('GET', '/config')).tauxEurGnf, 9500);
+});
+
+test('redistribution vers une autre agence, et envoi Guinée → France payé en GNF', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  // Une agence à Labé, et une agent à Labé
+  const cfg = (await appel('GET', '/config/admin', null, admin)).config;
+  const agences = [...cfg.agences, { code: 'LABE', nom: 'Agence Labé', pays: 'GN', ville: 'Labé', commune: 'Labé centre' }];
+  const maj = await appel('PATCH', '/config/admin', { agences }, admin);
+  assert.strictEqual(maj.status, 200, maj.message);
+  await appel('POST', '/utilisateurs/equipe', { telephone: '620000004', prenom: 'Mariama', nom: 'Labé', role: 'agent', lieu: 'LABE' }, admin);
+  const agentParis = await connexion('+33600000002');
+  const agentKaloum = await connexion('620000003');
+  const agentLabe = await connexion('620000004');
+
+  // ── France → Labé : arrivée à la plateforme de Kaloum, puis acheminement ──
+  const dep = await appel('POST', '/agent/depot', {
+    poidsReel: 4, mode: 'air', typeColis: 'vetements', guichet: 'LABE',
+    expediteur: { nom: 'Saliou Diallo', telephone: '0611111111' },
+    destinataire: { nom: 'Kadiatou Bah', telephone: '625555555' },
+    paiement: { montant: 48, devise: 'EUR', methode: 'especes' },
+  }, agentParis);
+  assert.strictEqual(dep.status, 201, dep.message);
+  assert.strictEqual(dep.colis.sens, 'FR-GN');
+  const numero = dep.colis.numeroSuivi;
+
+  // Une agence de retrait dans le même pays que le départ est refusée
+  const memePays = await appel('POST', '/agent/depot', {
+    poidsReel: 2, mode: 'air', typeColis: 'vetements', guichet: 'PARIS',
+    expediteur: { nom: 'A', telephone: '0611111112' }, destinataire: { nom: 'B', telephone: '0611111113' },
+  }, agentParis);
+  assert.strictEqual(memePays.status, 400);
+
+  const lot = (await appel('POST', '/lots', { mode: 'air', sens: 'FR-GN' }, admin)).lot;
+  assert.strictEqual(lot.destination, 'KALOUM');
+  await appel('POST', '/agent/scans', { scans: [{ opId: 'x1', numero, action: 'charger', lot: lot.code }] }, agentParis);
+  await appel('POST', `/lots/${lot.code}/statut`, { statut: 'parti' }, admin);
+  await appel('POST', `/lots/${lot.code}/statut`, { statut: 'arrive' }, admin);
+
+  // Kaloum ne peut pas le mettre en rayon : il se retire à Labé
+  let r = await appel('POST', '/agent/scans', { scans: [{ opId: 'x2', numero, action: 'guichet' }] }, agentKaloum);
+  assert.ok(!r.resultats[0].ok && /Labé/.test(r.resultats[0].erreur));
+  const ctxK = await appel('GET', '/agent/contexte', null, agentKaloum);
+  assert.strictEqual(ctxK.aAcheminer, 1);
+  r = await appel('POST', '/agent/scans', { scans: [{ opId: 'x3', numero, action: 'acheminer' }] }, agentKaloum);
+  assert.ok(r.resultats[0].ok, r.resultats[0].erreur);
+  assert.strictEqual(r.resultats[0].statut, 'acheminement');
+  const pub = await appel('GET', `/colis/suivi/${numero}`);
+  assert.strictEqual(pub.colis.statut, 'acheminement');
+  assert.strictEqual(pub.colis.guichet.ville, 'Labé');
+
+  // Labé le met en rayon et le remet
+  r = await appel('POST', '/agent/scans', { scans: [{ opId: 'x4', numero, action: 'guichet' }] }, agentLabe);
+  assert.ok(r.resultats[0].ok, r.resultats[0].erreur);
+  const code = (await appel('GET', `/admin/colis/${numero}`, null, admin)).colis.codeRetrait;
+  const remise = await appel('POST', '/agent/remise', { numero, code, pieceVerifiee: true }, agentLabe);
+  assert.strictEqual(remise.status, 200, remise.message);
+
+  // ── Guinée → France : déposé à Kaloum, payé en GNF, retiré à Paris ──
+  const retour = await appel('POST', '/agent/depot', {
+    poidsReel: 3, mode: 'air', typeColis: 'alimentaire', guichet: 'PARIS',
+    expediteur: { nom: 'Aminata Camara', telephone: '626666666' },
+    destinataire: { nom: 'Ibrahima Camara', telephone: '0622222222' },
+    paiement: { montant: 360000, devise: 'GNF', methode: 'orange_money', reference: 'OM-123' },
+  }, agentKaloum);
+  assert.strictEqual(retour.status, 201, retour.message);
+  assert.strictEqual(retour.colis.sens, 'GN-FR');
+  assert.strictEqual(retour.colis.tarif.devise, 'GNF');
+  assert.strictEqual(retour.colis.tarif.totalGnf, 360000);
+  assert.strictEqual(retour.colis.solde.soldeGnf, 0);
+  const numRetour = retour.colis.numeroSuivi;
+
+  // Un lot France → Guinée refuse ce colis ; un lot Guinée → France l'accepte
+  const lotAller = (await appel('POST', '/lots', { mode: 'air', sens: 'FR-GN' }, admin)).lot;
+  r = await appel('POST', '/agent/scans', { scans: [{ opId: 'y1', numero: numRetour, action: 'charger', lot: lotAller.code }] }, agentKaloum);
+  assert.ok(!r.resultats[0].ok);
+  const lotRetour = (await appel('POST', '/lots', { mode: 'air', sens: 'GN-FR' }, admin)).lot;
+  assert.match(lotRetour.code, /^AIR-GF-\d{4}$/);
+  assert.strictEqual(lotRetour.destination, 'PARIS');
+  // Le contexte de l'agent de Kaloum propose bien ce lot au chargement
+  const ctx2 = await appel('GET', '/agent/contexte', null, agentKaloum);
+  assert.ok(ctx2.lotsPreparation.some(l => l.code === lotRetour.code));
+  assert.ok(!ctx2.lotsPreparation.some(l => l.code === lotAller.code));
+  r = await appel('POST', '/agent/scans', { scans: [{ opId: 'y2', numero: numRetour, action: 'charger', lot: lotRetour.code }] }, agentKaloum);
+  assert.ok(r.resultats[0].ok, r.resultats[0].erreur);
+  await appel('POST', `/lots/${lotRetour.code}/statut`, { statut: 'parti' }, admin);
+  // Un agent en Guinée ne peut pas réceptionner un colis attendu en France
+  r = await appel('POST', '/agent/scans', { scans: [{ opId: 'y3', numero: numRetour, action: 'arrivee' }] }, agentLabe);
+  assert.ok(!r.resultats[0].ok && /France/.test(r.resultats[0].erreur));
+  r = await appel('POST', '/agent/scans', { scans: [
+    { opId: 'y4', numero: numRetour, action: 'arrivee', lot: lotRetour.code },
+    { opId: 'y5', numero: numRetour, action: 'guichet' },
+  ] }, agentParis);
+  assert.ok(r.resultats.every(x => x.ok), JSON.stringify(r.resultats));
+  // Douane française saisie en euros, convertie au taux du colis
+  await appel('PATCH', `/agent/colis/${numRetour}/douane`, { montant: 15, devise: 'EUR' }, agentParis);
+  const fiche = (await appel('GET', `/admin/colis/${numRetour}`, null, admin)).colis;
+  assert.strictEqual(fiche.fraisDouaneGnf, 15 * fiche.tarif.taux); // taux figé sur le colis
+  assert.strictEqual(fiche.solde.soldeEur, 15);
+  const remiseParis = await appel('POST', '/agent/remise', {
+    numero: numRetour, code: fiche.codeRetrait, pieceVerifiee: true,
+    paiement: { montant: 15, devise: 'EUR', methode: 'carte' },
+  }, agentParis);
+  assert.strictEqual(remiseParis.status, 200, remiseParis.message);
 });

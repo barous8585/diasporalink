@@ -10,7 +10,8 @@ const Lot = require('../models/Lot');
 const Config = require('../models/Config');
 const { auth, role } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
-const { ROLES, STATUTS, STATUTS_LOT, TYPES_COLIS, MODES } = require('../config/constants');
+const { ROLES, STATUTS, STATUTS_LOT, TYPES_COLIS, MODES, SENS } = require('../config/constants');
+const { enGnf } = require('../utils/tarif');
 const svc = require('../services/colisService');
 
 router.use(auth, role(ROLES.AGENT, ROLES.ADMIN));
@@ -19,16 +20,23 @@ router.use(auth, role(ROLES.AGENT, ROLES.ADMIN));
 router.get('/contexte', ah(async (req, res) => {
   const config = await Config.get();
   const lieu = await Config.lieu(req.user.lieu);
-  const estGuichet = config.guichets.some(g => g.code === req.user.lieu);
-  const [lotsPreparation, lotsEnRoute, colisPrets] = await Promise.all([
-    Lot.find({ statut: STATUTS_LOT.PREPARATION }).sort({ createdAt: -1 }).lean(),
-    Lot.find({ statut: { $in: [STATUTS_LOT.PARTI, STATUTS_LOT.ARRIVE] } }).sort({ createdAt: -1 }).limit(20).lean(),
-    estGuichet ? svc.colisDuGuichet(req.user.lieu) : [],
+  const pays = lieu?.pays || null; // admin sans agence : tout
+  // Lots qui partent de mon pays / qui arrivent dans mon pays
+  const sensDepart = SENS.filter(s => !pays || s.depart === pays).map(s => s.key);
+  const sensArrivee = SENS.filter(s => !pays || s.arrivee === pays).map(s => s.key);
+  const filtreSens = (liste) => ({ $or: [{ sens: { $in: liste } }, ...(liste.includes('FR-GN') ? [{ sens: { $exists: false } }] : [])] });
+  const [lotsPreparation, lotsEnRoute, colisPrets, aAcheminer] = await Promise.all([
+    Lot.find({ statut: STATUTS_LOT.PREPARATION, ...filtreSens(sensDepart) }).sort({ createdAt: -1 }).lean(),
+    Lot.find({ statut: { $in: [STATUTS_LOT.PARTI, STATUTS_LOT.ARRIVE] }, ...filtreSens(sensArrivee) }).sort({ createdAt: -1 }).limit(20).lean(),
+    lieu ? svc.colisDuGuichet(lieu.code) : [],
+    // Colis arrivés dans mon pays qui doivent repartir vers une autre agence
+    lieu ? Colis.countDocuments({ statut: STATUTS.ARRIVE, sens: { $in: sensArrivee }, guichet: { $ne: lieu.code } }) : 0,
   ]);
   res.json({
     succes: true,
-    agent: req.user, lieu, estGuichet,
-    lotsPreparation, lotsEnRoute, colisPrets,
+    agent: req.user, lieu, pays,
+    estGuichet: !!lieu, // conservé pour les anciennes versions de l'app
+    lotsPreparation, lotsEnRoute, colisPrets, aAcheminer,
     majLe: new Date(),
   });
 }));
@@ -108,15 +116,22 @@ router.post('/encaisser', [
   res.json({ succes: true, ...resultat });
 }));
 
-// ── PATCH /api/agent/colis/:numero/douane ── saisir les droits de douane (GNF)
+// ── PATCH /api/agent/colis/:numero/douane ── saisir les droits de douane
+// body : { montant, devise: 'GNF'|'EUR' } (ou l'ancien { fraisDouaneGnf })
 router.patch('/colis/:numero/douane', [
-  body('fraisDouaneGnf').isFloat({ min: 0 }).withMessage('Montant invalide'),
+  body('montant').optional().isFloat({ min: 0 }).withMessage('Montant invalide'),
+  body('devise').optional().isIn(['EUR', 'GNF']),
+  body('fraisDouaneGnf').optional().isFloat({ min: 0 }).withMessage('Montant invalide'),
 ], valider, ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.toUpperCase() });
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
   if (colis.statut === STATUTS.REMIS) return res.status(409).json({ succes: false, message: 'Colis déjà remis.' });
-  colis.fraisDouaneGnf = Math.round(req.body.fraisDouaneGnf);
-  colis.historique.push({ label: 'Dédouané', detail: `Droits : ${colis.fraisDouaneGnf.toLocaleString('fr-FR')} GNF`, lieu: req.user.lieu, le: new Date() });
+  const config = await Config.get();
+  const taux = colis.tarif?.taux || config.tauxEurGnf;
+  const montant = parseFloat(req.body.montant ?? req.body.fraisDouaneGnf) || 0;
+  const devise = req.body.montant !== undefined ? (req.body.devise || 'GNF') : 'GNF';
+  colis.fraisDouaneGnf = enGnf(montant, devise, taux);
+  colis.historique.push({ label: 'Dédouané', detail: `Droits : ${devise === 'EUR' ? `${montant.toLocaleString('fr-FR')} €` : `${colis.fraisDouaneGnf.toLocaleString('fr-FR')} GNF`}`, lieu: req.user.lieu, le: new Date() });
   await colis.save();
   res.json({ succes: true, colis: await svc.vueComplete(colis) });
 }));

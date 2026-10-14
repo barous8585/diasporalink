@@ -10,19 +10,21 @@ const { auth } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
 const { calculerTarif } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
-const { STATUTS, MODES, TYPES_COLIS, ROLES } = require('../config/constants');
-const { normTel, vuePublique, vueComplete } = require('../services/colisService');
+const { STATUTS, MODES, TYPES_COLIS, ROLES, SENS } = require('../config/constants');
+const { normTel, vuePublique, vueComplete, sensDepuisAgences } = require('../services/colisService');
 
 // Limite le « balayage » des numéros de suivi
 const suiviLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { succes: false, message: 'Trop de recherches, patientez une minute.' } });
 
-// ── GET /api/colis/tarif?mode=air&poids=5&type=vetements&valeur=0&assurance=0
+// ── GET /api/colis/tarif?sens=FR-GN&mode=air&poids=5&type=vetements&valeur=0&assurance=0
 router.get('/tarif', ah(async (req, res) => {
   const { mode, poids, type, valeur, assurance } = req.query;
+  const sens = req.query.sens || 'FR-GN';
   if (!Object.values(MODES).includes(mode)) return res.status(400).json({ succes: false, message: 'Mode invalide.' });
+  if (!SENS.some(s => s.key === sens)) return res.status(400).json({ succes: false, message: 'Sens invalide.' });
   const config = await Config.get();
   const tarif = calculerTarif(config, {
-    mode, poidsKg: poids, typeColis: type || 'vetements', valeurDeclaree: valeur, assurance: assurance === '1' || assurance === 'true',
+    sens, mode, poidsKg: poids, typeColis: type || 'vetements', valeurDeclaree: valeur, assurance: assurance === '1' || assurance === 'true',
   });
   res.json({ succes: true, tarif });
 }));
@@ -69,7 +71,8 @@ router.post('/', auth, [
   body('mode').isIn(Object.values(MODES)).withMessage('Choisissez avion ou bateau'),
   body('typeColis').isIn(TYPES_COLIS.map(t => t.key)).withMessage('Type de colis invalide'),
   body('poidsEstime').isFloat({ min: 0.1, max: 2000 }).withMessage('Poids invalide'),
-  body('guichet').trim().notEmpty().withMessage('Choisissez un guichet de retrait'),
+  body('depot').trim().notEmpty().withMessage('Choisissez l\'agence où vous déposez le colis'),
+  body('guichet').trim().notEmpty().withMessage('Choisissez l\'agence de retrait'),
   body('destinataire.nom').trim().notEmpty().withMessage('Nom du destinataire requis'),
   body('destinataire.telephone').trim().notEmpty().withMessage('Téléphone du destinataire requis'),
   body('nbCartons').optional().isInt({ min: 1, max: 50 }),
@@ -77,20 +80,20 @@ router.post('/', auth, [
 ], valider, ah(async (req, res) => {
   const config = await Config.get();
   const b = req.body;
-  if (!config.guichets.some(g => g.code === b.guichet)) return res.status(400).json({ succes: false, message: 'Guichet inconnu.' });
+  const sens = await sensDepuisAgences(b.depot, b.guichet);
 
   const colis = new Colis({
     client: req.user._id,
     expediteur: { nom: `${req.user.prenom} ${req.user.nom}`, telephone: req.user.telephone },
     destinataire: { nom: b.destinataire.nom, telephone: normTel(b.destinataire.telephone) },
-    mode: b.mode, typeColis: b.typeColis, guichet: b.guichet,
+    sens, mode: b.mode, typeColis: b.typeColis, depot: b.depot, guichet: b.guichet,
     description: b.description, nbCartons: b.nbCartons || 1,
     poidsEstime: parseFloat(b.poidsEstime),
     valeurDeclaree: b.valeurDeclaree || 0, assurance: !!b.assurance,
     payeurArrivee: !!b.payeurArrivee,
   });
   colis.tarif = { ...calculerTarif(config, {
-    mode: b.mode, poidsKg: b.poidsEstime, typeColis: b.typeColis, valeurDeclaree: b.valeurDeclaree, assurance: b.assurance,
+    sens, mode: b.mode, poidsKg: b.poidsEstime, typeColis: b.typeColis, valeurDeclaree: b.valeurDeclaree, assurance: b.assurance,
   }), estime: true };
   colis.ajouterEvenement(STATUTS.RESERVE, 'Réservation en ligne');
   await colis.save();

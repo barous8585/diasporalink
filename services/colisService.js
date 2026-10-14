@@ -9,8 +9,25 @@ const { Mouvement } = require('../models/Mouvement');
 const { calculerTarif, calculerSolde, calculerMagasinage } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
 const {
-  STATUTS, STATUTS_LABELS, STATUTS_LOT, CODE_RETRAIT_ESSAIS_MAX, METHODES_PAIEMENT, DEVISES,
+  STATUTS, STATUTS_LABELS, STATUTS_LOT, CODE_RETRAIT_ESSAIS_MAX, METHODES_PAIEMENT, DEVISES, PAYS, sensEntre,
 } = require('../config/constants');
+
+const paysArriveeDe = (sens) => String(sens || 'FR-GN').split('-')[1];
+const nomPays = (code) => PAYS[code]?.nom || code;
+
+/**
+ * Vérifie les agences de départ et de retrait et renvoie le sens d'envoi.
+ * Les deux agences doivent être dans deux pays différents (France ⇄ Guinée).
+ */
+async function sensDepuisAgences(codeDepart, codeRetrait) {
+  const [dep, ret] = await Promise.all([Config.lieu(codeDepart), Config.lieu(codeRetrait)]);
+  if (!dep) throw new ErreurMetier('Agence de départ inconnue.');
+  if (!ret) throw new ErreurMetier('Agence de retrait inconnue.');
+  if (ret.actif === false) throw new ErreurMetier(`L'agence ${ret.nom} est fermée.`);
+  const sens = sensEntre(dep.pays, ret.pays);
+  if (!sens) throw new ErreurMetier('L\'agence de retrait doit être dans l\'autre pays.');
+  return sens.key;
+}
 
 class ErreurMetier extends Error {
   constructor(message, status = 400, code = 'erreur') {
@@ -54,8 +71,9 @@ async function vuePublique(colis) {
     statut: colis.statut,
     statutLabel: STATUTS_LABELS[colis.statut],
     mode: colis.mode,
+    sens: colis.sens || 'FR-GN',
     destinataire: prenomSeul(colis.destinataire?.nom),
-    guichet: guichet ? { code: guichet.code, nom: guichet.nom, adresse: guichet.adresse, telephone: guichet.telephone, horaires: guichet.horaires } : { code: colis.guichet },
+    guichet: guichet ? { code: guichet.code, nom: guichet.nom, pays: guichet.pays, ville: guichet.ville, commune: guichet.commune, adresse: guichet.adresse, telephone: guichet.telephone, horaires: guichet.horaires } : { code: colis.guichet },
     poids: colis.poidsReel || colis.poidsEstime,
     nbCartons: colis.nbCartons,
     lotCode: colis.lotCode,
@@ -137,13 +155,14 @@ async function deposer(agent, data) {
   champs.forEach(k => { if (data[k] !== undefined && data[k] !== '') colis[k] = data[k]; });
   if (data.expediteur) colis.expediteur = { nom: data.expediteur.nom, telephone: normTel(data.expediteur.telephone) };
   if (data.destinataire) colis.destinataire = { nom: data.destinataire.nom, telephone: normTel(data.destinataire.telephone) };
-  if (!colis.guichet) throw new ErreurMetier('Guichet d\'arrivée requis.');
-  if (!config.guichets.some(g => g.code === colis.guichet)) throw new ErreurMetier('Guichet inconnu.');
+  if (!colis.guichet) throw new ErreurMetier('Agence de retrait requise.');
 
   colis.poidsReel = poidsReel;
-  colis.depot = agent.lieu || colis.depot;
+  // Le colis part de l'agence où il est pesé
+  colis.depot = agent.lieu || data.depot || colis.depot;
+  colis.sens = await sensDepuisAgences(colis.depot, colis.guichet);
   const tarif = calculerTarif(config, {
-    mode: colis.mode, poidsKg: poidsReel, typeColis: colis.typeColis,
+    sens: colis.sens, mode: colis.mode, poidsKg: poidsReel, typeColis: colis.typeColis,
     valeurDeclaree: colis.valeurDeclaree, assurance: colis.assurance,
   });
   colis.tarif = { ...tarif, estime: false };
@@ -163,12 +182,14 @@ async function deposer(agent, data) {
 
 // ── Scans (dépôt, arrivée, guichet) ─────────────────────────
 const ACTIONS_SCAN = {
-  // Mettre dans un lot au dépôt
+  // Mettre dans un lot à l'agence de départ
   charger: { depuis: [STATUTS.DEPOSE, STATUTS.CHARGE], vers: STATUTS.CHARGE },
-  // Réception à l'aéroport / au port
+  // Réception du lot à la plateforme d'arrivée (aéroport / port)
   arrivee: { depuis: [STATUTS.CHARGE, STATUTS.EN_TRANSIT, STATUTS.ARRIVE], vers: STATUTS.ARRIVE },
-  // Mise en rayon au guichet → code envoyé au destinataire
-  guichet: { depuis: [STATUTS.ARRIVE, STATUTS.EN_TRANSIT, STATUTS.PRET], vers: STATUTS.PRET },
+  // Envoi de la plateforme vers l'agence de retrait d'une autre ville / commune
+  acheminer: { depuis: [STATUTS.ARRIVE, STATUTS.ACHEMINEMENT], vers: STATUTS.ACHEMINEMENT },
+  // Mise en rayon à l'agence de retrait → code envoyé au destinataire
+  guichet: { depuis: [STATUTS.ARRIVE, STATUTS.EN_TRANSIT, STATUTS.ACHEMINEMENT, STATUTS.PRET], vers: STATUTS.PRET },
 };
 
 async function mettrePret(colis, agent, emplacement) {
@@ -178,8 +199,10 @@ async function mettrePret(colis, agent, emplacement) {
   const nomGuichet = await nomLieu(colis.guichet);
   colis.ajouterEvenement(STATUTS.PRET, nomGuichet, { lieu: colis.guichet, agent: agent?._id });
   const config = await Config.get();
-  const { soldeGnf } = calculerSolde(colis, config);
-  const msg = MESSAGES.pret(colis, code, nomGuichet, soldeGnf);
+  const { soldeGnf, soldeEur } = calculerSolde(colis, config);
+  const enFrance = paysArriveeDe(colis.sens) === 'FR';
+  const reste = soldeGnf > 0 ? (enFrance ? `${soldeEur.toLocaleString('fr-FR')} €` : `${soldeGnf.toLocaleString('fr-FR')} GNF`) : '';
+  const msg = MESSAGES.pret(colis, code, nomGuichet, reste);
   notifier(colis.destinataire.telephone, msg);
   if (colis.tiersAutorise?.telephone) notifier(colis.tiersAutorise.telephone, msg);
   if (colis.expediteur.telephone !== colis.destinataire.telephone) notifier(colis.expediteur.telephone, msg);
@@ -202,10 +225,14 @@ async function appliquerScan(agent, scan) {
     return { ...base, ...resume, ok: false, erreur: `Statut actuel : « ${STATUTS_LABELS[colis.statut]} ».` };
   }
 
+  const agence = agent.lieu ? await Config.lieu(agent.lieu) : null;
+  const paysDest = paysArriveeDe(colis.sens);
+
   if (scan.action === 'charger') {
     const lot = await Lot.findOne({ code: String(scan.lot || '').toUpperCase() });
     if (!lot) return { ...base, ...resume, ok: false, erreur: 'Choisissez un lot.' };
     if (lot.statut !== STATUTS_LOT.PREPARATION) return { ...base, ...resume, ok: false, erreur: `Le lot ${lot.code} est déjà parti.` };
+    if ((lot.sens || 'FR-GN') !== (colis.sens || 'FR-GN')) return { ...base, ...resume, ok: false, erreur: `Ce colis va vers : ${nomPays(paysDest)}. Le lot ${lot.code} part dans l'autre sens.` };
     if (lot.mode !== colis.mode) return { ...base, ...resume, ok: false, erreur: `Colis prévu en ${colis.mode === 'air' ? 'avion' : 'bateau'}, lot ${lot.code} en ${lot.mode === 'air' ? 'avion' : 'bateau'}.` };
     colis.lot = lot._id;
     colis.lotCode = lot.code;
@@ -216,14 +243,31 @@ async function appliquerScan(agent, scan) {
     if (scan.lot && colis.lotCode && colis.lotCode !== String(scan.lot).toUpperCase()) {
       return { ...base, ...resume, ok: false, horsLot: true, erreur: `N'est pas dans ce lot (lot ${colis.lotCode}).` };
     }
-    colis.ajouterEvenement(STATUTS.ARRIVE, 'Conakry', { lieu: agent.lieu, agent: agent._id });
-    notifier(colis.destinataire.telephone, MESSAGES.arrive(colis));
+    if (agence && agence.pays !== paysDest) {
+      return { ...base, ...resume, ok: false, erreur: `Ce colis est attendu en ${nomPays(paysDest)}.` };
+    }
+    colis.ajouterEvenement(STATUTS.ARRIVE, agence ? `${agence.ville || agence.nom}` : nomPays(paysDest), { lieu: agent.lieu, agent: agent._id });
+    notifier(colis.destinataire.telephone, MESSAGES.arrive(colis, nomPays(paysDest)));
+  }
+
+  if (scan.action === 'acheminer') {
+    if (agence && agence.pays !== paysDest) {
+      return { ...base, ...resume, ok: false, erreur: `Ce colis est attendu en ${nomPays(paysDest)}.` };
+    }
+    if (agent.lieu && colis.guichet === agent.lieu) {
+      return { ...base, ...resume, ok: false, erreur: 'Ce colis se retire ici : utilisez « Mise en rayon ».' };
+    }
+    const dest = await Config.lieu(colis.guichet);
+    colis.ajouterEvenement(STATUTS.ACHEMINEMENT, `Vers ${dest?.nom || colis.guichet}${dest?.ville ? ` (${dest.ville})` : ''}`, { lieu: agent.lieu, agent: agent._id });
+    notifier(colis.destinataire.telephone, MESSAGES.acheminement(colis, dest?.nom || colis.guichet));
+    await colis.save();
+    return { ...base, ...resume, ok: true, statut: colis.statut, versAgence: dest?.nom || colis.guichet };
   }
 
   if (scan.action === 'guichet') {
     if (agent.lieu && colis.guichet !== agent.lieu) {
       const prevu = await nomLieu(colis.guichet);
-      return { ...base, ...resume, ok: false, erreur: `Ce colis doit aller au ${prevu}.` };
+      return { ...base, ...resume, ok: false, erreur: `Ce colis se retire à : ${prevu}. Utilisez « Envoi vers agence ».`, autreAgence: prevu };
     }
     if (colis.statut === STATUTS.PRET) {
       return { ...base, ...resume, ok: true, dejaFait: true, statut: colis.statut };
@@ -245,7 +289,7 @@ async function remettre(agent, data) {
     throw new ErreurMetier('Ce colis a déjà été remis.', 409);
   }
   if (colis.statut !== STATUTS.PRET) throw new ErreurMetier(`Pas encore disponible (« ${STATUTS_LABELS[colis.statut]} »).`, 409);
-  if (agent.lieu && colis.guichet !== agent.lieu) throw new ErreurMetier('Ce colis est attendu dans un autre guichet.', 409);
+  if (agent.lieu && colis.guichet !== agent.lieu) throw new ErreurMetier('Ce colis est attendu dans une autre agence.', 409);
 
   if ((colis.codeEssais || 0) >= CODE_RETRAIT_ESSAIS_MAX) {
     throw new ErreurMetier('Trop de codes faux : colis bloqué. Appelez l\'administrateur.', 423, 'code_bloque');
@@ -263,7 +307,7 @@ async function remettre(agent, data) {
   // Vérifie que le paiement couvre le solde AVANT d'enregistrer quoi que ce soit en caisse.
   const config = await Config.get();
   const p = validerPaiement(data.paiement);
-  const essai = { paiements: [...colis.paiements, ...(p ? [p] : [])], tarif: colis.tarif, fraisDouaneGnf: colis.fraisDouaneGnf, arriveGuichetLe: colis.arriveGuichetLe };
+  const essai = { sens: colis.sens, paiements: [...colis.paiements, ...(p ? [p] : [])], tarif: colis.tarif, fraisDouaneGnf: colis.fraisDouaneGnf, arriveGuichetLe: colis.arriveGuichetLe };
   const solde = calculerSolde(essai, config);
   if (solde.soldeGnf > 0) {
     throw new ErreurMetier(`Il reste ${solde.soldeGnf.toLocaleString('fr-FR')} GNF à payer.`, 402, 'solde_du');
@@ -298,10 +342,11 @@ async function changerStatutMasse(numeros, statut, agent) {
     } else {
       colis.ajouterEvenement(statut, 'Mise à jour par l\'administration', { agent: agent._id });
       if (statut === STATUTS.EN_TRANSIT) {
-        notifier(colis.expediteur.telephone, MESSAGES.en_transit(colis));
-        notifier(colis.destinataire.telephone, MESSAGES.en_transit(colis));
+        const pays = nomPays(paysArriveeDe(colis.sens));
+        notifier(colis.expediteur.telephone, MESSAGES.en_transit(colis, pays));
+        notifier(colis.destinataire.telephone, MESSAGES.en_transit(colis, pays));
       }
-      if (statut === STATUTS.ARRIVE) notifier(colis.destinataire.telephone, MESSAGES.arrive(colis));
+      if (statut === STATUTS.ARRIVE) notifier(colis.destinataire.telephone, MESSAGES.arrive(colis, nomPays(paysArriveeDe(colis.sens))));
     }
     await colis.save();
     resultats.push({ numero, ok: true, statut });
@@ -330,6 +375,6 @@ async function colisDuGuichet(guichet) {
 
 module.exports = {
   ErreurMetier, normTel, masquerTel, vuePublique, vueComplete, avecOperation,
-  encaisser, deposer, appliquerScan, remettre, changerStatutMasse, colisDuGuichet,
+  encaisser, deposer, appliquerScan, sensDepuisAgences, paysArriveeDe, nomPays, remettre, changerStatutMasse, colisDuGuichet,
   mettrePret, calculerMagasinage,
 };
