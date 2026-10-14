@@ -367,6 +367,7 @@ async function colisDuGuichet(guichet) {
       poids: c.poidsReel, nbCartons: c.nbCartons, emplacement: c.emplacement,
       arriveGuichetLe: c.arriveGuichetLe,
       soldeGnf: solde.soldeGnf,
+      soldeEur: solde.soldeEur,
       magasinage: solde.magasinage,
       empreinteCode: Colis.empreinteCode(c.numeroSuivi, c.codeRetrait),
     };

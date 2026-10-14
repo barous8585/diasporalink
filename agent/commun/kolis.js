@@ -255,16 +255,18 @@
       const zone = document.querySelector('[data-etiquette]');
       let svg = '';
       try { svg = await this.qr(c.numeroSuivi); } catch {}
-      const g = config.guichets.find(x => x.code === c.guichet);
+      const g = (config.agences || []).find(x => x.code === c.guichet);
+      const sens = (config.sens || []).find(x => x.key === (c.sens || 'FR-GN'));
       const n = c.nbCartons || 1;
       zone.innerHTML = Array.from({ length: n }, (_, i) => `
         <div class="page">
-          <div style="display:flex;justify-content:space-between;font-weight:700"><span>${esc(config.app)}</span><span>${c.mode === 'mer' ? 'BATEAU' : 'AVION'}</span></div>
+          <div style="display:flex;justify-content:space-between;font-weight:700"><span>${esc(config.appCourt || config.app)}</span><span>${esc(sens?.label || '')} · ${c.mode === 'mer' ? 'BATEAU' : 'AVION'}</span></div>
           <div class="num">${esc(c.numeroSuivi)}</div>
           <div class="qr">${svg}</div>
           <div class="grand">${esc(c.destinataire.nom)}</div>
           <div>Tél. •••${esc(String(c.destinataire.telephone).slice(-4))}</div>
           <div class="grand">${esc(g?.nom || c.guichet)}</div>
+          <div>${esc([g?.commune, g?.ville].filter(Boolean).join(', '))}</div>
           <div style="display:flex;justify-content:space-between"><span>${kg(c.poidsReel)}</span><span>Carton ${i + 1}/${n}</span><span>${esc(date(new Date(), false))}</span></div>
         </div>`).join('');
       if (!sansImpression) setTimeout(() => window.print(), 100);

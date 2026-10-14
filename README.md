@@ -1,6 +1,9 @@
 # Talib Multi Services (TMS) : expédition de colis Europe → Guinée
 
-Plateforme d'envoi de colis pensée pour le terrain : **dépôt à Paris → lot (avion ou bateau) → arrivée à Conakry → guichet → remise au destinataire avec un code**.
+Plateforme d'envoi de colis **France ⇄ Guinée**, pensée pour le terrain : **agence de départ → lot (avion ou bateau) → plateforme d'arrivée → (redistribution vers l'agence d'une autre ville) → remise au destinataire avec un code**.
+
+- **Deux sens** : France → Guinée et Guinée → France, chacun avec sa grille de prix (en € ou en GNF).
+- **Réseau d'agences** dans les deux pays (ville, commune, horaires). Chaque agence reçoit les colis à envoyer, remet les colis arrivés et encaisse. Dans chaque pays, une agence est la **plateforme** où arrivent les lots ; de là, les colis repartent vers les autres agences (statut « En route vers l'agence »).
 
 Nom affiché : `APP_NOM` (Talib Multi Services), nom court pour les SMS : `APP_NOM_COURT` (TMS), préfixe des numéros : `PREFIXE_SUIVI` (TMS). Mentions légales : `config/constants.js → ENTREPRISE`.
 
@@ -9,7 +12,7 @@ Nom affiché : `APP_NOM` (Talib Multi Services), nom court pour les SMS : `APP_N
 | Dossier | Pour qui | Ce qu'on y fait |
 |---|---|---|
 | `frontend/` | Clients (expéditeurs et destinataires) | Suivi par numéro (même hors-ligne), estimation du prix, réservation, code de retrait, autoriser quelqu'un à retirer, paiement carte |
-| `agent/` | Agents du dépôt et des guichets | Pesée + prix final + étiquettes QR, chargement dans un lot, réception, mise en rayon, remise par code avec encaissement et signature, caisse du jour |
+| `agent/` | Agents des agences | Pesée + prix final + étiquettes QR, scanner (chargement, arrivée, envoi vers une autre agence, mise en rayon), remise par code avec encaissement et signature, caisse du jour |
 | `admin/` | Administrateur | Tableau de bord, lots et manifestes, changement de statut en masse, recherche de colis, caisses, tarifs/taux/guichets, équipe |
 
 ## Les règles du terrain intégrées
@@ -41,9 +44,9 @@ npm run dev                # API + les 3 apps sur http://localhost:5000
 En développement, le code SMS s'affiche à l'écran et tous les SMS sont écrits dans la console.
 
 **Premier lancement :** connectez-vous au back-office avec un numéro listé dans `ADMIN_TELEPHONES`, puis :
-1. *Tarifs & guichets* : taux EUR/GNF, prix au kilo, adresses, horaires et téléphones des guichets.
-2. *Équipe* : ajoutez les agents avec leur lieu de travail (dépôt ou guichet).
-3. *Lots* : créez un lot ; les agents du dépôt y chargent les colis en les scannant.
+1. *Tarifs & agences* : taux EUR/GNF, prix au kilo par sens, liste des agences (France et Guinée) avec la plateforme d'arrivée de chaque pays.
+2. *Équipe* : ajoutez les agents avec leur agence.
+3. *Lots* : créez un lot (sens + avion/bateau) ; les agents de l'agence de départ y chargent les colis en les scannant.
 
 ## Tests
 

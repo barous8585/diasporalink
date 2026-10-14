@@ -7,7 +7,13 @@
   let CONFIG = null;
   const LIB_STATUT_LOT = { preparation: 'En préparation', parti: 'Parti', arrive: 'Arrivé', cloture: 'Clôturé' };
   const badge = (statut, lib) => `<span class="badge b-${esc(statut)}">${esc(lib || CONFIG?.statuts?.[statut] || statut)}</span>`;
-  const nomLieu = (code) => [...(CONFIG?.depots || []), ...(CONFIG?.guichets || [])].find(l => l.code === code)?.nom || code || '—';
+  const nomLieu = (code) => (CONFIG?.agences || []).find(l => l.code === code)?.nom || code || '—';
+  const libSens = (sens) => CONFIG?.sens?.find(x => x.key === (sens || 'FR-GN'))?.label || '';
+  const optionsAgences = (pays, choisi) => {
+    const parVille = {};
+    (CONFIG?.agences || []).filter(a => !pays || a.pays === pays).forEach(a => { const k = `${CONFIG.pays[a.pays]?.nom} · ${a.ville || '—'}`; (parVille[k] = parVille[k] || []).push(a); });
+    return Object.entries(parVille).map(([v, l]) => `<optgroup label="${esc(v)}">${l.map(a => `<option value="${esc(a.code)}" ${a.code === choisi ? 'selected' : ''}>${esc(a.nom)}</option>`).join('')}</optgroup>`).join('');
+  };
 
   document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = ic(el.dataset.ic, el.classList.contains('logo-carre') ? '' : 'ic-sm'); });
 
@@ -70,7 +76,7 @@
         <a class="kpi" href="#/colis?statut=reserve"><div class="lib">Réservés en ligne</div><div class="val">${c.reserves}</div><div class="sous">à déposer</div></a>
         <a class="kpi" href="#/lots"><div class="lib">Au dépôt</div><div class="val">${c.auDepot}</div><div class="sous">déposés ou chargés</div></a>
         <a class="kpi" href="#/lots"><div class="lib">En route</div><div class="val">${c.enRoute}</div><div class="sous">${s.lotsEnCours.partis} lot(s) parti(s)</div></a>
-        <a class="kpi" href="#/colis?statut=pret"><div class="lib">Aux guichets</div><div class="val">${c.auxGuichets}</div><div class="sous ${c.anciensGuichet ? 'alerte' : ''}">${c.anciensGuichet} depuis plus de ${CONFIG.magasinage.joursGratuits} j</div></a>
+        <a class="kpi" href="#/colis?statut=pret"><div class="lib">En agence de retrait</div><div class="val">${c.auxGuichets}</div><div class="sous ${c.anciensGuichet ? 'alerte' : ''}">${c.anciensGuichet} depuis plus de ${CONFIG.magasinage.joursGratuits} j</div></a>
         <div class="kpi vert"><div class="lib">Encaissé aujourd'hui</div><div class="val" style="font-size:22px">${gnf(s.encaisseJour.GNF)}</div><div class="sous">+ ${eur(s.encaisseJour.EUR)}</div></div>
         <a class="kpi ocre" href="#/colis?statut=pret"><div class="lib">Impayés au guichet</div><div class="val">${c.impayes}</div><div class="sous">colis avec un reste à payer</div></a>
       </div>
@@ -78,7 +84,7 @@
         <section class="panneau">
           <div class="panneau-tete"><h2>Lots en cours</h2><button class="btn btn-noir btn-petit" data-nouveau-lot>${ic('plus', 'ic-sm')} Nouveau lot</button></div>
           <div class="defile"><table class="tableau"><thead><tr><th>Lot</th><th>Transport</th><th>Colis</th><th>Poids</th><th>Statut</th><th>Arrivée prévue</th></tr></thead><tbody>
-            ${enCours.length ? enCours.map(l => `<tr class="cliquable" data-lot="${esc(l.code)}"><td class="gras">${esc(l.code)}</td><td>${l.mode === 'mer' ? 'Bateau' : 'Avion'}${l.reference ? ` · ${esc(l.reference)}` : ''}</td><td>${l.nbColis}</td><td>${kg(l.poidsTotal)}</td><td>${badge(l.statut === 'preparation' ? 'reserve' : l.statut === 'parti' ? 'en_transit' : 'pret', LIB_STATUT_LOT[l.statut])}</td><td>${l.dateArriveePrevue ? esc(date(l.dateArriveePrevue, false)) : '—'}</td></tr>`).join('')
+            ${enCours.length ? enCours.map(l => `<tr class="cliquable" data-lot="${esc(l.code)}"><td class="gras">${esc(l.code)}</td><td>${esc(libSens(l.sens))} · ${l.mode === 'mer' ? 'bateau' : 'avion'}${l.reference ? ` · ${esc(l.reference)}` : ''}</td><td>${l.nbColis}</td><td>${kg(l.poidsTotal)}</td><td>${badge(l.statut === 'preparation' ? 'reserve' : l.statut === 'parti' ? 'en_transit' : 'pret', LIB_STATUT_LOT[l.statut])}</td><td>${l.dateArriveePrevue ? esc(date(l.dateArriveePrevue, false)) : '—'}</td></tr>`).join('')
               : '<tr><td colspan="6" class="vide">Aucun lot en cours. Créez un lot pour commencer le chargement.</td></tr>'}
           </tbody></table></div>
         </section>
@@ -105,6 +111,7 @@
     const { el, fermer } = modale(`
       <form class="pile" style="--gap:12px">
         <div class="ligne entre"><h2>Nouveau lot</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+        <div class="grille-2">${CONFIG.sens.map((x, i) => `<label class="case" style="border:1px solid var(--ligne-2);border-radius:12px;padding:0 12px;background:#fff"><input type="radio" name="sens" value="${x.key}" ${i === 0 ? 'checked' : ''}> ${esc(x.label)}</label>`).join('')}</div>
         <div class="grille-2">${CONFIG.modes.map((m, i) => `<label class="case" style="border:1px solid var(--ligne-2);border-radius:12px;padding:0 12px;background:#fff"><input type="radio" name="mode" value="${m.key}" ${i === 0 ? 'checked' : ''}> ${esc(m.label)}</label>`).join('')}</div>
         <label class="champ">Référence (n° de vol, de conteneur, LTA…) <input class="saisie" name="reference"></label>
         <label class="champ">Transporteur <input class="saisie" name="transporteur"></label>
@@ -131,7 +138,7 @@
     if (!code && liste.length) code = (liste.find(l => l.statut !== 'cloture') || liste[0]).code;
     main.innerHTML = `
       <div class="entete-page"><h1>Lots &amp; manifestes</h1><button class="btn btn-noir" data-nouveau-lot>${ic('plus', 'ic-sm')} Nouveau lot</button></div>
-      <div class="puces" style="margin-bottom:16px">${liste.slice(0, 12).map(l => `<a class="puce" href="#/lots/${esc(l.code)}" ${l.code === code ? 'aria-current="page"' : ''}>${esc(l.code)} · ${esc(LIB_STATUT_LOT[l.statut].toLowerCase())}</a>`).join('') || '<p class="muet">Aucun lot pour l\'instant.</p>'}</div>
+      <div class="puces" style="margin-bottom:16px">${liste.slice(0, 12).map(l => `<a class="puce" href="#/lots/${esc(l.code)}" ${l.code === code ? 'aria-current="page"' : ''}>${esc(l.code)} · ${esc(libSens(l.sens).replace(' → ', '→'))} · ${esc(LIB_STATUT_LOT[l.statut].toLowerCase())}</a>`).join('') || '<p class="muet">Aucun lot pour l\'instant.</p>'}</div>
       <div data-detail></div>`;
     main.querySelector('[data-nouveau-lot]').addEventListener('click', nouveauLot);
     if (code) await detailLot(code);
@@ -226,7 +233,7 @@
     w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Manifeste ${esc(lot.code)}</title>
       <style>body{font-family:system-ui,sans-serif;font-size:11pt;margin:15mm}h1{font-size:18pt;margin:0}table{width:100%;border-collapse:collapse;margin-top:10mm}th,td{border:1px solid #999;padding:4px 6px;text-align:left}th{background:#eee}.pied{margin-top:12mm;display:flex;justify-content:space-between}</style></head><body>
       <h1>${esc(CONFIG.app)} — Manifeste du lot ${esc(lot.code)}</h1>
-      <p>${lot.mode === 'mer' ? 'Bateau' : 'Avion'} · ${esc(lot.reference || '')} ${esc(lot.transporteur || '')} · ${stats.nb} colis · ${kg(stats.poids)} · imprimé le ${esc(date(new Date()))}</p>
+      <p>${esc(libSens(lot.sens))} · ${lot.mode === 'mer' ? 'Bateau' : 'Avion'} · ${esc(lot.reference || '')} ${esc(lot.transporteur || '')} · ${stats.nb} colis · ${kg(stats.poids)} · imprimé le ${esc(date(new Date()))}</p>
       <table><thead><tr><th>#</th><th>N° de suivi</th><th>Expéditeur</th><th>Destinataire</th><th>Téléphone</th><th>Contenu</th><th>Cartons</th><th>Poids</th><th>Valeur (€)</th></tr></thead><tbody>
       ${manifeste.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.numeroSuivi)}</td><td>${esc(c.expediteur.nom)}</td><td>${esc(c.destinataire.nom)}</td><td>${esc(c.destinataire.telephone)}</td><td>${esc(c.description || c.typeColis)}</td><td>${c.nbCartons}</td><td>${kg(c.poids)}</td><td>${c.valeurDeclaree || ''}</td></tr>`).join('')}
       </tbody></table><div class="pied"><span>Signature dépôt :</span><span>Signature réception :</span></div>
@@ -245,7 +252,7 @@
       <form class="ligne" style="--gap:8px;flex-wrap:wrap;margin-bottom:16px" data-filtres>
         <input class="saisie" style="flex:2;min-width:220px" name="q" placeholder="N° de suivi, téléphone ou nom" value="${esc(etat.q)}" aria-label="Rechercher">
         <select class="saisie" style="flex:1;min-width:160px" name="statut" aria-label="Statut"><option value="">Tous les statuts</option>${Object.entries(CONFIG.statuts).map(([k, v]) => `<option value="${k}" ${k === etat.statut ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
-        <select class="saisie" style="flex:1;min-width:160px" name="guichet" aria-label="Guichet"><option value="">Tous les guichets</option>${CONFIG.guichets.map(g => `<option value="${esc(g.code)}">${esc(g.nom)}</option>`).join('')}</select>
+        <select class="saisie" style="flex:1;min-width:160px" name="guichet" aria-label="Agence de retrait"><option value="">Toutes les agences de retrait</option>${optionsAgences(null)}</select>
         <button class="btn btn-noir">${ic('loupe', 'ic-sm')} Chercher</button>
       </form>
       <section class="panneau"><div class="defile" data-resultats></div></section>`;
@@ -281,7 +288,8 @@
           <div class="ligne-info"><span>Expéditeur</span><span>${esc(c.expediteur.nom)} · ${esc(c.expediteur.telephone)}</span></div>
           <div class="ligne-info"><span>Destinataire</span><span>${esc(c.destinataire.nom)} · ${esc(c.destinataire.telephone)}</span></div>
           ${c.tiersAutorise?.nom ? `<div class="ligne-info"><span>Autorisé à retirer</span><span>${esc(c.tiersAutorise.nom)} · ${esc(c.tiersAutorise.telephone)}</span></div>` : ''}
-          <div class="ligne-info"><span>Transport</span><span>${c.mode === 'mer' ? 'Bateau' : 'Avion'} · lot ${esc(c.lotCode || '—')}</span></div>
+          <div class="ligne-info"><span>Trajet</span><span>${esc(nomLieu(c.depot))} → ${esc(nomLieu(c.guichet))}</span></div>
+          <div class="ligne-info"><span>Transport</span><span>${esc(libSens(c.sens))} · ${c.mode === 'mer' ? 'bateau' : 'avion'} · lot ${esc(c.lotCode || '—')}</span></div>
           <div class="ligne-info"><span>Poids</span><span>${c.poidsReel ? kg(c.poidsReel) : '—'} pesé${c.poidsEstime ? ` · ${kg(c.poidsEstime)} annoncé` : ''} · ${c.nbCartons} carton(s)</span></div>
           <div class="ligne-info"><span>Prix transport</span><span>${eur(c.tarif?.totalEur)} · ${gnf(c.tarif?.totalGnf)} (taux ${gnf(c.tarif?.taux)})${c.tarif?.estime ? ' · estimé' : ''}</span></div>
           <div class="ligne-info"><span>Douane · garde</span><span>${gnf(c.fraisDouaneGnf)} · ${gnf(c.solde.magasinage.fraisGnf)}</span></div>
@@ -297,7 +305,7 @@
           <div class="grille-2">
             <label class="champ">Destinataire <input class="saisie" name="destNom" value="${esc(c.destinataire.nom)}"></label>
             <label class="champ">Téléphone <input class="saisie" name="destTel" value="${esc(c.destinataire.telephone)}"></label>
-            <label class="champ">Guichet <select class="saisie" name="guichet">${CONFIG.guichets.map(g => `<option value="${esc(g.code)}" ${g.code === c.guichet ? 'selected' : ''}>${esc(g.nom)}</option>`).join('')}</select></label>
+            <label class="champ">Agence de retrait <select class="saisie" name="guichet">${optionsAgences(String(c.sens || 'FR-GN').split('-')[1], c.guichet)}</select></label>
             <label class="champ">Douane (GNF) <input class="saisie" name="douane" type="number" min="0" step="500" value="${c.fraisDouaneGnf || 0}"></label>
           </div>
           <label class="champ">Note interne <input class="saisie" name="notes" value="${esc(c.notesAdmin || '')}"></label>
@@ -370,58 +378,78 @@
   // ══════════════════════════════════════════════════════════
   async function reglages() {
     const { config: c } = await api.get('/config/admin');
-    const lieuHtml = (l, type) => `
-      <div class="carte formulaire-grille" data-lieu="${type}" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-        <label class="champ">Code <input class="saisie" name="code" value="${esc(l.code || '')}" placeholder="KALOUM" style="text-transform:uppercase"></label>
-        <label class="champ">Nom <input class="saisie" name="nom" value="${esc(l.nom || '')}"></label>
-        <label class="champ">Ville <input class="saisie" name="ville" value="${esc(l.ville || '')}"></label>
-        <label class="champ">Adresse <input class="saisie" name="adresse" value="${esc(l.adresse || '')}"></label>
-        <label class="champ">Téléphone / WhatsApp <input class="saisie" name="telephone" value="${esc(l.telephone || '')}"></label>
-        <label class="champ">Horaires <input class="saisie" name="horaires" value="${esc(l.horaires || '')}" placeholder="Lun–sam 9 h – 18 h"></label>
+    const agenceHtml = (a) => `
+      <div class="carte formulaire-grille" data-agence style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+        <label class="champ">Pays <select class="saisie" name="pays">${Object.values(CONFIG.pays).map(p => `<option value="${p.code}" ${p.code === a.pays ? 'selected' : ''}>${esc(p.nom)}</option>`).join('')}</select></label>
+        <label class="champ">Code <input class="saisie" name="code" value="${esc(a.code || '')}" placeholder="LABE" style="text-transform:uppercase"></label>
+        <label class="champ">Nom <input class="saisie" name="nom" value="${esc(a.nom || '')}" placeholder="Agence Labé"></label>
+        <label class="champ">Ville <input class="saisie" name="ville" value="${esc(a.ville || '')}"></label>
+        <label class="champ">Commune / quartier <input class="saisie" name="commune" value="${esc(a.commune || '')}"></label>
+        <label class="champ">Adresse <input class="saisie" name="adresse" value="${esc(a.adresse || '')}"></label>
+        <label class="champ">Téléphone / WhatsApp <input class="saisie" name="telephone" value="${esc(a.telephone || '')}"></label>
+        <label class="champ">Horaires <input class="saisie" name="horaires" value="${esc(a.horaires || '')}" placeholder="Lun–sam 9 h – 18 h"></label>
+        <label class="case"><input type="checkbox" name="plateforme" ${a.plateforme ? 'checked' : ''}> Plateforme d'arrivée des lots</label>
+        <label class="case"><input type="checkbox" name="actif" ${a.actif !== false ? 'checked' : ''}> Ouverte</label>
       </div>`;
+    const blocTarif = (x) => {
+      const t = c.tarifs?.[x.key] || { devise: 'EUR', air: {}, mer: {} };
+      return `
+      <section class="panneau"><div class="panneau-tete"><h2>${esc(x.label)}</h2>
+        <label class="ligne" style="--gap:8px">Devise <select class="saisie" name="${x.key}_devise" style="width:auto"><option value="EUR" ${t.devise === 'EUR' ? 'selected' : ''}>€</option><option value="GNF" ${t.devise === 'GNF' ? 'selected' : ''}>GNF</option></select></label></div>
+        <div class="panneau-corps formulaire-grille">
+          <label class="champ">Avion : prix par kg <input class="saisie" name="${x.key}_air_prixKg" type="number" step="0.01" min="0" value="${t.air?.prixKg ?? ''}"></label>
+          <label class="champ">Avion : poids minimum (kg) <input class="saisie" name="${x.key}_air_poidsMin" type="number" step="0.1" min="0" value="${t.air?.poidsMin ?? ''}"></label>
+          <label class="champ">Bateau : prix par kg <input class="saisie" name="${x.key}_mer_prixKg" type="number" step="0.01" min="0" value="${t.mer?.prixKg ?? ''}"></label>
+          <label class="champ">Bateau : poids minimum (kg) <input class="saisie" name="${x.key}_mer_poidsMin" type="number" step="0.1" min="0" value="${t.mer?.poidsMin ?? ''}"></label>
+        </div></section>`;
+    };
     main.innerHTML = `
-      <div class="entete-page"><h1>Tarifs &amp; guichets</h1></div>
-      <form class="pile" style="--gap:20px;max-width:980px" data-reglages>
+      <div class="entete-page"><h1>Tarifs &amp; agences</h1></div>
+      <form class="pile" style="--gap:20px;max-width:1040px" data-reglages>
         <section class="panneau"><div class="panneau-tete"><h2>Taux de change</h2><span class="petit muet">Figé sur chaque colis au moment de la pesée</span></div>
           <div class="panneau-corps formulaire-grille">
             <label class="champ">1 € = … GNF <input class="saisie saisie-forte" name="tauxEurGnf" type="number" min="1" step="1" value="${c.tauxEurGnf}"></label>
             <p class="petit muet" style="align-self:end">Dernière mise à jour : ${esc(date(c.tauxMisAJourLe))}</p>
           </div></section>
-        <section class="panneau"><div class="panneau-tete"><h2>Prix du transport</h2></div>
+        ${CONFIG.sens.map(blocTarif).join('')}
+        <section class="panneau"><div class="panneau-tete"><h2>Suppléments et assurance</h2></div>
           <div class="panneau-corps formulaire-grille">
-            <label class="champ">Avion : € par kg <input class="saisie" name="air_prixKg" type="number" step="0.01" min="0" value="${c.tarifs.air.prixKg}"></label>
-            <label class="champ">Avion : poids minimum (kg) <input class="saisie" name="air_poidsMin" type="number" step="0.1" min="0" value="${c.tarifs.air.poidsMin}"></label>
-            <label class="champ">Bateau : € par kg <input class="saisie" name="mer_prixKg" type="number" step="0.01" min="0" value="${c.tarifs.mer.prixKg}"></label>
-            <label class="champ">Bateau : poids minimum (kg) <input class="saisie" name="mer_poidsMin" type="number" step="0.1" min="0" value="${c.tarifs.mer.poidsMin}"></label>
             ${CONFIG.typesColis.map(t => `<label class="champ">Supplément ${esc(t.label.toLowerCase())} (%) <input class="saisie" name="sur_${t.key}" type="number" step="1" min="0" value="${Math.round((c.surcharges?.[t.key] || 0) * 100)}"></label>`).join('')}
             <label class="champ">Assurance (% de la valeur) <input class="saisie" name="tauxAssurance" type="number" step="0.1" min="0" value="${(c.tauxAssurance * 100).toFixed(1)}"></label>
           </div></section>
-        <section class="panneau"><div class="panneau-tete"><h2>Garde au guichet</h2></div>
+        <section class="panneau"><div class="panneau-tete"><h2>Garde en agence de retrait</h2></div>
           <div class="panneau-corps formulaire-grille">
             <label class="champ">Jours gratuits <input class="saisie" name="joursGratuits" type="number" min="0" value="${c.magasinage.joursGratuits}"></label>
-            <label class="champ">Frais par jour ensuite (GNF) <input class="saisie" name="fraisJourGnf" type="number" min="0" step="500" value="${c.magasinage.fraisJourGnf}"></label>
+            <label class="champ">Ensuite, par jour en Guinée (GNF) <input class="saisie" name="fraisJourGnf" type="number" min="0" step="500" value="${c.magasinage.fraisJourGnf}"></label>
+            <label class="champ">Ensuite, par jour en France (€) <input class="saisie" name="fraisJourEur" type="number" min="0" step="0.5" value="${c.magasinage.fraisJourEur ?? 0}"></label>
           </div></section>
-        <section class="panneau"><div class="panneau-tete"><h2>Dépôts (départ)</h2><button type="button" class="btn btn-petit" data-ajout="depots">${ic('plus', 'ic-sm')} Ajouter</button></div>
-          <div class="panneau-corps pile" data-liste="depots">${c.depots.map(l => lieuHtml(l, 'depots')).join('')}</div></section>
-        <section class="panneau"><div class="panneau-tete"><h2>Guichets (retrait)</h2><button type="button" class="btn btn-petit" data-ajout="guichets">${ic('plus', 'ic-sm')} Ajouter</button></div>
-          <div class="panneau-corps pile" data-liste="guichets">${c.guichets.map(l => lieuHtml(l, 'guichets')).join('')}</div></section>
+        <section class="panneau"><div class="panneau-tete"><div><h2>Agences</h2><p class="petit muet" style="margin-top:4px">Chaque agence reçoit les colis à envoyer, remet les colis arrivés et encaisse. Dans chaque pays, cochez la plateforme où arrivent les lots.</p></div><button type="button" class="btn btn-petit" data-ajout>${ic('plus', 'ic-sm')} Ajouter une agence</button></div>
+          <div class="panneau-corps pile" data-liste-agences>${(c.agences || []).map(agenceHtml).join('')}</div></section>
         <div><button class="btn btn-principal btn-grand">Enregistrer les réglages</button></div>
       </form>`;
     const form = main.querySelector('[data-reglages]');
-    form.querySelectorAll('[data-ajout]').forEach(b => b.addEventListener('click', () => {
-      form.querySelector(`[data-liste="${b.dataset.ajout}"]`).insertAdjacentHTML('beforeend', lieuHtml({}, b.dataset.ajout));
-    }));
+    form.querySelector('[data-ajout]').addEventListener('click', () => {
+      form.querySelector('[data-liste-agences]').insertAdjacentHTML('beforeend', agenceHtml({ pays: 'GN' }));
+    });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const v = (n) => form.querySelector(`[name="${n}"]`).value;
-      const lieux = (type) => [...form.querySelectorAll(`[data-lieu="${type}"]`)].map(bloc => Object.fromEntries([...bloc.querySelectorAll('input')].map(i => [i.name, i.value.trim()]))).filter(l => l.code && l.nom);
+      const agences = [...form.querySelectorAll('[data-agence]')].map(bloc => {
+        const o = {};
+        bloc.querySelectorAll('input, select').forEach(i => { o[i.name] = i.type === 'checkbox' ? i.checked : i.value.trim(); });
+        return o;
+      }).filter(a => a.code && a.nom);
+      const tarifs = Object.fromEntries(CONFIG.sens.map(x => [x.key, {
+        devise: v(`${x.key}_devise`),
+        air: { prixKg: v(`${x.key}_air_prixKg`), poidsMin: v(`${x.key}_air_poidsMin`) },
+        mer: { prixKg: v(`${x.key}_mer_prixKg`), poidsMin: v(`${x.key}_mer_poidsMin`) },
+      }]));
       const corps = {
-        tauxEurGnf: v('tauxEurGnf'),
-        tarifs: { air: { prixKg: v('air_prixKg'), poidsMin: v('air_poidsMin') }, mer: { prixKg: v('mer_prixKg'), poidsMin: v('mer_poidsMin') } },
+        tauxEurGnf: v('tauxEurGnf'), tarifs,
         surcharges: Object.fromEntries(CONFIG.typesColis.map(t => [t.key, (parseFloat(v(`sur_${t.key}`)) || 0) / 100])),
         tauxAssurance: (parseFloat(v('tauxAssurance')) || 0) / 100,
-        magasinage: { joursGratuits: v('joursGratuits'), fraisJourGnf: v('fraisJourGnf') },
-        depots: lieux('depots'), guichets: lieux('guichets'),
+        magasinage: { joursGratuits: v('joursGratuits'), fraisJourGnf: v('fraisJourGnf'), fraisJourEur: v('fraisJourEur') },
+        agences,
       };
       try {
         await api.patch('/config/admin', corps);
@@ -437,7 +465,7 @@
   // ══════════════════════════════════════════════════════════
   async function equipe() {
     const { equipe: liste } = await api.get('/utilisateurs/equipe');
-    const lieux = [...CONFIG.depots, ...CONFIG.guichets];
+    const lieux = CONFIG.agences;
     main.innerHTML = `
       <div class="entete-page"><h1>Équipe</h1></div>
       <div class="deux-col">

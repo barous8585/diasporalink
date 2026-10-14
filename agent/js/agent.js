@@ -9,6 +9,7 @@
   let CONFIG = null;       // config publique
   let CTX = stock.lire('ctx');   // contexte agent (lots, colis prêts…), gardé hors-ligne
   let arreterCamera = null;
+  let ecouteJournal = null;
 
   document.querySelector('[data-recherche]').innerHTML = ic('loupe');
 
@@ -75,7 +76,7 @@
 
   function libelleOk(res) {
     if (res.dejaFait) return 'Déjà enregistré';
-    return ({ charger: `Chargé · lot ${res.lotCode || ''}`, arrivee: 'Arrivé', guichet: 'Prêt · code envoyé' })[res.action] || 'OK';
+    return ({ charger: `Chargé · lot ${res.lotCode || ''}`, arrivee: 'Arrivé', acheminer: `Envoyé vers ${res.versAgence || 'l\'agence'}`, guichet: 'Prêt · code envoyé' })[res.action] || 'OK';
   }
 
   function majPastille() {
@@ -116,20 +117,25 @@
   // ══════════════════════════════════════════════════════════
   //  NAVIGATION
   // ══════════════════════════════════════════════════════════
+  // Chaque agence TMS fait tout : dépôt, scans, remise, caisse
   const ONGLETS = {
-    depot:     { lib: 'Dépôt',      ic: 'balance', vue: vueDepot },
-    chargement:{ lib: 'Chargement', ic: 'lot',     vue: () => vueScan('charger') },
-    arrivee:   { lib: 'Arrivée',    ic: 'avion',   vue: () => vueScan('arrivee') },
-    guichet:   { lib: 'Guichet',    ic: 'scan',    vue: () => vueScan('guichet') },
-    remise:    { lib: 'Remise',     ic: 'ok',      vue: vueRemise },
-    caisse:    { lib: 'Caisse',     ic: 'billet',  vue: vueCaisse },
-    fiche:     { lib: 'Recherche',  ic: 'loupe',   vue: vueFiche, cache: true },
+    depot:   { lib: 'Dépôt',     ic: 'balance', vue: vueDepot },
+    scanner: { lib: 'Scanner',   ic: 'scan',    vue: () => vueScan(stock.lire('action_scan') || 'charger') },
+    remise:  { lib: 'Remise',    ic: 'ok',      vue: vueRemise },
+    caisse:  { lib: 'Caisse',    ic: 'billet',  vue: vueCaisse },
+    fiche:   { lib: 'Recherche', ic: 'loupe',   vue: vueFiche, cache: true },
   };
-  function ongletsVisibles() {
-    const u = session.utilisateur();
-    if (u?.role === 'admin' && !u.lieu) return ['depot', 'chargement', 'arrivee', 'guichet', 'remise', 'caisse'];
-    return CTX?.estGuichet ? ['arrivee', 'guichet', 'remise', 'caisse'] : ['depot', 'chargement', 'caisse'];
-  }
+  // Anciens liens (#/chargement…) → onglet Scanner sur la bonne action
+  const ANCIENS = { chargement: 'charger', arrivee: 'arrivee', guichet: 'guichet' };
+  const ongletsVisibles = () => ['depot', 'scanner', 'remise', 'caisse'];
+
+  // Pays et devise de l'agence de l'agent (admin sans agence : France / €)
+  const paysAgent = () => CTX?.pays || null;
+  const deviseAgent = () => CONFIG?.pays?.[paysAgent()]?.devise || 'EUR';
+  const methodesDe = (devise) => devise === 'GNF'
+    ? [['especes', 'Espèces'], ['orange_money', 'Orange Money'], ['mtn_momo', 'MTN MoMo']]
+    : [['especes', 'Espèces'], ['carte', 'Carte'], ['virement', 'Virement']];
+  const agenceDe = (code) => CONFIG?.agences?.find(a => a.code === code) || null;
 
   function dessinerNav(actif) {
     const nav = document.querySelector('[data-nav]');
@@ -152,6 +158,7 @@
     const lieu = CTX?.lieu;
     document.querySelector('[data-qui]').textContent = `${u.prenom} ${u.nom[0]}. · ${lieu?.nom || (u.role === 'admin' ? 'Administrateur' : 'Lieu non défini')}`;
     let onglet = location.hash.replace(/^#\/?/, '').split('/')[0];
+    if (ANCIENS[onglet]) { stock.ecrire('action_scan', ANCIENS[onglet]); onglet = 'scanner'; }
     const visibles = ongletsVisibles();
     if (!ONGLETS[onglet] || (!visibles.includes(onglet) && !ONGLETS[onglet].cache)) onglet = visibles[0];
     document.querySelector('[data-titre]').textContent = ONGLETS[onglet].lib;
@@ -178,12 +185,15 @@
   //  SCAN : chargement, arrivée, guichet
   // ══════════════════════════════════════════════════════════
   const ACTIONS = {
-    charger: { titre: 'Mettre dans un lot', consigne: 'Scannez chaque colis chargé' },
-    arrivee: { titre: 'Réception en Guinée', consigne: 'Scannez chaque colis reçu' },
-    guichet: { titre: 'Mise en rayon', consigne: 'Scannez le colis posé sur l\'étagère' },
+    charger:   { lib: 'Charger',     titre: 'Mettre dans un lot',         consigne: 'Scannez chaque colis chargé' },
+    arrivee:   { lib: 'Arrivée',     titre: 'Réception d\'un lot',         consigne: 'Scannez chaque colis reçu' },
+    acheminer: { lib: 'Vers agence', titre: 'Envoi vers une autre agence', consigne: 'Scannez les colis qui partent vers une autre agence' },
+    guichet:   { lib: 'En rayon',    titre: 'Mise en rayon',              consigne: 'Scannez le colis posé sur l\'étagère' },
   };
 
   async function vueScan(action) {
+    if (!ACTIONS[action]) action = 'charger';
+    stock.ecrire('action_scan', action);
     const lots = action === 'charger' ? (CTX?.lotsPreparation || []) : action === 'arrivee' ? (CTX?.lotsEnRoute || []) : [];
     let lotChoisi = stock.lire(`lot_${action}`) || lots[0]?.code || '';
     if (lotChoisi && !lots.some(l => l.code === lotChoisi)) lotChoisi = lots[0]?.code || '';
@@ -191,15 +201,18 @@
 
     main.innerHTML = `
       <div class="pile">
-        ${action !== 'guichet' ? `
+        <div class="segments" role="group" aria-label="Type de scan">${Object.entries(ACTIONS).map(([k, a]) => `<button type="button" data-action="${k}" aria-pressed="${k === action}">${esc(a.lib)}</button>`).join('')}</div>
+        ${action === 'acheminer' ? `
+          <p class="bandeau bandeau-ocre">${ic('colis', 'ic-sm')}<span>${CTX?.aAcheminer ? `<b>${CTX.aAcheminer}</b> colis arrivé(s) ici doivent partir vers d'autres agences.` : 'Aucun colis en attente d\'envoi vers une autre agence.'} Le destinataire est prévenu par SMS.</span></p>` : ''}
+        ${action === 'charger' || action === 'arrivee' ? `
           <label class="champ">${action === 'charger' ? 'Lot en préparation' : 'Lot attendu'}
             <select class="saisie saisie-forte" data-lot>
-              ${lots.length ? lots.map(l => `<option value="${esc(l.code)}" ${l.code === lotChoisi ? 'selected' : ''}>${esc(l.code)}${l.reference ? ` · ${esc(l.reference)}` : ''}</option>`).join('')
+              ${lots.length ? lots.map(l => `<option value="${esc(l.code)}" ${l.code === lotChoisi ? 'selected' : ''}>${esc(l.code)} · ${esc(CONFIG.sens.find(x => x.key === (l.sens || 'FR-GN'))?.label || '')}${l.reference ? ` · ${esc(l.reference)}` : ''}</option>`).join('')
                 : `<option value="">${action === 'charger' ? 'Aucun lot ouvert : demandez à l\'admin' : 'Aucun lot en route'}</option>`}
               ${action === 'arrivee' ? '<option value="">Sans lot (colis isolé)</option>' : ''}
             </select>
           </label>
-          <div class="carte pile cache" style="--gap:8px" data-avancement></div>` : `
+          <div class="carte pile cache" style="--gap:8px" data-avancement></div>` : action === 'acheminer' ? '' : `
           <label class="champ">Étagère (facultatif)
             <input class="saisie" data-emplacement placeholder="Ex. B-14" value="${esc(stock.lire('emplacement') || '')}" autocomplete="off">
           </label>`}
@@ -224,6 +237,10 @@
 
     const $ = (s) => main.querySelector(s);
     const viseur = $('[data-viseur]');
+    main.querySelectorAll('[data-action]').forEach(b => b.addEventListener('click', async () => {
+      if (arreterCamera) { try { await arreterCamera(); } catch {} arreterCamera = null; }
+      vueScan(b.dataset.action);
+    }));
 
     const dessinerJournal = () => {
       const lignes = journal.lire().filter(e => e.action === action).slice(0, 25);
@@ -241,8 +258,11 @@
       dessinerJournal();
       // Met à jour le compteur du lot après chaque envoi
       clearTimeout(delaiManifeste);
-      if (action !== 'guichet' && navigator.onLine) delaiManifeste = setTimeout(() => chargerManifeste(), 400);
+      if ((action === 'charger' || action === 'arrivee') && navigator.onLine) delaiManifeste = setTimeout(() => chargerManifeste(), 400);
     };
+    // Une seule écoute à la fois (on change souvent d'action sans changer d'onglet)
+    if (ecouteJournal) document.removeEventListener('journal-maj', ecouteJournal);
+    ecouteJournal = ecoute;
     document.addEventListener('journal-maj', ecoute);
 
     async function chargerManifeste() {
@@ -340,9 +360,21 @@
 
   function formulaireDepot(resa) {
     const r = resa || {};
+    // Agence de départ : celle de l'agent (un admin sans agence la choisit)
+    const choisirDepart = !CTX?.lieu;
     const etat = {
-      mode: r.mode || 'air', typeColis: r.typeColis || 'vetements', guichet: r.guichet || CONFIG.guichets[0]?.code,
-      assurance: !!r.assurance, payeurArrivee: !!r.payeurArrivee, methode: 'especes', devise: 'EUR',
+      depot: CTX?.lieu?.code || r.depot || CONFIG.agences[0]?.code,
+      mode: r.mode || 'air', typeColis: r.typeColis || 'vetements', guichet: r.guichet || '',
+      assurance: !!r.assurance, payeurArrivee: !!r.payeurArrivee, methode: 'especes',
+    };
+    const paysDepart = () => agenceDe(etat.depot)?.pays || 'FR';
+    const paysDest = () => (paysDepart() === 'FR' ? 'GN' : 'FR');
+    const sens = () => `${paysDepart()}-${paysDest()}`;
+    const devisePaie = () => CONFIG.pays[paysDepart()]?.devise || 'EUR'; // on paie dans la devise du pays de dépôt
+    const optionsRetrait = () => {
+      const parVille = {};
+      CONFIG.agences.filter(a => a.pays === paysDest()).forEach(a => { (parVille[a.ville || '—'] = parVille[a.ville || '—'] || []).push(a); });
+      return Object.entries(parVille).map(([v, l]) => `<optgroup label="${esc(v)}">${l.map(a => `<option value="${esc(a.code)}" ${a.code === etat.guichet ? 'selected' : ''}>${esc(a.nom)}${a.commune ? ` (${esc(a.commune)})` : ''}</option>`).join('')}</optgroup>`).join('');
     };
     main.innerHTML = `
       <form class="pile" data-depot novalidate>
@@ -356,17 +388,18 @@
           ${r.poidsEstime ? `<p class="petit muet centre" data-ecart>Annoncé par le client : ${kg(r.poidsEstime)}</p>` : ''}
         </div>
 
+        ${choisirDepart ? `<label class="champ">Agence de départ <select class="saisie" name="depot">${CONFIG.agences.map(a => `<option value="${esc(a.code)}" ${a.code === etat.depot ? 'selected' : ''}>${esc(a.nom)} · ${esc(CONFIG.pays[a.pays]?.nom || a.pays)}</option>`).join('')}</select></label>` : ''}
         <div class="segments" role="group" aria-label="Transport">${CONFIG.modes.map(m => `<button type="button" data-mode="${m.key}" aria-pressed="${etat.mode === m.key}">${esc(m.label)}</button>`).join('')}</div>
         <label class="champ">Contenu
           <select class="saisie" name="typeColis">${CONFIG.typesColis.map(t => `<option value="${t.key}" ${t.key === etat.typeColis ? 'selected' : ''}>${esc(t.label)}${t.surcharge ? ` (+${Math.round(t.surcharge * 100)} %)` : ''}</option>`).join('')}</select>
         </label>
+        <label class="champ"><span data-lib-retrait>Agence de retrait</span>
+          <select class="saisie saisie-forte" name="guichet" data-retrait></select>
+        </label>
         <div class="grille-2">
           <label class="champ">Cartons <input class="saisie" name="nbCartons" type="number" inputmode="numeric" min="1" value="${r.nbCartons || 1}"></label>
-          <label class="champ">Guichet d'arrivée
-            <select class="saisie" name="guichet">${CONFIG.guichets.map(g => `<option value="${esc(g.code)}" ${g.code === etat.guichet ? 'selected' : ''}>${esc(g.nom)}</option>`).join('')}</select>
-          </label>
+          <label class="champ">Description <input class="saisie" name="description" value="${esc(r.description || '')}" placeholder="Ex. vêtements, riz"></label>
         </div>
-        <label class="champ">Description <input class="saisie" name="description" value="${esc(r.description || '')}" placeholder="Ex. vêtements, riz, téléphone"></label>
 
         <h3>Expéditeur</h3>
         <div class="grille-2">
@@ -376,23 +409,24 @@
         <h3>Destinataire</h3>
         <div class="grille-2">
           <label class="champ">Nom <input class="saisie" name="destNom" value="${esc(r.destinataire?.nom || '')}" required></label>
-          <label class="champ">Téléphone <input class="saisie" name="destTel" type="tel" inputmode="tel" value="${esc(r.destinataire?.telephone || '')}" required placeholder="6XX XX XX XX"></label>
+          <label class="champ">Téléphone <input class="saisie" name="destTel" type="tel" inputmode="tel" value="${esc(r.destinataire?.telephone || '')}" required></label>
         </div>
 
         <label class="case"><input type="checkbox" name="assurance" ${etat.assurance ? 'checked' : ''}> Assurance (${(CONFIG.tauxAssurance * 100).toLocaleString('fr-FR')} % de la valeur)</label>
-        <label class="champ ${etat.assurance ? '' : 'cache'}" data-valeur>Valeur déclarée (€) <input class="saisie" name="valeurDeclaree" type="number" inputmode="decimal" min="0" value="${r.valeurDeclaree || ''}"></label>
+        <label class="champ ${etat.assurance ? '' : 'cache'}" data-valeur><span data-lib-valeur>Valeur déclarée</span> <input class="saisie" name="valeurDeclaree" type="number" inputmode="decimal" min="0" value="${r.valeurDeclaree || ''}"></label>
 
         <div class="carte-noire pile" style="--gap:6px" aria-live="polite">
-          <div class="recap-prix"><span style="color:#D6CFC0">Prix à payer</span><span class="valeur" data-eur>—</span></div>
-          <div class="recap-prix"><span style="color:#D6CFC0">en francs guinéens</span><span class="gras" data-gnf>—</span></div>
+          <div class="recap-prix"><span style="color:#D6CFC0">Prix à payer</span><span class="valeur" data-prix>—</span></div>
+          <div class="recap-prix"><span style="color:#D6CFC0">soit</span><span class="gras" data-prix-autre>—</span></div>
           <div class="tres-petit" style="color:#D6CFC0" data-detail></div>
         </div>
 
         <h3>Paiement</h3>
         <label class="case"><input type="checkbox" name="payeurArrivee" ${etat.payeurArrivee ? 'checked' : ''}> Le destinataire paie à l'arrivée</label>
         <div class="pile" style="--gap:8px" data-paiement>
-          <div class="grille-3">${[['especes', 'Espèces'], ['carte', 'Carte'], ['virement', 'Virement']].map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center" data-methode="${k}" aria-pressed="${etat.methode === k}"><span class="nom">${l}</span></button>`).join('')}</div>
-          <label class="champ">Montant reçu (€) <input class="saisie saisie-forte" name="montant" type="number" inputmode="decimal" step="0.01" min="0"></label>
+          <div class="grille-3" data-methodes></div>
+          <label class="champ"><span data-lib-montant>Montant reçu</span> <input class="saisie saisie-forte" name="montant" type="number" inputmode="decimal" step="0.01" min="0"></label>
+          <label class="champ cache" data-champ-ref>Référence de la transaction <input class="saisie" name="reference" autocomplete="off"></label>
           <p class="petit" data-rendu></p>
         </div>
 
@@ -401,31 +435,55 @@
 
     const form = main.querySelector('[data-depot]');
     const $ = (s) => form.querySelector(s);
-    let tarif = null;
+    let tarif = null, paysAffiche = null;
+    const aPayer = () => (devisePaie() === 'EUR' ? tarif.totalEur : tarif.totalGnf);
+    const dev = (n) => montant(n, devisePaie());
+    const majPays = () => {
+      if (paysAffiche === paysDepart()) return;
+      paysAffiche = paysDepart();
+      if (!CONFIG.agences.some(a => a.code === etat.guichet && a.pays === paysDest())) etat.guichet = '';
+      $('[data-retrait]').innerHTML = optionsRetrait();
+      if (etat.guichet) $('[data-retrait]').value = etat.guichet;
+      $('[data-lib-retrait]').textContent = `Agence de retrait en ${CONFIG.pays[paysDest()]?.nom}`;
+      form.destTel.placeholder = paysDest() === 'GN' ? '6XX XX XX XX' : '06 XX XX XX XX';
+      const methodes = methodesDe(devisePaie());
+      if (!methodes.some(([k]) => k === etat.methode)) etat.methode = 'especes';
+      $('[data-methodes]').innerHTML = methodes.map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${etat.methode === k}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('');
+      form.querySelectorAll('[data-methode]').forEach(b => b.addEventListener('click', () => { etat.methode = b.dataset.methode; calc(); }));
+      $('[data-lib-montant]').textContent = `Montant reçu (${devisePaie() === 'EUR' ? '€' : 'GNF'})`;
+      form.montant.step = devisePaie() === 'EUR' ? '0.01' : '500';
+      delete form.montant.dataset.touche;
+    };
     const calc = () => {
+      if (form.depot) etat.depot = form.depot.value;
+      majPays();
+      etat.guichet = form.guichet.value;
       const poids = parseFloat(form.poidsReel.value);
       etat.typeColis = form.typeColis.value;
       $('[data-valeur]').classList.toggle('cache', !form.assurance.checked);
       $('[data-paiement]').classList.toggle('cache', form.payeurArrivee.checked);
+      $('[data-champ-ref]').classList.toggle('cache', ['especes'].includes(etat.methode));
       form.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === etat.mode));
       form.querySelectorAll('[data-methode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.methode === etat.methode));
-      if (!(poids > 0)) { $('[data-eur]').textContent = '—'; $('[data-gnf]').textContent = '—'; $('[data-detail]').textContent = 'Pesez le colis.'; tarif = null; return; }
-      tarif = KolisTarif.calculerTarif(CONFIG.regles, { mode: etat.mode, poidsKg: poids, typeColis: etat.typeColis, valeurDeclaree: form.valeurDeclaree.value, assurance: form.assurance.checked });
-      $('[data-eur]').textContent = eur(tarif.totalEur);
-      $('[data-gnf]').textContent = gnf(tarif.totalGnf);
-      $('[data-detail]').textContent = `${kg(tarif.poidsFacture)} × ${eur(tarif.prixKg)}${tarif.surcharge ? ` + ${eur(tarif.surcharge)} supplément` : ''}${tarif.assurance ? ` + ${eur(tarif.assurance)} assurance` : ''}`;
+      const deviseTarif = CONFIG.tarifs[sens()]?.devise || 'EUR';
+      $('[data-lib-valeur]').textContent = `Valeur déclarée (${deviseTarif === 'EUR' ? '€' : 'GNF'})`;
+      if (!(poids > 0)) { $('[data-prix]').textContent = '—'; $('[data-prix-autre]').textContent = '—'; $('[data-detail]').textContent = 'Pesez le colis.'; tarif = null; return; }
+      tarif = KolisTarif.calculerTarif(CONFIG.regles, { sens: sens(), mode: etat.mode, poidsKg: poids, typeColis: etat.typeColis, valeurDeclaree: form.valeurDeclaree.value, assurance: form.assurance.checked });
+      $('[data-prix]').textContent = dev(aPayer());
+      $('[data-prix-autre]').textContent = devisePaie() === 'EUR' ? gnf(tarif.totalGnf) : eur(tarif.totalEur);
+      const md = (n) => montant(n, tarif.devise);
+      $('[data-detail]').textContent = `${kg(tarif.poidsFacture)} × ${md(tarif.prixKg)}${tarif.surcharge ? ` + ${md(tarif.surcharge)} supplément` : ''}${tarif.assurance ? ` + ${md(tarif.assurance)} assurance` : ''}`;
       if (r.poidsEstime) {
         const ecart = Math.round((poids - r.poidsEstime) * 10) / 10;
         $('[data-ecart]').innerHTML = `Annoncé : ${kg(r.poidsEstime)} · ${ecart > 0 ? `<b style="color:var(--rouge)">+${kg(ecart)}</b>` : ecart < 0 ? `${kg(ecart)}` : 'identique'}`;
       }
-      if (!form.montant.dataset.touche) form.montant.value = tarif.totalEur;
+      if (!form.montant.dataset.touche) form.montant.value = aPayer();
       const recu = parseFloat(form.montant.value) || 0;
-      $('[data-rendu]').innerHTML = etat.methode === 'especes' && recu > tarif.totalEur ? `Monnaie à rendre : <b>${eur(recu - tarif.totalEur)}</b>` : recu < tarif.totalEur && recu > 0 ? `<span style="color:var(--rouge)">Paiement partiel : reste ${eur(tarif.totalEur - recu)}</span>` : '';
+      $('[data-rendu]').innerHTML = etat.methode === 'especes' && recu > aPayer() ? `Monnaie à rendre : <b>${dev(recu - aPayer())}</b>` : recu < aPayer() && recu > 0 ? `<span style="color:var(--rouge)">Paiement partiel : reste ${dev(aPayer() - recu)}</span>` : '';
     };
     form.addEventListener('input', (e) => { if (e.target.name === 'montant') e.target.dataset.touche = '1'; calc(); });
     form.addEventListener('change', calc);
     form.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { etat.mode = b.dataset.mode; calc(); }));
-    form.querySelectorAll('[data-methode]').forEach(b => b.addEventListener('click', () => { etat.methode = b.dataset.methode; calc(); }));
     $('[data-retour]').addEventListener('click', vueDepot);
     calc();
     form.poidsReel.focus();
@@ -433,16 +491,18 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!tarif) { toast('Pesez le colis.', 'erreur'); form.poidsReel.focus(); return; }
+      if (!form.guichet.value) { toast('Choisissez l\'agence de retrait.', 'erreur'); form.guichet.focus(); return; }
       const manque = ['expNom', 'expTel', 'destNom', 'destTel'].find(k => !form[k].value.trim());
       if (manque) { toast('Complétez les noms et téléphones.', 'erreur'); form[manque].focus(); return; }
       const recu = parseFloat(form.montant.value) || 0;
       const paiement = !form.payeurArrivee.checked && recu > 0
-        ? { montant: Math.min(recu, tarif.totalEur), devise: 'EUR', methode: etat.methode, objet: 'transport' } : undefined;
+        ? { montant: Math.min(recu, aPayer()), devise: devisePaie(), methode: etat.methode, objet: 'transport', reference: form.reference.value.trim() || undefined } : undefined;
       const btn = form.querySelector('[type=submit]'); btn.disabled = true;
       try {
         const res = await api.post('/agent/depot', {
           opId: form.dataset.opId || (form.dataset.opId = uid()),
           numeroSuivi: resa?.numeroSuivi,
+          depot: etat.depot,
           poidsReel: parseFloat(form.poidsReel.value), mode: etat.mode, typeColis: etat.typeColis,
           guichet: form.guichet.value, nbCartons: parseInt(form.nbCartons.value, 10) || 1,
           description: form.description.value, assurance: form.assurance.checked,
@@ -466,7 +526,7 @@
           <span class="badge" style="align-self:center;background:var(--ocre);color:var(--encre)">${ic('ok', 'ic-sm')} Enregistré</span>
           <div class="num-grand">${esc(c.numeroSuivi)}</div>
           <div>${esc(c.destinataire.nom)} · ${esc(c.guichetInfo?.nom || c.guichet)}</div>
-          <div>${kg(c.poidsReel)} · ${eur(c.tarif.totalEur)} · ${c.solde.soldeGnf > 0 ? `reste ${gnf(c.solde.soldeGnf)}` : 'payé'}</div>
+          <div>${kg(c.poidsReel)} · ${c.tarif.devise === 'GNF' ? gnf(c.tarif.totalGnf) : eur(c.tarif.totalEur)} · ${c.solde.soldeGnf > 0 ? `reste ${deviseAgent() === 'EUR' ? eur(c.solde.soldeEur) : gnf(c.solde.soldeGnf)}` : 'payé'}</div>
         </div>
         <div class="carte centre qr-apercu" data-qr><div class="chargement"></div></div>
         <button class="btn btn-noir btn-grand btn-plein" data-imprimer>${ic('imprimer')} Imprimer ${c.nbCartons > 1 ? `${c.nbCartons} étiquettes` : 'l\'étiquette'}</button>
@@ -502,7 +562,7 @@
       liste.innerHTML = prets.length ? prets.slice(0, 40).map(c => `
         <button class="choix" data-num="${esc(c.numeroSuivi)}" style="width:100%">
           <span class="nom">${esc(c.destinataire.nom)}${c.emplacement ? ` · étagère ${esc(c.emplacement)}` : ''}</span>
-          <span class="sous">${esc(c.numeroSuivi)} · depuis ${c.magasinage?.jours || 0} j${c.soldeGnf > 0 ? ` · reste ${gnf(c.soldeGnf)}` : ''}</span>
+          <span class="sous">${esc(c.numeroSuivi)} · depuis ${c.magasinage?.jours || 0} j${c.soldeGnf > 0 ? ` · reste ${deviseAgent() === 'EUR' ? eur(c.soldeEur) : gnf(c.soldeGnf)}` : ''}</span>
         </button>`).join('') : '<p class="vide petit">Aucun colis en attente.</p>';
       liste.querySelectorAll('[data-num]').forEach(b => b.addEventListener('click', () => ouvrirRemise(b.dataset.num)));
     };
@@ -524,7 +584,7 @@
         const r = await api.get(`/agent/colis/${numero}`);
         const f = r.colis;
         if (f.statut !== 'pret') { toast(`${numero} : ${f.statutLabel}`, 'erreur'); return; }
-        c = { ...(c || {}), numeroSuivi: f.numeroSuivi, destinataire: f.destinataire, tiersAutorise: f.tiersAutorise, poids: f.poidsReel, nbCartons: f.nbCartons, emplacement: f.emplacement, soldeGnf: f.solde.soldeGnf, magasinage: f.solde.magasinage, detail: f.solde };
+        c = { ...(c || {}), numeroSuivi: f.numeroSuivi, destinataire: f.destinataire, tiersAutorise: f.tiersAutorise, poids: f.poidsReel, nbCartons: f.nbCartons, emplacement: f.emplacement, soldeGnf: f.solde.soldeGnf, soldeEur: f.solde.soldeEur, magasinage: f.solde.magasinage, detail: f.solde };
         horsCache = !c.empreinteCode;
       } catch (e) { if (!e.reseau) { toast(e.message, 'erreur'); return; } }
     }
@@ -532,7 +592,10 @@
 
     const opId = uid();
     const etat = { code: '', codeOk: null, retirePar: 'destinataire', methode: 'especes' };
-    const solde = c.soldeGnf || 0;
+    // On encaisse dans la devise du pays de l'agence (€ en France, GNF en Guinée)
+    const devise = deviseAgent();
+    const solde = c.soldeGnf > 0 ? (devise === 'EUR' ? (c.soldeEur || 0) : c.soldeGnf) : 0;
+    const dev = (n) => montant(n, devise);
     main.innerHTML = `
       <form class="pile" data-remise novalidate>
         <div class="ligne"><button type="button" class="btn btn-rond" data-retour aria-label="Retour">${ic('retour')}</button><h2 class="grandit">Remise du colis</h2></div>
@@ -564,10 +627,10 @@
 
         ${solde > 0 ? `
         <div class="carte pile">
-          <div class="ligne"><span style="width:26px;height:26px;border-radius:13px;background:var(--vert);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700">2</span><h3 class="grandit">Encaisser</h3><span class="titre" style="font-size:20px">${gnf(solde)}</span></div>
+          <div class="ligne"><span style="width:26px;height:26px;border-radius:13px;background:var(--vert);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700">2</span><h3 class="grandit">Encaisser</h3><span class="titre" style="font-size:20px">${dev(solde)}</span></div>
           ${c.magasinage?.fraisGnf ? `<p class="tres-petit muet">Dont frais de garde : ${gnf(c.magasinage.fraisGnf)} (${c.magasinage.joursFactures} j)</p>` : ''}
-          <div class="grille-3">${[['especes', 'Espèces'], ['orange_money', 'Orange Money'], ['mtn_momo', 'MTN MoMo']].map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${k === 'especes'}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('')}</div>
-          <label class="champ" data-champ-recu>Montant reçu (GNF) <input class="saisie saisie-forte" name="recu" type="number" inputmode="numeric" min="0" step="500" value="${solde}"></label>
+          <div class="grille-3">${methodesDe(devise).map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${k === 'especes'}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('')}</div>
+          <label class="champ" data-champ-recu>Montant reçu (${devise === 'EUR' ? '€' : 'GNF'}) <input class="saisie saisie-forte" name="recu" type="number" inputmode="decimal" min="0" step="${devise === 'EUR' ? '0.01' : '500'}" value="${solde}"></label>
           <label class="champ cache" data-champ-ref>Référence de la transaction <input class="saisie" name="reference" autocomplete="off"></label>
           <div class="bandeau bandeau-ocre cache" data-monnaie></div>
         </div>` : '<p class="bandeau bandeau-vert">' + ic('ok', 'ic-sm') + ' Tout est payé.</p>'}
@@ -617,8 +680,8 @@
       const recu = parseFloat(form.recu.value) || 0;
       const m = $('[data-monnaie]');
       $('[data-champ-ref]').classList.toggle('cache', etat.methode === 'especes');
-      if (etat.methode === 'especes' && recu > solde) { m.classList.remove('cache'); m.innerHTML = `Monnaie à rendre : <b>&nbsp;${gnf(recu - solde)}</b>`; }
-      else if (recu < solde) { m.classList.remove('cache'); m.innerHTML = `<span style="color:var(--rouge)">Il manque ${gnf(solde - recu)}</span>`; }
+      if (etat.methode === 'especes' && recu > solde) { m.classList.remove('cache'); m.innerHTML = `Monnaie à rendre : <b>&nbsp;${dev(Math.round((recu - solde) * 100) / 100)}</b>`; }
+      else if (recu < solde) { m.classList.remove('cache'); m.innerHTML = `<span style="color:var(--rouge)">Il manque ${dev(Math.round((solde - recu) * 100) / 100)}</span>`; }
       else m.classList.add('cache');
     };
     form.querySelectorAll('[data-methode]').forEach(b => b.addEventListener('click', () => {
@@ -637,12 +700,12 @@
       if (etat.codeOk === false) { toast('Code incorrect. Demandez le SMS au destinataire.', 'erreur'); return; }
       if (!form.piece.checked) { toast('Vérifiez la pièce d\'identité.', 'erreur'); return; }
       if (etat.retirePar === 'tiers' && !form.nomRetrait.value.trim()) { toast('Nom de la personne présente requis.', 'erreur'); return; }
-      if (solde > 0 && (parseFloat(form.recu.value) || 0) < solde) { toast(`Il faut encaisser ${gnf(solde)}.`, 'erreur'); return; }
+      if (solde > 0 && (parseFloat(form.recu.value) || 0) < solde) { toast(`Il faut encaisser ${dev(solde)}.`, 'erreur'); return; }
       if (sig.vide()) { toast('Faites signer la personne.', 'erreur'); return; }
       const payload = {
         opId, numero: c.numeroSuivi, code: etat.code, pieceVerifiee: true,
         retirePar: etat.retirePar, nomRetrait: etat.retirePar === 'tiers' ? form.nomRetrait.value.trim() : undefined,
-        paiement: solde > 0 ? { montant: solde, devise: 'GNF', methode: etat.methode, objet: 'global', reference: form.reference?.value || undefined } : undefined,
+        paiement: solde > 0 ? { montant: solde, devise, methode: etat.methode, objet: 'global', reference: form.reference?.value || undefined } : undefined,
         signature: sig.image(),
       };
       const btn = form.querySelector('[type=submit]'); btn.disabled = true;
@@ -765,7 +828,11 @@
     zone.innerHTML = '<div class="chargement"></div>';
     try {
       const { colis: c } = await api.get(`/agent/colis/${numero}`);
-      const estGuichet = CTX?.estGuichet || session.utilisateur().role === 'admin';
+      // Douane saisie dans le pays d'arrivée, dans sa devise
+      const paysDest = String(c.sens || 'FR-GN').split('-')[1];
+      const deviseDouane = CONFIG.pays[paysDest]?.devise || 'GNF';
+      const peutDouane = !paysAgent() || paysAgent() === paysDest;
+      const taux = c.tarif?.taux || CONFIG.tauxEurGnf;
       zone.innerHTML = `
         <div class="pile">
           <div class="carte pile" style="--gap:6px">
@@ -776,14 +843,15 @@
             <div class="ligne-info"><span>Guichet</span><span>${esc(c.guichetInfo?.nom || c.guichet)}</span></div>
             <div class="ligne-info"><span>Poids</span><span>${kg(c.poidsReel || c.poidsEstime)} · ${c.nbCartons} carton(s)</span></div>
             <div class="ligne-info"><span>Lot</span><span>${esc(c.lotCode || '—')}</span></div>
+            <div class="ligne-info"><span>Sens</span><span>${esc(CONFIG.sens.find(x => x.key === (c.sens || 'FR-GN'))?.label || '')}</span></div>
             <div class="ligne-info"><span>Transport</span><span>${eur(c.tarif?.totalEur)} (${gnf(c.tarif?.totalGnf)})</span></div>
-            <div class="ligne-info"><span>Douane</span><span>${gnf(c.fraisDouaneGnf)}</span></div>
-            <div class="ligne-info"><span>Reste à payer</span><span class="gras">${gnf(c.solde.soldeGnf)}</span></div>
+            <div class="ligne-info"><span>Douane</span><span>${deviseDouane === 'EUR' ? eur((c.fraisDouaneGnf || 0) / taux) : gnf(c.fraisDouaneGnf)}</span></div>
+            <div class="ligne-info"><span>Reste à payer</span><span class="gras">${deviseDouane === 'EUR' ? eur(c.solde.soldeEur) : gnf(c.solde.soldeGnf)}</span></div>
           </div>
-          ${estGuichet && !['remis', 'annule'].includes(c.statut) ? `
+          ${peutDouane && !['remis', 'annule'].includes(c.statut) ? `
           <form class="carte pile" data-douane>
             <h3>Droits de douane</h3>
-            <div class="ligne" style="--gap:8px"><input class="saisie grandit" name="douane" type="number" inputmode="numeric" min="0" step="500" value="${c.fraisDouaneGnf || ''}" placeholder="Montant en GNF"><button class="btn btn-noir">Enregistrer</button></div>
+            <div class="ligne" style="--gap:8px"><input class="saisie grandit" name="douane" type="number" inputmode="decimal" min="0" step="${deviseDouane === 'EUR' ? '0.01' : '500'}" value="${c.fraisDouaneGnf ? (deviseDouane === 'EUR' ? Math.round(c.fraisDouaneGnf / taux * 100) / 100 : c.fraisDouaneGnf) : ''}" placeholder="Montant en ${deviseDouane === 'EUR' ? '€' : 'GNF'}"><button class="btn btn-noir">Enregistrer</button></div>
           </form>` : ''}
           <button class="btn btn-plein" data-reimprimer>${ic('imprimer', 'ic-sm')} Réimprimer l'étiquette</button>
           <div class="carte"><h3 style="margin-bottom:12px">Historique</h3><div class="frise">${[...c.historique].reverse().map(h => `
@@ -791,7 +859,7 @@
         </div>`;
       zone.querySelector('[data-douane]')?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        try { await api.patch(`/agent/colis/${c.numeroSuivi}/douane`, { fraisDouaneGnf: parseFloat(e.target.douane.value) || 0 }); toast('Douane enregistrée.', 'ok'); afficherFiche(c.numeroSuivi); }
+        try { await api.patch(`/agent/colis/${c.numeroSuivi}/douane`, { montant: parseFloat(e.target.douane.value) || 0, devise: deviseDouane }); toast('Douane enregistrée.', 'ok'); afficherFiche(c.numeroSuivi); }
         catch (err) { toast(err.message, 'erreur'); }
       });
       zone.querySelector('[data-reimprimer]').addEventListener('click', () => Etiquette.imprimer(c, CONFIG));
