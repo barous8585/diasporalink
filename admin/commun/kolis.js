@@ -258,6 +258,7 @@
           <button class="btn btn-plein" type="button" data-vue="connexion">Retour</button>
         </div>` : `
         <form class="pile" style="--gap:16px" novalidate>
+          <img class="logo-connexion" src="commun/logo.png" alt="Talib Multi Services" width="200" height="136">
           <h1>${vue === 'inscription' ? 'Créer mon compte' : esc(titre)}</h1>
           ${vue === 'inscription' ? `
             <div class="grille-2">

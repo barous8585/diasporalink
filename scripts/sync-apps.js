@@ -8,6 +8,8 @@ const fichiers = [
   ['shared/kolis.css', 'commun/kolis.css'],
   ['shared/kolis.js', 'commun/kolis.js'],
   ['utils/tarif.js', 'commun/tarif.js'],
+  ['shared/img/logo.png', 'commun/logo.png'],
+  ['shared/img/embleme.png', 'commun/embleme.png'],
 ];
 
 for (const app of ['frontend', 'agent', 'admin']) {

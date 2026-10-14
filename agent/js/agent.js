@@ -609,7 +609,7 @@
         </div>
 
         <div class="carte pile">
-          <div class="ligne"><span class="etape-num" style="width:26px;height:26px;border-radius:13px;background: var(--surface);color: var(--encre);display:inline-flex;align-items:center;justify-content:center;font-weight:700">1</span><h3>Code de retrait</h3></div>
+          <div class="ligne"><span class="etape-num" style="width:26px;height:26px;border-radius:13px;background: var(--marine);color: #fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700">1</span><h3>Code de retrait</h3></div>
           <div class="code-4" data-code>${[0, 1, 2, 3].map(i => `<input inputmode="numeric" maxlength="1" aria-label="Chiffre ${i + 1}" autocomplete="off">`).join('')}</div>
           <p class="petit gras" data-verdict aria-live="polite"></p>
           <div style="height:1px;background:var(--creme-2)"></div>
@@ -627,7 +627,7 @@
 
         ${solde > 0 ? `
         <div class="carte pile">
-          <div class="ligne"><span style="width:26px;height:26px;border-radius:13px;background: var(--surface);color: var(--encre);display:inline-flex;align-items:center;justify-content:center;font-weight:700">2</span><h3 class="grandit">Encaisser</h3><span class="titre" style="font-size:20px">${dev(solde)}</span></div>
+          <div class="ligne"><span style="width:26px;height:26px;border-radius:13px;background: var(--marine);color: #fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700">2</span><h3 class="grandit">Encaisser</h3><span class="titre" style="font-size:20px">${dev(solde)}</span></div>
           ${c.magasinage?.fraisGnf ? `<p class="tres-petit muet">Dont frais de garde : ${gnf(c.magasinage.fraisGnf)} (${c.magasinage.joursFactures} j)</p>` : ''}
           <div class="grille-3">${methodesDe(devise).map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${k === 'especes'}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('')}</div>
           <label class="champ" data-champ-recu>Montant reçu (${devise === 'EUR' ? '€' : 'GNF'}) <input class="saisie saisie-forte" name="recu" type="number" inputmode="decimal" min="0" step="${devise === 'EUR' ? '0.01' : '500'}" value="${solde}"></label>

@@ -59,7 +59,7 @@
 
   function majEncartTaux() {
     const jours = CONFIG.tauxMisAJourLe ? Math.floor((Date.now() - new Date(CONFIG.tauxMisAJourLe)) / 86400000) : null;
-    document.querySelector('[data-taux]').innerHTML = `<b>Taux du jour</b><br>1 € = ${gnf(CONFIG.tauxEurGnf)}<br>${jours === null ? '' : jours === 0 ? 'mis à jour aujourd\'hui' : `mis à jour il y a ${jours} j`}<br><a href="#/reglages" style="color:var(--encre)">Modifier</a>`;
+    document.querySelector('[data-taux]').innerHTML = `<b>Taux du jour</b><br>1 € = ${gnf(CONFIG.tauxEurGnf)}<br>${jours === null ? '' : jours === 0 ? 'mis à jour aujourd\'hui' : `mis à jour il y a ${jours} j`}<br><a href="#/reglages">Modifier</a>`;
   }
 
   // ══════════════════════════════════════════════════════════
