@@ -1,0 +1,11 @@
+# Le site Netlify « diasporalink-livreur » construit depuis ce dossier.
+# L'ancienne app livreur est remplacée par l'app agent (dossier agent/) :
+# on publie simplement une copie de agent/.
+[build]
+  command = "rm -rf site && cp -r ../agent site"
+  publish = "site"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
