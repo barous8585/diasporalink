@@ -51,6 +51,10 @@
     [/^\/guichets$/, guichets, 'guichets'],
     [/^\/compte$/, compte, null],
     [/^\/connexion$/, connexion, null],
+    [/^\/cgv$/, () => pageLegale('Conditions générales', KolisLegal.cgv(CONFIG)), null],
+    [/^\/interdits$/, () => pageLegale('Objets interdits', KolisLegal.listeInterdits()), null],
+    [/^\/confidentialite$/, () => pageLegale('Confidentialité', KolisLegal.confidentialite(CONFIG)), null],
+    [/^\/reclamation\/([\w-]+)$/, reclamation, null],
   ];
 
   async function router() {
@@ -267,6 +271,10 @@
             ${depart ? `<p class="petit"><b>${esc(depart.nom)}</b>${depart.adresse ? ` · ${esc(depart.adresse)}` : ''}${depart.horaires ? `<br><span class="muet">${esc(depart.horaires)}</span>` : ''}</p>` : `<a class="btn btn-petit" href="#/guichets">Voir les agences</a>`}
           </div>` : ''}
 
+        ${complet && !['reserve', 'annule'].includes(c.statut) ? `
+        <div class="carte pile" style="--gap:6px" data-factures><h3>Factures</h3><p class="petit muet">Chargement…</p></div>
+        <div data-reclamations></div>` : ''}
+
         <div class="carte">
           <h2 style="margin-bottom:14px">Historique</h2>
           <div class="frise">
@@ -296,12 +304,124 @@
     });
     main.querySelector('[data-tiers]')?.addEventListener('click', () => autoriserTiers(c));
     main.querySelector('[data-livraison]')?.addEventListener('click', (e) => demanderLivraison(c, liv, e.currentTarget.dataset.livraison));
+    if (complet && !['reserve', 'annule'].includes(c.statut) && !horsLigne) chargerFacturesEtReclamations(c);
     main.querySelector('[data-payer]')?.addEventListener('click', () => payer(c, solde));
     main.querySelector('[data-annuler]')?.addEventListener('click', async () => {
       if (!confirm('Annuler cette réservation ?')) return;
       try { await api.del(`/colis/${c.numeroSuivi}`); toast('Réservation annulée.', 'ok'); router(); }
       catch (e) { toast(e.message, 'erreur'); }
     });
+  }
+
+  // ── Factures et réclamations d'un colis (compte connecté) ──
+  async function chargerFacturesEtReclamations(c) {
+    const zf = main.querySelector('[data-factures]');
+    const zr = main.querySelector('[data-reclamations]');
+    try {
+      const [{ factures }, { reclamations }] = await Promise.all([api.get(`/factures/colis/${c.numeroSuivi}`), api.get('/reclamations')]);
+      zf.innerHTML = `<h3>Factures</h3>${factures.length ? factures.map(f => `
+        <a class="ligne-facture" href="${esc(K.lienFacture(f))}" target="_blank" rel="noopener">
+          ${ic('liste', 'ic-sm')}
+          <span class="grandit"><span class="gras">${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${esc(f.numero)}</span><span class="tres-petit muet" style="display:block">${esc(date(f.date, false))} · ${esc(K.ETATS_FACTURE[f.etat] || '')}</span></span>
+          <span class="gras chiffres">${montant(f.totalTTC, f.devise)}</span>
+        </a>`).join('') : '<p class="petit muet">La facture est émise au dépôt ou à la remise du colis.</p>'}`;
+      const miennes = reclamations.filter(r => r.numeroSuivi === c.numeroSuivi);
+      const ouverte = miennes.find(r => ['ouverte', 'en_cours'].includes(r.statut));
+      zr.innerHTML = `
+        ${miennes.map(r => `<a class="carte ligne entre" href="#/reclamation/${esc(r.numero)}" style="text-decoration:none;color:inherit">
+          <span><span class="gras">Réclamation ${esc(r.numero)}</span><span class="tres-petit muet" style="display:block">${esc(LIB_MOTIF[r.motif] || r.motif)}</span></span>
+          <span class="badge b-${esc(r.statut)}">${esc(LIB_REC[r.statut])}</span></a>`).join('')}
+        ${ouverte ? '' : `<button class="btn btn-plein" data-signaler>${ic('alerte', 'ic-sm')} Signaler un problème</button>`}`;
+      zr.querySelector('[data-signaler]')?.addEventListener('click', () => signalerProbleme(c));
+    } catch (e) { zf.innerHTML = '<h3>Factures</h3><p class="petit muet">Indisponibles pour le moment.</p>'; }
+  }
+
+  const LIB_MOTIF = { perdu: 'Colis perdu', abime: 'Colis abîmé', incomplet: 'Contenu manquant', retard: 'Retard important', autre: 'Autre problème' };
+  const LIB_REC = { ouverte: 'Envoyée', en_cours: 'En cours d\'examen', acceptee: 'Acceptée', refusee: 'Refusée', close: 'Close' };
+
+  function signalerProbleme(c) {
+    const photos = [];
+    const l = CONFIG.litiges || {};
+    const { el, fermer } = modale(`
+      <form class="pile" style="--gap:12px" novalidate>
+        <div class="ligne entre"><h2>Signaler un problème</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+        <p class="petit muet">Colis ${esc(c.numeroSuivi)}. Pour un colis abîmé ou incomplet : dans les ${esc(l.delaiAbimeJours ?? 3)} jours après la remise, avec des photos. Gardez l'emballage.</p>
+        <div class="grille-2">${Object.entries(LIB_MOTIF).map(([k, v]) => `<button type="button" class="choix choix-noir" style="min-height:52px" data-motif="${k}"><span class="nom">${esc(v)}</span></button>`).join('')}</div>
+        <label class="champ">Que s'est-il passé ? <textarea class="saisie" name="description" rows="4" required placeholder="Décrivez le problème : ce qui manque, ce qui est cassé…"></textarea></label>
+        <div class="pile" style="--gap:6px">
+          <span class="gras petit">Photos (4 maximum)</span>
+          <div class="vignettes" data-vignettes></div>
+          <label class="btn btn-plein">${ic('plus', 'ic-sm')} Ajouter une photo<input type="file" accept="image/*" capture="environment" data-photo hidden></label>
+        </div>
+        <div class="grille-2">
+          <label class="champ">Montant demandé (facultatif) <input class="saisie" name="montant" type="number" inputmode="decimal" min="0"></label>
+          <label class="champ">Devise <select class="saisie" name="devise"><option value="EUR">€</option><option value="GNF">GNF</option></select></label>
+        </div>
+        <button class="btn btn-principal btn-grand" type="submit">Envoyer la réclamation</button>
+      </form>`);
+    let motif = '';
+    el.querySelectorAll('[data-motif]').forEach(b => b.addEventListener('click', () => {
+      motif = b.dataset.motif;
+      el.querySelectorAll('[data-motif]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    }));
+    el.querySelector('[data-photo]').addEventListener('change', async (e) => {
+      const fichier = e.target.files[0]; e.target.value = '';
+      if (!fichier) return;
+      if (photos.length >= 4) { toast('4 photos maximum.', 'erreur'); return; }
+      try {
+        const d = await K.photoReduite(fichier);
+        photos.push(d);
+        el.querySelector('[data-vignettes]').insertAdjacentHTML('beforeend', `<img src="${d}" alt="Photo ${photos.length}">`);
+      } catch (err) { toast(err.message, 'erreur'); }
+    });
+    el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      if (!motif) { toast('Choisissez le problème.', 'erreur'); return; }
+      if ((f.get('description') || '').trim().length < 10) { toast('Décrivez le problème en quelques mots.', 'erreur'); return; }
+      const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
+      try {
+        const r = await api.post('/reclamations', { numero: c.numeroSuivi, motif, description: f.get('description'), montantDemande: f.get('montant'), deviseDemande: f.get('devise'), photos }, { delai: 60000 });
+        fermer(); toast(`Réclamation ${r.reclamation.numero} envoyée. Nous vous répondons sous 30 jours.`, 'ok');
+        location.hash = `#/reclamation/${r.reclamation.numero}`;
+      } catch (err) { toast(err.message, 'erreur'); btn.disabled = false; }
+    });
+  }
+
+  async function reclamation(numero) {
+    if (!exigerConnexion()) return;
+    const { reclamation: r } = await api.get(`/reclamations/${numero}`);
+    const d = r.decision;
+    main.innerHTML = `
+      <div class="pile">
+        <div class="ligne"><a href="#/suivi/${esc(r.numeroSuivi)}" class="btn btn-rond" aria-label="Retour">${ic('retour')}</a>
+          <div class="grandit"><div class="tres-petit muet">Réclamation · colis ${esc(r.numeroSuivi)}</div><div class="titre" style="font-size:19px;font-weight:700">${esc(r.numero)}</div></div>
+          <span class="badge b-${esc(r.statut)}">${esc(LIB_REC[r.statut])}</span></div>
+        <div class="carte pile" style="--gap:6px">
+          <div class="gras">${esc(LIB_MOTIF[r.motif] || r.motif)}</div>
+          ${r.montantDemande ? `<div class="petit muet">Montant demandé : ${montant(r.montantDemande, r.deviseDemande || 'EUR')}</div>` : ''}
+          ${r.photos?.length ? `<div class="vignettes">${r.photos.map(id => `<img data-photo-id="${esc(id)}" alt="Photo jointe">`).join('')}</div>` : ''}
+        </div>
+        ${d?.type ? `<div class="carte-vert pile" style="--gap:6px"><div class="gras">${d.type === 'refus' ? 'Réclamation refusée' : `${d.type === 'avoir' ? 'Remboursement' : 'Indemnisation'} : ${montant(d.montant, d.devise)}`}</div><div class="petit">${esc(d.motif || '')}</div></div>` : ''}
+        <h3>Échanges</h3>
+        <div class="pile" style="--gap:8px">${r.suivi.map(s => `<div class="message-rec ${s.auteur}"><div class="tres-petit muet">${s.auteur === 'tms' ? 'TMS' : 'Vous'} · ${esc(date(s.le))}</div><div>${esc(s.texte)}</div></div>`).join('')}</div>
+        ${['ouverte', 'en_cours'].includes(r.statut) ? `
+        <form class="ligne" style="--gap:8px" data-message>
+          <input class="saisie grandit" name="texte" placeholder="Ajouter une précision…" autocomplete="off">
+          <button class="btn btn-noir">Envoyer</button>
+        </form>` : ''}
+      </div>`;
+    main.querySelectorAll('[data-photo-id]').forEach(img => K.afficherPhoto(img, img.dataset.photoId));
+    main.querySelector('[data-message]')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const t = e.target.texte.value.trim(); if (!t) return;
+      try { await api.post(`/reclamations/${numero}/message`, { texte: t }); router(); } catch (err) { toast(err.message, 'erreur'); }
+    });
+  }
+
+  function pageLegale(titre, html) {
+    main.innerHTML = `<div class="pile texte-legal"><div class="ligne"><button class="btn btn-rond" data-retour aria-label="Retour">${ic('retour')}</button><h1 class="grandit" style="font-size:24px">${esc(titre)}</h1></div>${html}${mentions()}</div>`;
+    main.querySelector('[data-retour]').addEventListener('click', () => (history.length > 1 ? history.back() : (location.hash = '#/')));
   }
 
   // ── Courses à domicile sur la page de suivi ──
@@ -537,6 +657,7 @@
           <label class="champ">Nombre de cartons <input class="saisie" name="nbCartons" type="number" inputmode="numeric" min="1" value="1"></label>
           <label class="champ">Contenu (facultatif) <input class="saisie" name="description" placeholder="Ex. vêtements, chaussures"></label>
           <label class="case"><input type="checkbox" name="payeurArrivee"> Le destinataire paiera à l'arrivée</label>
+          <label class="case" style="align-items:flex-start"><input type="checkbox" name="cgv" style="margin-top:2px"> <span>J'accepte les <a href="#/cgv" target="_blank">conditions générales</a> et je confirme que mon colis ne contient aucun <a href="#/interdits" target="_blank">objet interdit</a>.</span></label>
           <button class="btn btn-principal btn-grand btn-plein" type="submit">Réserver mon envoi</button>
           <p class="tres-petit muet centre">Vous recevrez un numéro de suivi à présenter en agence.</p>
         </form>
@@ -625,6 +746,7 @@
       e.preventDefault();
       const f = new FormData(e.target);
       if (!f.get('nom') || !f.get('telephone')) { toast('Indiquez le nom et le téléphone du destinataire.', 'erreur'); return; }
+      if (f.get('cgv') !== 'on') { toast('Acceptez les conditions générales et confirmez qu\'il n\'y a aucun objet interdit.', 'erreur'); return; }
       const ram = etat.depart === 'domicile' ? adrRam.lire() : null;
       const liv = etat.arrivee === 'domicile' ? adrLiv.lire() : null;
       for (const [a, lib] of [[ram, 'ramassage'], [liv, 'livraison']]) {
@@ -644,7 +766,7 @@
           mode: etat.mode, typeColis: etat.type, poidsEstime: etat.poids,
           assurance: etat.assurance, valeurDeclaree: parseFloat(etat.valeur) || 0,
           depot: f.get('depot'), guichet: f.get('guichet'), nbCartons: parseInt(f.get('nbCartons'), 10) || 1,
-          description: f.get('description'), payeurArrivee: f.get('payeurArrivee') === 'on',
+          description: f.get('description'), payeurArrivee: f.get('payeurArrivee') === 'on', cgvAcceptees: true,
           destinataire: { nom: f.get('nom'), telephone: normTel(f.get('telephone')) },
           ramassage: ram ? { demande: true, adresse: ram, jour: f.get('ram_jour') || undefined, moment: f.get('ram_moment') } : undefined,
           livraison: liv ? { demande: true, adresse: liv } : undefined,
@@ -714,7 +836,8 @@
   const mentions = () => {
     const e = CONFIG?.entreprise;
     if (!e) return '';
-    return `<p class="tres-petit muet centre" style="line-height:1.6;margin-top:8px">${esc(e.nomCommercial)} · ${esc(e.forme)}<br>${esc(e.adresse)}<br>SIREN ${esc(e.siren)} · ${esc(e.rcs)} · TVA ${esc(e.tva)}</p>`;
+    return `<p class="petit centre" style="margin-top:8px"><a href="#/cgv">Conditions générales</a> · <a href="#/interdits">Objets interdits</a> · <a href="#/confidentialite">Confidentialité</a></p>
+      <p class="tres-petit muet centre" style="line-height:1.6;margin-top:8px">${esc(e.nomCommercial)} · ${esc(e.forme)}<br>${esc(e.adresse)}<br>SIREN ${esc(e.siren)} · ${esc(e.rcs)} · TVA ${esc(e.tva)}</p>`;
   };
 
   // ════════════════════════════════════════════════════════

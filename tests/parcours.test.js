@@ -610,4 +610,15 @@ test('conditions, factures conformes, photo au dépôt et réclamation', async (
   // Registre pour le comptable
   const csv = await (await fetch(`${API}/factures/export.csv`, { headers: { Authorization: `Bearer ${admin}` } })).text();
   assert.ok(csv.includes(fa.numero) && csv.includes(av.numero) && csv.includes('-20'));
+
+  // Durées de conservation : un an après la remise, photos et signature disparaissent
+  const mongoose = require('mongoose');
+  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/kolis_test');
+  const { appliquerRetention } = require('../scripts/retention');
+  const bilan = await appliquerRetention(new Date(Date.now() + 400 * 86400000));
+  assert.ok(bilan.photos >= 2, JSON.stringify(bilan));
+  const apres = (await appel('GET', `/admin/colis/${numero}`, null, admin)).colis;
+  assert.ok(!apres.photoDepot && !apres.remise.signature);
+  assert.strictEqual((await appel('GET', `/factures/colis/${numero}`, null, admin)).factures.length, 3, 'les factures restent');
+  await mongoose.disconnect();
 });

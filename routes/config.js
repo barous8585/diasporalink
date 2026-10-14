@@ -26,7 +26,7 @@ router.get('/', ah(async (req, res) => {
     magasinage: c.magasinage,
     domicile: c.domicile,
     moments: MOMENTS,
-    facturation: { capital: c.facturation?.capital, email: c.facturation?.email, telephone: c.facturation?.telephone, site: c.facturation?.site },
+    facturation: { capital: c.facturation?.capital, email: c.facturation?.email, telephone: c.facturation?.telephone, site: c.facturation?.site, mediateur: c.facturation?.mediateur },
     litiges: c.litiges,
     cgvVersion: CGV_VERSION,
     frontendUrl: process.env.FRONTEND_URL || '',
@@ -128,7 +128,7 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
   }
   if (b.facturation && typeof b.facturation === 'object') {
     const f = JSON.parse(JSON.stringify(actuel.facturation || {}));
-    for (const k of ['capital', 'email', 'telephone', 'site', 'conditionsPaiement']) {
+    for (const k of ['capital', 'email', 'telephone', 'site', 'conditionsPaiement', 'mediateur']) {
       if (typeof b.facturation[k] === 'string') f[k] = b.facturation[k].trim().slice(0, 300);
     }
     if (b.facturation.tva) {
