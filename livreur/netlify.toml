@@ -1,9 +1,12 @@
-# Le site Netlify « diasporalink-livreur » construit depuis ce dossier.
+# Le site Netlify « tms-agent » (ex diasporalink-livreur) construit depuis ce dossier.
 # L'ancienne app livreur est remplacée par l'app agent (dossier agent/) :
 # on publie simplement une copie de agent/.
 [build]
   command = "rm -rf site && cp -r ../agent site"
   publish = "site"
+  # Toujours reconstruire : le code vient de agent/, hors de ce dossier,
+  # donc Netlify croirait sinon que rien n'a changé.
+  ignore = "exit 1"
 
 [[redirects]]
   from = "/*"
