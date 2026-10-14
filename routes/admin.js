@@ -60,7 +60,7 @@ router.get('/stats', ah(async (req, res) => {
       reserves: nb.reserve || 0,
       auDepot: (nb.depose || 0) + (nb.charge || 0),
       enRoute: (nb.en_transit || 0) + (nb.arrive || 0) + (nb.acheminement || 0),
-      auxGuichets: nb.pret || 0,
+      auxGuichets: (nb.pret || 0) + (nb.en_livraison || 0),
       anciensGuichet: anciens.length,
       impayes,
       remis: nb.remis || 0,

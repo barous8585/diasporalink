@@ -73,6 +73,55 @@ function calculerMagasinage(config, arriveGuichetLe, maintenant = new Date(), { 
   return { jours, joursFactures, fraisGnf: joursFactures * parJourGnf, gratuitJusquau };
 }
 
+// ── Courses à domicile ──────────────────────────────────────
+const RAYON_TERRE_KM = 6371;
+const rad = (d) => d * Math.PI / 180;
+const pointValide = (p) => p && Number.isFinite(+p.lat) && Number.isFinite(+p.lng)
+  && Math.abs(+p.lat) <= 90 && Math.abs(+p.lng) <= 180 && !(+p.lat === 0 && +p.lng === 0);
+
+/** Distance à vol d'oiseau en km entre deux points { lat, lng }. */
+function distanceKm(a, b) {
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * RAYON_TERRE_KM * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Prix d'une course (ramassage ou livraison) entre une agence et le client.
+ * Prix = base + parKm × distance par la route (vol d'oiseau × majoration),
+ * arrondi au millier de GNF ou au demi-euro supérieur, plafond facultatif.
+ * @returns { ok, distanceKm, prix, devise, prixGnf } ou { ok:false, raison }
+ */
+function calculerCourse(config, agence, point, { taux } = {}) {
+  const dom = config.domicile || {};
+  const pays = agence?.pays;
+  const bareme = dom[pays];
+  const devise = pays === 'FR' ? 'EUR' : 'GNF';
+  if (!bareme || bareme.actif === false) return { ok: false, raison: 'indisponible', message: 'Service à domicile pas encore proposé dans ce pays.' };
+  if (!pointValide(agence?.position)) return { ok: false, raison: 'agence_sans_position', message: `Service à domicile pas encore proposé par ${agence?.nom || 'cette agence'}.` };
+  if (!pointValide(point)) return { ok: false, raison: 'sans_position', message: 'Position du client nécessaire pour calculer le prix.' };
+  const route = distanceKm(agence.position, point) * (dom.majoration || 1.3);
+  const km = Math.round(route * 10) / 10;
+  if (bareme.rayonMaxKm && km > bareme.rayonMaxKm) {
+    return { ok: false, raison: 'trop_loin', distanceKm: km, message: `Trop loin de ${agence.nom} (${km.toLocaleString('fr-FR')} km, maximum ${bareme.rayonMaxKm} km).` };
+  }
+  let prix = (bareme.base || 0) + (bareme.parKm || 0) * km;
+  if (bareme.plafond > 0) prix = Math.min(prix, bareme.plafond);
+  prix = devise === 'GNF' ? Math.ceil(prix / 1000) * 1000 : Math.ceil(prix * 2) / 2;
+  const t = taux || config.tauxEurGnf;
+  return { ok: true, distanceKm: km, prix, devise, prixGnf: enGnf(prix, devise, t) };
+}
+
+/** Frais des courses à domicile demandées sur un colis, en GNF. */
+function fraisDomicileGnf(colis) {
+  let total = 0;
+  for (const k of ['ramassage', 'livraison']) {
+    const c = colis?.[k];
+    if (c?.demande && c.statut !== 'annulee') total += c.prixGnf || 0;
+  }
+  return total;
+}
+
 /** Convertit un paiement en GNF au taux figé du colis. */
 function enGnf(montant, devise, taux) {
   return devise === 'EUR' ? arrondiGnf(montant * taux) : Math.round(montant);
@@ -80,12 +129,13 @@ function enGnf(montant, devise, taux) {
 
 /**
  * Solde restant dû sur un colis, en GNF (et équivalent EUR).
- * Dû = transport (totalGnf) + douane + garde − paiements.
+ * Dû = transport (totalGnf) + douane + garde + courses à domicile − paiements.
  */
 function calculerSolde(colis, config, maintenant = new Date()) {
   const taux       = colis.tarif?.taux || config.tauxEurGnf;
   const magasinage = calculerMagasinage(config, colis.arriveGuichetLe, maintenant, { pays: paysArrivee(colis.sens), taux });
-  const du = (colis.tarif?.totalGnf || 0) + (colis.fraisDouaneGnf || 0) + magasinage.fraisGnf;
+  const domicileGnf = fraisDomicileGnf(colis);
+  const du = (colis.tarif?.totalGnf || 0) + (colis.fraisDouaneGnf || 0) + magasinage.fraisGnf + domicileGnf;
   const paye = (colis.paiements || []).reduce((s, p) => s + enGnf(p.montant, p.devise, taux), 0);
   const soldeGnf = Math.max(0, du - paye);
   return {
@@ -93,11 +143,12 @@ function calculerSolde(colis, config, maintenant = new Date()) {
     payeGnf: paye,
     soldeGnf,
     soldeEur: arrondi2(soldeGnf / taux),
+    domicileGnf,
     magasinage,
   };
 }
 
-const api = { calculerTarif, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee };
+const api = { calculerTarif, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee, distanceKm, calculerCourse, fraisDomicileGnf, pointValide };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else racine.KolisTarif = api;
 })(typeof window !== 'undefined' ? window : globalThis);

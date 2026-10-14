@@ -1,7 +1,7 @@
 // Service worker : l'app s'ouvre même sans réseau.
 // Les réponses de l'API ne sont pas mises en cache ici : l'app garde elle-même
 // les dernières infos de suivi (avec leur heure) pour les montrer hors-ligne.
-const CACHE = 'kolis-client-v1';
+const CACHE = 'kolis-client-v2';
 const ASSETS = ['./', './index.html', './css/app.css', './js/app.js', './commun/kolis.css', './commun/kolis.js', './commun/tarif.js', './manifest.json'];
 
 self.addEventListener('install', e => {

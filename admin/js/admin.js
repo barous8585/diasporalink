@@ -24,6 +24,7 @@
     [/^\/lots\/([\w-]+)$/, (c) => lots(c), 'lots'],
     [/^\/colis$/, colis, 'colis'],
     [/^\/caisses$/, caisses, 'caisses'],
+    [/^\/courses$/, courses, 'courses'],
     [/^\/reglages$/, reglages, 'reglages'],
     [/^\/equipe$/, equipe, 'equipe'],
   ];
@@ -283,7 +284,7 @@
     const { el, fermer } = modale(`
       <div class="pile" style="--gap:14px">
         <div class="ligne entre"><div><h2>${esc(c.numeroSuivi)}</h2><div style="margin-top:4px">${badge(c.statut)}</div></div><button class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
-        ${c.statut === 'pret' ? `<div class="carte-ocre ligne entre"><div><div class="tres-petit gras">Code de retrait</div><div class="titre" style="font-size:26px;letter-spacing:5px">${esc(c.codeRetrait || '—')}</div>${c.codeEssais ? `<div class="tres-petit">${c.codeEssais} essai(s) faux</div>` : ''}</div>${c.codeEssais >= 5 ? '<button class="btn btn-noir btn-petit" data-debloquer>Débloquer</button>' : ''}</div>` : ''}
+        ${['pret', 'en_livraison'].includes(c.statut) ? `<div class="carte-ocre ligne entre"><div><div class="tres-petit gras">Code de retrait</div><div class="titre" style="font-size:26px;letter-spacing:5px">${esc(c.codeRetrait || '—')}</div>${c.codeEssais ? `<div class="tres-petit">${c.codeEssais} essai(s) faux</div>` : ''}</div>${c.codeEssais >= 5 ? '<button class="btn btn-noir btn-petit" data-debloquer>Débloquer</button>' : ''}</div>` : ''}
         <div class="carte">
           <div class="ligne-info"><span>Expéditeur</span><span>${esc(c.expediteur.nom)} · ${esc(c.expediteur.telephone)}</span></div>
           <div class="ligne-info"><span>Destinataire</span><span>${esc(c.destinataire.nom)} · ${esc(c.destinataire.telephone)}</span></div>
@@ -295,7 +296,8 @@
           <div class="ligne-info"><span>Douane · garde</span><span>${gnf(c.fraisDouaneGnf)} · ${gnf(c.solde.magasinage.fraisGnf)}</span></div>
           <div class="ligne-info"><span>Payé</span><span>${gnf(c.solde.payeGnf)}${c.payeurArrivee ? ' · paie à l\'arrivée' : ''}</span></div>
           <div class="ligne-info"><span class="gras">Reste à payer</span><span class="gras">${gnf(c.solde.soldeGnf)}</span></div>
-          ${c.remise?.le ? `<div class="ligne-info"><span>Remis</span><span>${esc(date(c.remise.le))} à ${esc(c.remise.nomRetrait || '')}</span></div>` : ''}
+          ${['ramassage', 'livraison'].filter(k => c[k]?.demande).map(k => `<div class="ligne-info"><span>${k === 'ramassage' ? 'Ramassage' : 'Livraison'} à domicile</span><span>${esc(c[k].adresse?.quartier || '')}${c[k].prix ? ` · ${montant(c[k].prix, c[k].devise)}` : ' · prix à calculer'} · ${esc(LIB_COURSE[c[k].statut] || c[k].statut)}${c[k].livreurNom ? ` · ${esc(c[k].livreurNom)}` : ''}</span></div>`).join('')}
+          ${c.remise?.le ? `<div class="ligne-info"><span>Remis</span><span>${esc(date(c.remise.le))} à ${esc(c.remise.nomRetrait || '')}${c.remise.aDomicile ? ' (à domicile)' : ''}</span></div>` : ''}
         </div>
         ${c.remise?.signature ? `<img src="${esc(c.remise.signature)}" alt="Signature du retrait" style="max-width:260px;border:1px solid var(--ligne);border-radius:10px;background:#fff">` : ''}
         ${c.paiements.length ? `<div class="carte"><h3 style="margin-bottom:8px">Paiements</h3>${c.paiements.map(p => `<div class="ligne-info"><span>${esc(date(p.le))} · ${esc(CONFIG.methodesPaiement.find(m => m.key === p.methode)?.label || p.methode)} · ${esc(p.lieu === 'EN_LIGNE' ? 'en ligne' : nomLieu(p.lieu))}</span><span class="gras">${montant(p.montant, p.devise)}</span></div>`).join('')}</div>` : ''}
@@ -327,6 +329,82 @@
       } catch (err) { toast(err.message, 'erreur'); }
     });
     el.querySelector('[data-etiquette-colis]').addEventListener('click', () => K.etiquette.imprimer(c, CONFIG));
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  COURSES À DOMICILE
+  // ══════════════════════════════════════════════════════════
+  const LIB_COURSE = { a_planifier: 'Sans livreur', assignee: 'Livreur choisi', en_route: 'En route', faite: 'Faite', annulee: 'Annulée' };
+  async function courses() {
+    const filtre = stock.lire('filtre_courses') || '';
+    const r = await api.get(`/admin/courses${filtre ? `?agence=${encodeURIComponent(filtre)}` : ''}`);
+    const sansPos = r.courses.filter(c => !c.adresse?.position?.lat);
+    const sansLivreur = r.courses.filter(c => !c.livreur);
+    const optionsLivreurs = (c) => `<option value="">— Aucun —</option>${r.livreurs.filter(l => l.lieu === c.agence).map(l => `<option value="${esc(l._id)}" ${String(l._id) === String(c.livreur) ? 'selected' : ''}>${esc(l.prenom)} ${esc(l.nom)}</option>`).join('')}`;
+    const ligne = (c) => `
+      <tr data-num="${esc(c.numeroSuivi)}" data-type="${c.type}">
+        <td><span class="badge">${c.type === 'ramassage' ? 'Ramassage' : 'Livraison'}</span></td>
+        <td><a href="#" data-fiche class="gras">${esc(c.numeroSuivi)}</a><div class="tres-petit muet">${esc(CONFIG.statuts[c.statutColis] || c.statutColis)}</div></td>
+        <td>${esc(c.adresse?.nom || c.contact?.nom || '')}<div class="tres-petit muet">${esc(c.adresse?.telephone || c.contact?.telephone || '')}</div></td>
+        <td>${esc([c.adresse?.quartier, c.adresse?.ville].filter(Boolean).join(', '))}<div class="tres-petit muet">${esc(c.adresse?.repere || '')}</div>
+          ${c.adresse?.position?.lat ? `<a class="tres-petit" href="${esc(K.lienCarte(c.adresse.position))}" target="_blank" rel="noopener">carte</a>` : '<span class="tres-petit rouge">position manquante</span>'}</td>
+        <td>${esc(nomLieu(c.agence))}<div class="tres-petit muet">${c.distanceKm ? `${esc(String(c.distanceKm).replace('.', ','))} km` : ''}</div></td>
+        <td class="chiffres">${c.prix ? montant(c.prix, c.devise) : '—'}</td>
+        <td>${c.statut === 'en_route' ? `<span class="gras">${esc(c.livreurNom || '')}</span><div class="tres-petit muet">en route</div>`
+          : `<select class="saisie" style="min-height:40px;font-size:14px" data-livreur aria-label="Livreur">${optionsLivreurs(c)}</select>`}
+          ${c.echecs?.length ? `<div class="tres-petit rouge">${c.echecs.length} échec(s) : ${esc(c.echecs.at(-1).motif)}</div>` : ''}</td>
+        <td><button class="btn btn-petit" type="button" data-adresse>Adresse</button></td>
+      </tr>`;
+    main.innerHTML = `
+      <div class="entete-page"><h1>Courses à domicile</h1>
+        <label class="ligne" style="--gap:8px">Agence <select class="saisie" data-filtre style="width:auto"><option value="">Toutes</option>${optionsAgences(null, filtre)}</select></label></div>
+      <div class="kpis">
+        <div class="kpi"><div class="lib">Courses ouvertes</div><div class="val">${r.courses.length}</div></div>
+        <div class="kpi ${sansLivreur.length ? 'ocre' : ''}"><div class="lib">Sans livreur</div><div class="val">${sansLivreur.length}</div></div>
+        <div class="kpi ${sansPos.length ? 'ocre' : ''}"><div class="lib">Position manquante</div><div class="val">${sansPos.length}</div></div>
+        <div class="kpi"><div class="lib">Livreurs actifs</div><div class="val">${r.livreurs.length}</div></div>
+      </div>
+      ${r.livreurs.length ? '' : '<p class="bandeau bandeau-ocre">Aucun livreur : ajoutez-en dans Équipe (rôle « Livreur »).</p>'}
+      <section class="panneau"><div class="panneau-tete"><h2>À faire</h2><span class="petit muet">Les livreurs peuvent aussi prendre eux-mêmes les courses de leur agence.</span></div>
+        <div class="defile"><table class="tableau">
+          <thead><tr><th>Type</th><th>Colis</th><th>Client</th><th>Adresse</th><th>Agence</th><th>Prix</th><th>Livreur</th><th></th></tr></thead>
+          <tbody>${r.courses.map(ligne).join('') || '<tr><td colspan="8" class="muet">Aucune course en cours.</td></tr>'}</tbody></table></div></section>
+      <section class="panneau" style="margin-top:20px"><div class="panneau-tete"><h2>Faites ces 7 derniers jours</h2><span class="petit muet">Écart = distance entre le téléphone du livreur et l'adresse au moment où il valide</span></div>
+        <div class="defile"><table class="tableau">
+          <thead><tr><th>Quand</th><th>Type</th><th>Colis</th><th>Quartier</th><th>Livreur</th><th>Prix</th><th>Écart GPS</th></tr></thead>
+          <tbody>${r.faites.map(c => `<tr>
+            <td>${esc(date(c.faiteLe))}</td><td>${c.type === 'ramassage' ? 'Ramassage' : 'Livraison'}</td><td>${esc(c.numeroSuivi)}</td>
+            <td>${esc(c.adresse?.quartier || '')}</td><td>${esc(c.livreurNom || '')}</td><td class="chiffres">${c.prix ? montant(c.prix, c.devise) : '—'}</td>
+            <td class="chiffres">${c.ecartM === undefined || c.ecartM === null ? '<span class="muet">pas de GPS</span>' : c.ecartM > 500 ? `<span class="alerte-ecart">${(c.ecartM / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km</span>` : `${c.ecartM} m`}</td>
+          </tr>`).join('') || '<tr><td colspan="7" class="muet">Rien pour l\'instant.</td></tr>'}</tbody></table></div></section>`;
+    main.querySelector('[data-filtre]').addEventListener('change', (e) => { stock.ecrire('filtre_courses', e.target.value); courses(); });
+    main.querySelectorAll('tr[data-num]').forEach(tr => {
+      const { num, type } = tr.dataset;
+      const c = r.courses.find(x => x.numeroSuivi === num && x.type === type);
+      tr.querySelector('[data-fiche]').addEventListener('click', (e) => { e.preventDefault(); ficheColis(num, courses); });
+      tr.querySelector('[data-livreur]')?.addEventListener('change', async (e) => {
+        try { await api.post('/admin/courses/assigner', { numero: num, type, livreur: e.target.value || null }); toast(e.target.value ? 'Livreur assigné.' : 'Course libérée.', 'ok'); }
+        catch (err) { toast(err.message, 'erreur'); courses(); }
+      });
+      tr.querySelector('[data-adresse]').addEventListener('click', () => modifierAdresse(c));
+    });
+  }
+
+  function modifierAdresse(c) {
+    const { el, fermer } = modale(`
+      <form class="pile" style="--gap:12px" novalidate>
+        <div class="ligne entre"><h2>${c.type === 'ramassage' ? 'Ramassage' : 'Livraison'} · ${esc(c.numeroSuivi)}</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+        ${K.champsAdresse('a', c.adresse || {}, { maPosition: false })}
+        <button class="btn btn-principal" type="submit">Enregistrer</button>
+        <button class="btn btn-lien" type="button" data-annuler>Annuler la course (${c.type === 'ramassage' ? 'dépôt en agence' : 'retrait en agence'})</button>
+      </form>`);
+    const adr = K.brancherAdresse(el, 'a', { valeur: c.adresse || {}, agence: () => (CONFIG.agences || []).find(a => a.code === c.agence), config: CONFIG });
+    const envoyer = async (corps) => {
+      try { await api.post('/admin/courses/adresse', { numero: c.numeroSuivi, type: c.type, ...corps }); fermer(); toast('Course mise à jour.', 'ok'); courses(); }
+      catch (err) { toast(err.message, 'erreur'); }
+    };
+    el.querySelector('[data-annuler]').addEventListener('click', () => { if (confirm('Annuler cette course ? Son prix est retiré du colis.')) envoyer({ demande: false }); });
+    el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); envoyer({ demande: true, adresse: adr.lire() }); });
   }
 
   // ══════════════════════════════════════════════════════════
@@ -388,6 +466,9 @@
         <label class="champ">Adresse <input class="saisie" name="adresse" value="${esc(a.adresse || '')}"></label>
         <label class="champ">Téléphone / WhatsApp <input class="saisie" name="telephone" value="${esc(a.telephone || '')}"></label>
         <label class="champ">Horaires <input class="saisie" name="horaires" value="${esc(a.horaires || '')}" placeholder="Lun–sam 9 h – 18 h"></label>
+        <label class="champ">Position GPS <span class="tres-petit muet">${a.position?.lat ? `${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)} · <a href="${esc(K.lienCarte(a.position))}" target="_blank" rel="noopener">voir</a>` : 'non renseignée : pas de courses à domicile'}</span>
+          <input class="saisie" name="lienPosition" placeholder="Lien Google Maps ou « 9.51, -13.71 »" autocomplete="off">
+          <input type="hidden" name="positionLat" value="${a.position?.lat ?? ''}"><input type="hidden" name="positionLng" value="${a.position?.lng ?? ''}"></label>
         <label class="case"><input type="checkbox" name="plateforme" ${a.plateforme ? 'checked' : ''}> Plateforme d'arrivée des lots</label>
         <label class="case"><input type="checkbox" name="actif" ${a.actif !== false ? 'checked' : ''}> Ouverte</label>
       </div>`;
@@ -423,11 +504,32 @@
             <label class="champ">Ensuite, par jour en Guinée (GNF) <input class="saisie" name="fraisJourGnf" type="number" min="0" step="500" value="${c.magasinage.fraisJourGnf}"></label>
             <label class="champ">Ensuite, par jour en France (€) <input class="saisie" name="fraisJourEur" type="number" min="0" step="0.5" value="${c.magasinage.fraisJourEur ?? 0}"></label>
           </div></section>
+        <section class="panneau"><div class="panneau-tete"><div><h2>Ramassage et livraison à domicile</h2><p class="petit muet" style="margin-top:4px">Prix = base + prix par km × distance entre l'agence et le client (vol d'oiseau + ${Math.round(((c.domicile?.majoration || 1.3) - 1) * 100)} % pour suivre les routes). L'agence doit avoir sa position GPS.</p></div></div>
+          <div class="panneau-corps pile" style="--gap:14px">
+            ${Object.values(CONFIG.pays).map(p => { const d = c.domicile?.[p.code] || {}; const u = p.devise === 'EUR' ? '€' : 'GNF'; return `
+            <div class="formulaire-grille" data-domicile="${p.code}">
+              <label class="case" style="align-self:end"><input type="checkbox" name="actif" ${d.actif !== false ? 'checked' : ''}> ${esc(p.nom)}</label>
+              <label class="champ">Base (${u}) <input class="saisie" name="base" type="number" min="0" step="${u === '€' ? '0.5' : '500'}" value="${d.base ?? ''}"></label>
+              <label class="champ">Par km (${u}) <input class="saisie" name="parKm" type="number" min="0" step="${u === '€' ? '0.1' : '100'}" value="${d.parKm ?? ''}"></label>
+              <label class="champ">Plafond (${u}, 0 = aucun) <input class="saisie" name="plafond" type="number" min="0" value="${d.plafond ?? 0}"></label>
+              <label class="champ">Distance max (km) <input class="saisie" name="rayonMaxKm" type="number" min="0" value="${d.rayonMaxKm ?? ''}"></label>
+              <p class="tres-petit muet" data-exemples style="grid-column:1/-1"></p>
+            </div>`; }).join('')}
+          </div></section>
         <section class="panneau"><div class="panneau-tete"><div><h2>Agences</h2><p class="petit muet" style="margin-top:4px">Chaque agence reçoit les colis à envoyer, remet les colis arrivés et encaisse. Dans chaque pays, cochez la plateforme où arrivent les lots.</p></div><button type="button" class="btn btn-petit" data-ajout>${ic('plus', 'ic-sm')} Ajouter une agence</button></div>
           <div class="panneau-corps pile" data-liste-agences>${(c.agences || []).map(agenceHtml).join('')}</div></section>
         <div><button class="btn btn-principal btn-grand">Enregistrer les réglages</button></div>
       </form>`;
     const form = main.querySelector('[data-reglages]');
+    // Exemples de prix, recalculés pendant la saisie
+    const majExemples = () => form.querySelectorAll('[data-domicile]').forEach(b => {
+      const n = (k) => parseFloat(b.querySelector(`[name=${k}]`).value) || 0;
+      const devise = CONFIG.pays[b.dataset.domicile].devise;
+      const prix = (km) => { let x = n('base') + n('parKm') * km; if (n('plafond') > 0) x = Math.min(x, n('plafond')); return montant(devise === 'GNF' ? Math.ceil(x / 1000) * 1000 : Math.ceil(x * 2) / 2, devise); };
+      b.querySelector('[data-exemples]').textContent = `Exemples : 2 km → ${prix(2)} · 5 km → ${prix(5)} · 10 km → ${prix(10)} · 20 km → ${prix(20)}`;
+    });
+    form.addEventListener('input', majExemples);
+    majExemples();
     form.querySelector('[data-ajout]').addEventListener('click', () => {
       form.querySelector('[data-liste-agences]').insertAdjacentHTML('beforeend', agenceHtml({ pays: 'GN' }));
     });
@@ -437,6 +539,9 @@
       const agences = [...form.querySelectorAll('[data-agence]')].map(bloc => {
         const o = {};
         bloc.querySelectorAll('input, select').forEach(i => { o[i.name] = i.type === 'checkbox' ? i.checked : i.value.trim(); });
+        if (o.positionLat && o.positionLng) o.position = { lat: parseFloat(o.positionLat), lng: parseFloat(o.positionLng) };
+        delete o.positionLat; delete o.positionLng;
+        if (!o.lienPosition) delete o.lienPosition;
         return o;
       }).filter(a => a.code && a.nom);
       const tarifs = Object.fromEntries(CONFIG.sens.map(x => [x.key, {
@@ -449,6 +554,10 @@
         surcharges: Object.fromEntries(CONFIG.typesColis.map(t => [t.key, (parseFloat(v(`sur_${t.key}`)) || 0) / 100])),
         tauxAssurance: (parseFloat(v('tauxAssurance')) || 0) / 100,
         magasinage: { joursGratuits: v('joursGratuits'), fraisJourGnf: v('fraisJourGnf'), fraisJourEur: v('fraisJourEur') },
+        domicile: Object.fromEntries([...form.querySelectorAll('[data-domicile]')].map(b => [b.dataset.domicile, {
+          actif: b.querySelector('[name=actif]').checked,
+          ...Object.fromEntries(['base', 'parKm', 'plafond', 'rayonMaxKm'].map(k => [k, b.querySelector(`[name=${k}]`).value])),
+        }])),
         agences,
       };
       try {
@@ -456,6 +565,7 @@
         CONFIG = await K.config({ forcer: true });
         majEncartTaux();
         toast('Réglages enregistrés. Les nouveaux prix s\'appliquent aux prochaines pesées.', 'ok');
+        reglages();
       } catch (err) { toast(err.message, 'erreur'); }
     });
   }
@@ -474,7 +584,7 @@
           <tbody>${liste.map(u => `
             <tr data-id="${esc(u._id)}">
               <td class="gras">${esc(u.prenom)} ${esc(u.nom)}</td><td class="chiffres">${esc(u.telephone)}</td>
-              <td>${u.role === 'admin' ? 'Administrateur' : 'Agent'}</td>
+              <td>${u.role === 'admin' ? 'Administrateur' : u.role === 'livreur' ? 'Livreur' : 'Agent'}</td>
               <td><select class="saisie" style="min-height:40px;font-size:14px" data-lieu aria-label="Lieu de ${esc(u.prenom)}">${lieux.map(l => `<option value="${esc(l.code)}" ${l.code === u.lieu ? 'selected' : ''}>${esc(l.nom)}</option>`).join('')}${!u.lieu ? '<option value="" selected>—</option>' : ''}</select></td>
               <td><label class="case" style="min-height:40px"><input type="checkbox" data-actif ${u.actif ? 'checked' : ''}> Actif</label></td>
               <td><button class="btn btn-petit" type="button" data-reinit>Mot de passe</button></td>
@@ -482,11 +592,11 @@
         <form class="panneau" data-ajout-agent><div class="panneau-tete"><h2>Ajouter un membre</h2></div><div class="panneau-corps pile" style="--gap:10px">
           <label class="champ">Téléphone <input class="saisie" name="telephone" type="tel" required></label>
           <div class="grille-2"><label class="champ">Prénom <input class="saisie" name="prenom" required></label><label class="champ">Nom <input class="saisie" name="nom" required></label></div>
-          <label class="champ">Rôle <select class="saisie" name="role"><option value="agent">Agent (dépôt ou guichet)</option><option value="admin">Administrateur</option></select></label>
+          <label class="champ">Rôle <select class="saisie" name="role"><option value="agent">Agent (dépôt ou guichet)</option><option value="livreur">Livreur (ramassages et livraisons)</option><option value="admin">Administrateur</option></select></label>
           <label class="champ">Agence <select class="saisie" name="lieu">${lieux.map(l => `<option value="${esc(l.code)}">${esc(l.nom)}</option>`).join('')}</select></label>
           <label class="champ">Mot de passe (8 caractères minimum) <input class="saisie" name="motDePasse" type="text" autocomplete="off" minlength="8" required></label>
           <button class="btn btn-principal">Ajouter</button>
-          <p class="tres-petit muet">Donnez ce mot de passe à la personne : elle se connecte à l'app agent avec son numéro, puis peut le changer.</p>
+          <p class="tres-petit muet">Donnez ce mot de passe à la personne : elle se connecte à l'app agent avec son numéro, puis peut le changer. Un livreur n'y voit que ses courses et sa caisse.</p>
         </div></form>
       </div>
       <form class="panneau" style="margin-top:20px;max-width:720px" data-mdp-client>

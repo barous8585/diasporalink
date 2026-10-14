@@ -142,6 +142,9 @@
     ajoutPers: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M19 8v6M16 11h6"/>',
     sortie: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
     fermer: '<path d="M18 6 6 18M6 6l12 12"/>',
+    gps: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>',
+    moto: '<circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M5.5 17h6l3-6h-4M14.5 11 13 6h3M8 11h3"/><path d="m18.5 17-3-8"/>',
+    maison2: '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
     lampe: '<path d="M9 2h6l-1 6h-4z"/><path d="M10 8h4v13h-4z"/>',
     carte: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
     reglages: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
@@ -383,8 +386,116 @@
     },
   };
 
+  // ── Adresse à domicile (ramassage / livraison) : quartier, repère, position GPS ──
+  // Accepte un lien Google Maps / WhatsApp, ou « 9.51, -13.71 ». Liens courts : résolus par le serveur.
+  function positionDuTexte(texte) {
+    let t = String(texte || '');
+    try { t = decodeURIComponent(t); } catch {}
+    const motifs = [
+      /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
+      /@(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
+      /[?&](?:q|query|ll|daddr|destination|center)=(?:loc:)?(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
+      /^\s*(-?\d{1,2}\.\d+)\s*[,; ]\s*(-?\d{1,3}\.\d+)\s*$/,
+      /(-?\d{1,2}\.\d{4,})\s*,\s*(-?\d{1,3}\.\d{4,})/,
+    ];
+    for (const m of motifs) {
+      const r = t.match(m);
+      if (r) { const p = { lat: parseFloat(r[1]), lng: parseFloat(r[2]) }; if (Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180) return p; }
+    }
+    return null;
+  }
+  async function positionDuLien(texte) {
+    const p = positionDuTexte(texte);
+    if (p) return p;
+    if (!/https?:\/\//.test(texte)) return null;
+    try { return (await api.get('/config/position?lien=' + encodeURIComponent(texte))).position; } catch (e) { if (e.reseau) throw e; return null; }
+  }
+  function gpsActuel() {
+    return new Promise((ok, ko) => {
+      if (!navigator.geolocation) return ko(new Error('Votre téléphone ne donne pas sa position. Collez plutôt un lien de localisation.'));
+      navigator.geolocation.getCurrentPosition(
+        (p) => ok({ lat: Math.round(p.coords.latitude * 1e6) / 1e6, lng: Math.round(p.coords.longitude * 1e6) / 1e6, precision: Math.round(p.coords.accuracy) }),
+        (e) => ko(new Error(e.code === 1 ? 'Position refusée. Autorisez la localisation, ou collez un lien de localisation.' : 'Position introuvable. Sortez à découvert ou collez un lien de localisation.')),
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+    });
+  }
+  const lienCarte = (p) => p?.lat ? `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}` : '';
+
+  /**
+   * Bloc d'adresse. valeur = { quartier, ville, repere, telephone, position }.
+   * options : { maPosition: bouton « Je suis sur place », positionFacultative, aide }
+   */
+  function champsAdresse(prefixe, valeur = {}, { maPosition = true, positionFacultative = false, aide = '' } = {}) {
+    const n = (k) => `${prefixe}_${k}`;
+    return `
+      <div class="pile bloc-adresse" style="--gap:10px" data-adresse="${prefixe}">
+        <div class="grille-2">
+          <label class="champ">Quartier / commune <input class="saisie" name="${n('quartier')}" value="${esc(valeur.quartier || valeur.commune || '')}" autocomplete="address-level3" required></label>
+          <label class="champ">Ville <input class="saisie" name="${n('ville')}" value="${esc(valeur.ville || '')}" autocomplete="address-level2"></label>
+        </div>
+        <label class="champ">Point de repère <input class="saisie" name="${n('repere')}" value="${esc(valeur.repere || '')}" placeholder="Ex. derrière la mosquée, portail bleu, 3e étage" required></label>
+        <label class="champ">Téléphone sur place <span class="tres-petit muet">(si différent)</span><input class="saisie" name="${n('telephone')}" type="tel" inputmode="tel" value="${esc(valeur.telephone || '')}"></label>
+        <div class="carte pile position-gps" style="--gap:8px;padding:12px">
+          <div class="gras petit">${ic('gps', 'ic-sm')} Position exacte${positionFacultative ? ' <span class="muet">(peut être envoyée plus tard)</span>' : ''}</div>
+          ${maPosition ? `<button type="button" class="btn btn-plein" data-ma-position>${ic('gps', 'ic-sm')} Je suis sur place : prendre ma position</button>` : ''}
+          <label class="champ tres-petit">${maPosition ? 'ou c' : 'C'}ollez le lien de localisation (WhatsApp, Google Maps)
+            <input class="saisie" data-lien-position placeholder="https://maps.app.goo.gl/… ou 9.5412, -13.6773" inputmode="url">
+          </label>
+          ${aide ? `<p class="tres-petit muet">${aide}</p>` : ''}
+          <div class="petit" data-etat-position aria-live="polite"></div>
+        </div>
+      </div>`;
+  }
+
+  /** Branche le bloc : calcule la course à chaque changement de position. */
+  function brancherAdresse(racine, prefixe, { valeur = {}, agence, config, surChange } = {}) {
+    const bloc = racine.querySelector(`[data-adresse="${prefixe}"]`);
+    let position = valeur.position?.lat ? valeur.position : null;
+    let course = null;
+    const etat = bloc.querySelector('[data-etat-position]');
+    const majEtat = (message, type, { silencieux = false } = {}) => {
+      const ag = agence?.();
+      course = position && ag ? KolisTarif.calculerCourse(config.regles || config, ag, position) : null;
+      if (message) etat.innerHTML = `<span class="${type === 'erreur' ? 'rouge' : 'muet'}">${esc(message)}</span>`;
+      else if (!position) etat.innerHTML = '';
+      else if (course && !course.ok) etat.innerHTML = `<span class="rouge">${esc(course.message)}</span>`;
+      else etat.innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} Position reçue</span>${course ? ` · ${esc(course.distanceKm.toLocaleString('fr-FR'))} km de ${esc(ag.nom)} · <b>${esc(montant(course.prix, course.devise))}</b>` : ''} · <a href="${esc(lienCarte(position))}" target="_blank" rel="noopener">voir</a>`;
+      if (!silencieux) surChange?.();
+    };
+    bloc.querySelector('[data-ma-position]')?.addEventListener('click', async (e) => {
+      const b = e.currentTarget; b.disabled = true;
+      majEtat('Recherche de votre position…');
+      try { position = await gpsActuel(); majEtat(); }
+      catch (err) { majEtat(err.message, 'erreur'); }
+      b.disabled = false;
+    });
+    const lien = bloc.querySelector('[data-lien-position]');
+    let minuteur;
+    lien.addEventListener('input', () => {
+      clearTimeout(minuteur);
+      minuteur = setTimeout(async () => {
+        const t = lien.value.trim();
+        if (!t) return;
+        majEtat('Lecture du lien…');
+        try {
+          const p = await positionDuLien(t);
+          if (p) { position = p; majEtat(); } else majEtat('Lien non reconnu. Dans WhatsApp : trombone → Localisation → copiez le lien Google Maps.', 'erreur');
+        } catch (err) { majEtat(err.message, 'erreur'); }
+      }, 400);
+    });
+    majEtat(null, null, { silencieux: true }); // premier affichage : l'appelant n'est pas encore prêt
+    const champ = (k) => bloc.querySelector(`[name="${prefixe}_${k}"]`)?.value.trim() || '';
+    return {
+      lire: () => ({ quartier: champ('quartier'), ville: champ('ville'), repere: champ('repere'), telephone: champ('telephone') ? normTel(champ('telephone')) : '', position: position || undefined }),
+      course: () => course,
+      position: () => position,
+      recalculer: () => majEtat(),
+    };
+  }
+
   window.K = {
     API_URL, api, session, stock, config, ErreurReseau,
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
+    positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse,
   };
 })();

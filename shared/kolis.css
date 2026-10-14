@@ -210,3 +210,18 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
 
 :focus-visible { outline: 3px solid var(--or); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ── Courses à domicile ── */
+.rouge { color: var(--rouge); }
+.vert { color: var(--vert); font-weight: 600; }
+.position-gps { background: var(--vert-doux); border-color: transparent; }
+.option-domicile { border: 1.5px solid var(--ligne, #d9dee8); border-radius: var(--r-lg, 16px); padding: 14px; }
+.option-domicile[data-actif="true"] { border-color: var(--marine); box-shadow: inset 0 0 0 1px var(--marine); }
+.course { display: flex; flex-direction: column; gap: 8px; }
+.course .entete-course { display: flex; align-items: center; gap: 10px; }
+.course .type-course { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 3px 8px; border-radius: 999px; background: var(--vert-doux); color: var(--marine); }
+.course .type-course.livraison { background: var(--marine); color: #fff; }
+.course .adresse-course { font-size: 15px; line-height: 1.4; }
+.course .actions-course { display: flex; flex-wrap: wrap; gap: 8px; }
+.course .actions-course .btn { flex: 1 1 auto; }
+.alerte-ecart { color: var(--rouge); font-weight: 600; }

@@ -13,7 +13,7 @@
     { lib: 'Dépôt', statuts: ['depose', 'charge'] },
     { lib: 'En route', statuts: ['en_transit'] },
     { lib: 'Arrivé', statuts: ['arrive', 'acheminement'] },
-    { lib: 'Agence', statuts: ['pret', 'remis'] },
+    { lib: 'Agence', statuts: ['pret', 'en_livraison', 'remis'] },
   ];
   const indexEtape = (s) => ETAPES.findIndex(e => e.statuts.includes(s));
   const icMode = (mode) => ic(mode === 'mer' ? 'bateau' : 'avion');
@@ -193,7 +193,11 @@
 
     const g = complet ? c.guichetInfo : c.guichet;
     const solde = complet ? c.solde : { soldeGnf: c.soldeGnf, soldeEur: c.soldeEur, magasinage: c.magasinage };
-    const pret = c.statut === 'pret';
+    const pret = c.statut === 'pret' || c.statut === 'en_livraison';
+    // Courses : vue publique { statut, quartier, aPosition, prix… } ou objet complet (compte)
+    const course = (k) => { const x = c[k]; if (!x || x.demande === false || x.statut === 'annulee') return null;
+      return complet ? { ...x, quartier: x.adresse?.quartier || x.adresse?.commune, aPosition: !!x.adresse?.position?.lat, livreur: x.livreurNom } : x; };
+    const ram = course('ramassage'), liv = course('livraison');
     const historique = [...(c.historique || [])].reverse();
     const poids = complet ? (c.poidsReel || c.poidsEstime) : c.poids;
     const peutAutoriser = complet && !['reserve', 'remis', 'annule'].includes(c.statut);
@@ -225,7 +229,7 @@
           <div class="carte pile">
             <h3>Code de retrait</h3>
             <div class="code-4">${c.codeRetrait.split('').map(d => `<div>${esc(d)}</div>`).join('')}</div>
-            <p class="petit muet">Montrez ce code et une pièce d'identité à l'agent de l'agence.</p>
+            <p class="petit muet">${liv ? 'Donnez ce code au livreur quand il vous remet le colis.' : 'Montrez ce code et une pièce d\'identité à l\'agent de l\'agence.'}</p>
           </div>` : pret ? `
           <div class="carte pile">
             <h3>Code de retrait</h3>
@@ -254,7 +258,9 @@
           </div>` : ''}
         </div>` : ''}
 
-        ${c.statut === 'reserve' ? `
+        ${carteCourses(c, ram, liv)}
+
+        ${c.statut === 'reserve' && !ram ? `
           <div class="carte pile">
             <h3>Prochaine étape : le dépôt</h3>
             <p class="petit">Apportez le colis en agence avec ce numéro. Il sera pesé et le prix final sera fixé à ce moment-là.</p>
@@ -289,6 +295,7 @@
       else { window.open(lienWhatsApp('', `${texte} : ${url}`), '_blank', 'noopener'); }
     });
     main.querySelector('[data-tiers]')?.addEventListener('click', () => autoriserTiers(c));
+    main.querySelector('[data-livraison]')?.addEventListener('click', (e) => demanderLivraison(c, liv, e.currentTarget.dataset.livraison));
     main.querySelector('[data-payer]')?.addEventListener('click', () => payer(c, solde));
     main.querySelector('[data-annuler]')?.addEventListener('click', async () => {
       if (!confirm('Annuler cette réservation ?')) return;
@@ -297,18 +304,92 @@
     });
   }
 
+  // ── Courses à domicile sur la page de suivi ──
+  const LIB_COURSE = { a_planifier: 'Livreur bientôt choisi', assignee: 'Livreur choisi', en_route: 'Livreur en route', faite: 'Fait' };
+  function carteCourses(c, ram, liv) {
+    const blocs = [];
+    if (ram) {
+      blocs.push(`
+        <div class="carte pile" style="--gap:6px">
+          <div class="ligne entre"><h3>${ic('moto', 'ic-sm')} Ramassage à domicile</h3><span class="badge">${esc(ram.statut === 'faite' ? 'Ramassé' : LIB_COURSE[ram.statut] || '')}</span></div>
+          <p class="petit">${esc(ram.quartier || '')}${ram.prix ? ` · ${esc(montant(ram.prix, ram.devise))}` : ''}${ram.livreur ? ` · ${esc(ram.livreur)}` : ''}</p>
+          ${ram.statut !== 'faite' ? '<p class="tres-petit muet">Le livreur vous appelle avant de passer. Le colis sera pesé à l\'agence.</p>' : ''}
+        </div>`);
+    }
+    const ouvert = !['remis', 'annule', 'en_livraison'].includes(c.statut);
+    if (liv) {
+      blocs.push(`
+        <div class="carte pile" style="--gap:8px">
+          <div class="ligne entre"><h3>${ic('moto', 'ic-sm')} Livraison à domicile</h3>${c.statut === 'remis' ? '<span class="badge">Livré</span>' : liv.statut === 'en_route' ? '<span class="badge">En route</span>' : ''}</div>
+          <p class="petit">${esc(liv.quartier || '')}${liv.prix ? ` · ${esc(montant(liv.prix, liv.devise))} (${esc(String(liv.distanceKm).replace('.', ','))} km)` : ''}${liv.livreur ? ` · ${esc(liv.livreur)}` : ''}</p>
+          ${!liv.aPosition && ouvert ? `
+            <p class="bandeau bandeau-ocre">${ic('gps', 'ic-sm')}<span>Il manque la position exacte du destinataire pour calculer le prix et lui livrer le colis.</span></p>
+            <button class="btn btn-principal btn-plein" data-livraison="position">${ic('gps', 'ic-sm')} Envoyer la position</button>` : ''}
+          ${liv.aPosition && ouvert ? `<button class="btn btn-lien" data-livraison="modifier">Changer l'adresse ou venir le retirer à l'agence</button>` : ''}
+        </div>`);
+    } else if (ouvert) {
+      const g = agence(typeof c.guichet === 'string' ? c.guichet : c.guichet?.code);
+      const dispo = g && KolisTarif.calculerCourse(CONFIG.regles, g, { lat: g.position?.lat ?? 1, lng: g.position?.lng ?? 1 });
+      if (dispo && (dispo.ok || dispo.raison === 'trop_loin')) {
+        blocs.push(`<button class="btn btn-plein" data-livraison="demander">${ic('moto', 'ic-sm')} Me faire livrer à domicile</button>`);
+      }
+    }
+    return blocs.join('');
+  }
+
+  // Le destinataire (ou l'expéditeur) envoie la position / demande la livraison, prouvé par son numéro
+  function demanderLivraison(c, liv, action) {
+    const u = session.utilisateur();
+    const codeAgence = typeof c.guichet === 'string' ? c.guichet : c.guichet?.code;
+    const { el, fermer } = modale(`
+      <form class="pile" style="--gap:14px" novalidate>
+        <div class="ligne entre"><h2>${action === 'demander' ? 'Livraison à domicile' : 'Adresse de livraison'}</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+        <label class="champ">Votre numéro de téléphone <span class="tres-petit muet">(celui du destinataire sur le colis)</span>
+          <input class="saisie" name="telephone" type="tel" inputmode="tel" required value="${esc(u?.telephone || '')}"></label>
+        ${K.champsAdresse('d', { quartier: liv?.quartier }, { maPosition: true })}
+        <button class="btn btn-principal btn-grand" type="submit">Valider</button>
+        ${action === 'modifier' ? '<button class="btn btn-lien" type="button" data-annuler-liv>Je viendrai plutôt le retirer à l\'agence</button>' : ''}
+      </form>`);
+    const adr = K.brancherAdresse(el, 'd', { agence: () => agence(codeAgence), config: CONFIG });
+    const envoyer = async (corps) => {
+      try {
+        await api.post(`/colis/${c.numeroSuivi}/livraison`, corps);
+        fermer(); toast(corps.demande === false ? 'Livraison annulée : retrait à l\'agence.' : 'Adresse enregistrée.', 'ok'); router();
+      } catch (err) { toast(err.message, 'erreur'); }
+    };
+    el.querySelector('[data-annuler-liv]')?.addEventListener('click', () => {
+      const tel = el.querySelector('[name=telephone]').value;
+      if (!tel) { toast('Indiquez votre numéro.', 'erreur'); return; }
+      envoyer({ telephone: normTel(tel), demande: false });
+    });
+    el.querySelector('form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const a = adr.lire();
+      const tel = el.querySelector('[name=telephone]').value;
+      if (!tel || !a.quartier || !a.repere) { toast('Numéro, quartier et point de repère sont nécessaires.', 'erreur'); return; }
+      if (!a.position) { toast('Envoyez votre position : « Je suis sur place » ou lien de localisation.', 'erreur'); return; }
+      const course = adr.course();
+      if (course && !course.ok) { toast(course.message, 'erreur'); return; }
+      if (course && !confirm(`Livraison : ${montant(course.prix, course.devise)} (${course.distanceKm.toLocaleString('fr-FR')} km), à payer au livreur. Confirmer ?`)) return;
+      envoyer({ telephone: normTel(tel), demande: true, adresse: a });
+    });
+  }
+
   function titreStatut(c, g) {
     const nom = g?.nom || 'votre agence';
     const pays = nomPays(paysArrivee(c));
     const en = paysArrivee(c) === 'FR' ? 'en France' : 'en Guinée';
     switch (c.statut) {
-      case 'reserve': return 'Réservé : à déposer en agence';
+      case 'reserve': return c.ramassage && c.ramassage.statut !== 'annulee' && c.ramassage.demande !== false
+        ? (c.ramassage.statut === 'faite' ? 'Ramassé, en route vers l\'agence' : 'Réservé : un livreur vient le chercher')
+        : 'Réservé : à déposer en agence';
       case 'depose': return 'Reçu en agence, bientôt en route';
       case 'charge': return `Chargé, départ ${c.mode === 'mer' ? 'en bateau' : 'en avion'} prochainement`;
       case 'en_transit': return `En route vers ${pays === 'France' ? 'la France' : 'la Guinée'} ${c.mode === 'mer' ? 'par bateau' : 'par avion'}`;
       case 'arrive': return `Arrivé ${en}, en cours de dédouanement`;
       case 'acheminement': return `En route vers ${nom}${g?.ville ? ` (${g.ville})` : ''}`;
-      case 'pret': return `Votre colis vous attend à ${nom}`;
+      case 'pret': return c.livraison && c.livraison.statut !== 'annulee' && c.livraison.demande !== false ? `Arrivé à ${nom}, bientôt livré chez vous` : `Votre colis vous attend à ${nom}`;
+      case 'en_livraison': return 'Le livreur arrive avec votre colis';
       case 'remis': return 'Colis remis. Merci !';
       default: return c.statutLabel;
     }
@@ -353,11 +434,12 @@
   //  ENVOYER : estimation + réservation
   // ════════════════════════════════════════════════════════
   async function envoyer() {
-    const defaut = { sens: 'FR-GN', mode: 'air', poids: 5, type: 'vetements', assurance: false, valeur: '' };
+    const defaut = { sens: 'FR-GN', mode: 'air', poids: 5, type: 'vetements', assurance: false, valeur: '', depart: 'agence', arrivee: 'agence' };
     const etat = { ...defaut, ...(stock.lire('brouillon_envoi') || {}) };
     if (!CONFIG.sens.some(s => s.key === etat.sens)) etat.sens = 'FR-GN';
     const types = CONFIG.typesColis;
     const sensInfo = () => CONFIG.sens.find(s => s.key === etat.sens);
+    const brouillonAdr = stock.lire('brouillon_adresses') || {};
     const optionsAgences = (pays) => {
       const parVille = {};
       agencesDe(pays).forEach(a => { (parVille[a.ville || '—'] = parVille[a.ville || '—'] || []).push(a); });
@@ -418,15 +500,38 @@
           <div class="petit" style="color: var(--gris)">Prix estimé</div>
           <div class="prix-gnf" data-prix-principal></div>
           <div data-prix-autre></div>
+          <div class="petit" data-prix-domicile style="color: var(--gris)"></div>
           <div style="height:1px;background: var(--ligne-2);margin:10px 0 6px"></div>
           <div class="ligne tres-petit" style="color: var(--gris);align-items:flex-start">${ic('balance', 'ic-sm')}<span>Le prix final est fixé à la pesée en agence. Taux : 1 € = ${gnf(CONFIG.tauxEurGnf)}, bloqué sur votre reçu.</span></div>
         </div>
 
         <form class="pile" style="--gap:12px" data-form novalidate>
-          <h3>5. Où déposer, où retirer ?</h3>
-          <label class="champ">Je dépose le colis à <select class="saisie" name="depot" required data-select-depot></select></label>
-          <label class="champ">Retrait à <select class="saisie" name="guichet" required data-select-retrait></select></label>
-          <h3>6. Pour qui ?</h3>
+          <h3>5. Départ du colis</h3>
+          <div class="grille-2">
+            <button type="button" class="choix choix-noir" style="min-height:72px" data-depart="agence">${ic('maison', 'ic-sm')}<span class="nom">Je dépose en agence</span><span class="sous">Gratuit</span></button>
+            <button type="button" class="choix choix-noir" style="min-height:72px" data-depart="domicile">${ic('moto', 'ic-sm')}<span class="nom">On vient chercher</span><span class="sous" data-sous-ram>Ramassage chez moi</span></button>
+          </div>
+          <label class="champ"><span data-lib-depot>Je dépose le colis à</span> <select class="saisie" name="depot" required data-select-depot></select></label>
+          <div class="pile cache" style="--gap:10px" data-zone-ram>
+            ${K.champsAdresse('ram', brouillonAdr.ram || {}, { maPosition: true })}
+            <div class="grille-2">
+              <label class="champ">Quel jour ? <input class="saisie" type="date" name="ram_jour" min="${new Date().toISOString().slice(0, 10)}"></label>
+              <label class="champ">Moment <select class="saisie" name="ram_moment">${(CONFIG.moments || []).map(m => `<option value="${m.key}">${esc(m.label)}</option>`).join('')}</select></label>
+            </div>
+            <p class="tres-petit muet">Le livreur vous appelle avant de passer. Le colis est pesé à l'agence et vous payez là-bas (ou le destinataire à l'arrivée).</p>
+          </div>
+
+          <h3>6. Arrivée</h3>
+          <div class="grille-2">
+            <button type="button" class="choix choix-noir" style="min-height:72px" data-arrivee="agence">${ic('maison', 'ic-sm')}<span class="nom">Retrait en agence</span><span class="sous">Gratuit</span></button>
+            <button type="button" class="choix choix-noir" style="min-height:72px" data-arrivee="domicile">${ic('moto', 'ic-sm')}<span class="nom">Livraison à domicile</span><span class="sous" data-sous-liv>Prix selon la distance</span></button>
+          </div>
+          <label class="champ"><span data-lib-retrait>Retrait à</span> <select class="saisie" name="guichet" required data-select-retrait></select></label>
+          <div class="pile cache" style="--gap:10px" data-zone-liv>
+            ${K.champsAdresse('liv', brouillonAdr.liv || {}, { maPosition: false, positionFacultative: true, aide: 'Demandez au destinataire de vous envoyer sa localisation sur WhatsApp, puis collez le lien ici. Sinon, il pourra l\'envoyer lui-même depuis la page de suivi.' })}
+          </div>
+
+          <h3>7. Pour qui ?</h3>
           <label class="champ">Nom du destinataire <input class="saisie" name="nom" required autocomplete="off"></label>
           <label class="champ"><span data-lib-tel>Son téléphone</span> <input class="saisie" name="telephone" type="tel" inputmode="tel" required></label>
           <label class="champ">Nombre de cartons <input class="saisie" name="nbCartons" type="number" inputmode="numeric" min="1" value="1"></label>
@@ -439,6 +544,41 @@
 
     const $ = (s) => main.querySelector(s);
     let sensAffiche = null;
+    // Courses à domicile : disponibles si l'agence a une position et le service est ouvert dans le pays
+    const dispoDomicile = (code) => {
+      const a = agence(code);
+      if (!a) return null;
+      const r = KolisTarif.calculerCourse(CONFIG.regles, a, { lat: a.position?.lat ?? 1, lng: a.position?.lng ?? 1 });
+      return r.ok || r.raison === 'trop_loin' ? null : r.message;
+    };
+    const adrRam = K.brancherAdresse(main, 'ram', { valeur: brouillonAdr.ram, agence: () => agence($('[name=depot]').value), config: CONFIG, surChange: () => majPrixDomicile() });
+    const adrLiv = K.brancherAdresse(main, 'liv', { valeur: brouillonAdr.liv, agence: () => agence($('[name=guichet]').value), config: CONFIG, surChange: () => majPrixDomicile() });
+    function majPrixDomicile() {
+      const zone = $('[data-prix-domicile]');
+      if (!zone) return;
+      const lignes = [];
+      const ligne = (lib, c, defaut) => lignes.push(`+ ${lib} : ${c?.ok ? `<b>${esc(K.montant(c.prix, c.devise))}</b> (${esc(c.distanceKm.toLocaleString('fr-FR'))} km)` : esc(defaut)}`);
+      if (etat.depart === 'domicile') ligne('ramassage', adrRam.course(), 'selon la distance, dès que la position est connue');
+      if (etat.arrivee === 'domicile') ligne('livraison', adrLiv.course(), 'selon la distance, dès que la position est connue');
+      zone.innerHTML = lignes.join('<br>');
+    }
+    const majDomicile = () => {
+      const indispoRam = dispoDomicile($('[name=depot]').value);
+      const indispoLiv = dispoDomicile($('[name=guichet]').value);
+      if (indispoRam && etat.depart === 'domicile') etat.depart = 'agence';
+      if (indispoLiv && etat.arrivee === 'domicile') etat.arrivee = 'agence';
+      const bRam = $('[data-depart="domicile"]'), bLiv = $('[data-arrivee="domicile"]');
+      bRam.disabled = !!indispoRam; bLiv.disabled = !!indispoLiv;
+      $('[data-sous-ram]').textContent = indispoRam ? 'Pas encore ici' : 'Prix selon la distance';
+      $('[data-sous-liv]').textContent = indispoLiv ? 'Pas encore ici' : 'Prix selon la distance';
+      main.querySelectorAll('[data-depart]').forEach(b => b.setAttribute('aria-pressed', b.dataset.depart === etat.depart));
+      main.querySelectorAll('[data-arrivee]').forEach(b => b.setAttribute('aria-pressed', b.dataset.arrivee === etat.arrivee));
+      $('[data-zone-ram]').classList.toggle('cache', etat.depart !== 'domicile');
+      $('[data-zone-liv]').classList.toggle('cache', etat.arrivee !== 'domicile');
+      $('[data-lib-depot]').textContent = etat.depart === 'domicile' ? 'Agence la plus proche de chez vous' : 'Je dépose le colis à';
+      $('[data-lib-retrait]').textContent = etat.arrivee === 'domicile' ? 'Agence qui livre (la plus proche du destinataire)' : 'Retrait à';
+      adrRam.recalculer(); adrLiv.recalculer();
+    };
     const majAgences = () => {
       if (sensAffiche === etat.sens) return;
       sensAffiche = etat.sens;
@@ -456,6 +596,7 @@
       main.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', Number(b.dataset.preset) === etat.poids));
       $('[data-champ-valeur]').classList.toggle('cache', !etat.assurance);
       majAgences();
+      majDomicile();
       const grille = CONFIG.tarifs[etat.sens];
       const devise = grille.devise;
       const m = grille[etat.mode];
@@ -474,13 +615,28 @@
     $('[data-plus]').addEventListener('click', () => { etat.poids = Math.min(500, Math.round(etat.poids) + 1); maj(); });
     $('[data-assurance]').addEventListener('change', (e) => { etat.assurance = e.target.checked; maj(); });
     $('[data-valeur]').addEventListener('input', (e) => { etat.valeur = e.target.value; maj(); });
+    main.querySelectorAll('[data-depart]').forEach(b => b.addEventListener('click', () => { etat.depart = b.dataset.depart; maj(); }));
+    main.querySelectorAll('[data-arrivee]').forEach(b => b.addEventListener('click', () => { etat.arrivee = b.dataset.arrivee; maj(); }));
+    $('[name=depot]').addEventListener('change', maj);
+    $('[name=guichet]').addEventListener('change', maj);
     maj();
 
     $('[data-form]').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
       if (!f.get('nom') || !f.get('telephone')) { toast('Indiquez le nom et le téléphone du destinataire.', 'erreur'); return; }
+      const ram = etat.depart === 'domicile' ? adrRam.lire() : null;
+      const liv = etat.arrivee === 'domicile' ? adrLiv.lire() : null;
+      for (const [a, lib] of [[ram, 'ramassage'], [liv, 'livraison']]) {
+        if (a && !a.quartier) { toast(`Adresse de ${lib} : indiquez le quartier.`, 'erreur'); return; }
+        if (a && !a.repere) { toast(`Adresse de ${lib} : indiquez un point de repère.`, 'erreur'); return; }
+      }
+      if (ram && !ram.position) { toast('Pour le ramassage, envoyez votre position (« Je suis sur place » ou lien de localisation).', 'erreur'); return; }
+      for (const [c, lib] of [[ram && adrRam.course(), 'ramassage'], [liv && liv.position && adrLiv.course(), 'livraison']]) {
+        if (c && !c.ok) { toast(`${lib[0].toUpperCase() + lib.slice(1)} : ${c.message}`, 'erreur'); return; }
+      }
       stock.ecrire('brouillon_dest', Object.fromEntries(f));
+      stock.ecrire('brouillon_adresses', { ram: ram || brouillonAdr.ram, liv: liv || brouillonAdr.liv });
       if (!exigerConnexion()) return;
       const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
       try {
@@ -490,8 +646,10 @@
           depot: f.get('depot'), guichet: f.get('guichet'), nbCartons: parseInt(f.get('nbCartons'), 10) || 1,
           description: f.get('description'), payeurArrivee: f.get('payeurArrivee') === 'on',
           destinataire: { nom: f.get('nom'), telephone: normTel(f.get('telephone')) },
+          ramassage: ram ? { demande: true, adresse: ram, jour: f.get('ram_jour') || undefined, moment: f.get('ram_moment') } : undefined,
+          livraison: liv ? { demande: true, adresse: liv } : undefined,
         });
-        stock.suppr('brouillon_dest');
+        stock.suppr('brouillon_dest'); stock.suppr('brouillon_adresses');
         confirmation(r.colis);
       } catch (err) { toast(err.message, 'erreur'); btn.disabled = false; }
     });
@@ -513,10 +671,16 @@
         </div>
         <div class="carte pile">
           <h3>Et maintenant ?</h3>
+          ${c.ramassage?.demande ? `
+          <p>1. Un livreur vous appelle puis passe chercher le colis${c.ramassage.prix ? ` (${esc(montant(c.ramassage.prix, c.ramassage.devise))})` : ''}.</p>
+          <p>2. Il est pesé à <b>${esc(d.nom || 'l\'agence')}</b> : vous recevez le prix final et votre reçu.</p>` : `
           <p>1. Apportez le colis à <b>${esc(d.nom || 'l\'agence')}</b>${d.adresse ? `, ${esc(d.adresse)}` : ''}.</p>
           ${d.horaires ? `<p class="petit muet">${esc(d.horaires)}</p>` : ''}
-          <p>2. Il sera pesé, vous payez et recevez votre reçu.</p>
-          <p>3. ${esc(c.destinataire.nom)} reçoit un SMS avec le code de retrait dès que le colis est à <b>${esc(r.nom || 'son agence')}</b>${r.ville ? ` (${esc(r.ville)})` : ''}.</p>
+          <p>2. Il sera pesé, vous payez et recevez votre reçu.</p>`}
+          ${c.livraison?.demande ? `
+          <p>3. À l'arrivée, un livreur l'apporte à ${esc(c.destinataire.nom)}${c.livraison.prix ? ` (${esc(montant(c.livraison.prix, c.livraison.devise))})` : ''}, qui donne son code de retrait.</p>
+          ${c.livraison.adresse?.position ? '' : `<p class="bandeau bandeau-ocre">${ic('gps', 'ic-sm')}<span>Il manque sa position : envoyez-lui le lien de suivi, il pourra l'ajouter lui-même.</span></p>`}` : `
+          <p>3. ${esc(c.destinataire.nom)} reçoit un SMS avec le code de retrait dès que le colis est à <b>${esc(r.nom || 'son agence')}</b>${r.ville ? ` (${esc(r.ville)})` : ''}.</p>`}
         </div>
         <a class="btn btn-principal btn-grand btn-plein" href="#/suivi/${encodeURIComponent(c.numeroSuivi)}">Voir le suivi</a>
         <a class="btn btn-plein" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Je t'envoie un colis. Numéro de suivi : ${c.numeroSuivi}`)}`)}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} Prévenir ${esc(c.destinataire.nom.split(' ')[0])} sur WhatsApp</a>

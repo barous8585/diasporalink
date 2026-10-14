@@ -22,7 +22,7 @@ router.patch('/moi', auth, [
 
 // ── Équipe (admin) ─────────────────────────
 router.get('/equipe', auth, role(ROLES.ADMIN), ah(async (req, res) => {
-  const equipe = await User.find({ role: { $in: [ROLES.AGENT, ROLES.ADMIN] } }).sort({ prenom: 1 });
+  const equipe = await User.find({ role: { $in: [ROLES.AGENT, ROLES.LIVREUR, ROLES.ADMIN] } }).sort({ prenom: 1 });
   res.json({ succes: true, equipe });
 }));
 

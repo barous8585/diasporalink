@@ -48,10 +48,11 @@
         }
         file.ecrire(file.lire().filter(o => !faits.has(o.opId)));
       }
-      // 2. Remises faites hors-ligne
-      for (const op of file.lire().filter(o => o.type === 'remise')) {
+      // 2. Remises (guichet) et livraisons (livreur) faites hors-ligne
+      const ROUTE_OP = { remise: '/agent/remise', livre: '/livreur/livre' };
+      for (const op of file.lire().filter(o => ROUTE_OP[o.type])) {
         try {
-          await api.post('/agent/remise', op.payload);
+          await api.post(ROUTE_OP[op.type], op.payload);
           file.ecrire(file.lire().filter(o => o.opId !== op.opId));
           journal.maj(op.opId, { etat: 'ok', message: 'Remise enregistrée' });
         } catch (e) {
@@ -102,8 +103,17 @@
   // ══════════════════════════════════════════════════════════
   //  CONTEXTE (lots, colis prêts au guichet) — gardé pour le hors-ligne
   // ══════════════════════════════════════════════════════════
+  const estLivreur = () => session.utilisateur()?.role === 'livreur';
   async function rafraichirContexte() {
     try {
+      if (estLivreur()) {
+        // Livreur : ses courses (et celles de son agence), gardées pour le hors-ligne
+        const r = await api.get('/livreur/courses');
+        const livresLocal = new Set(file.lire().filter(o => o.type === 'livre').map(o => o.payload.numero));
+        CTX = { lieu: r.lieu, pays: r.lieu?.pays || null, courses: r.courses.filter(c => !(c.type === 'livraison' && livresLocal.has(c.numeroSuivi))), majLe: r.majLe };
+        stock.ecrire('ctx', CTX);
+        return CTX;
+      }
       CTX = await api.get('/agent/contexte');
       // Retire du cache les colis remis hors-ligne pas encore synchronisés
       const remisLocal = new Set(file.lire().filter(o => o.type === 'remise').map(o => o.payload.numero));
@@ -123,11 +133,12 @@
     scanner: { lib: 'Scanner',   ic: 'scan',    vue: () => vueScan(stock.lire('action_scan') || 'charger') },
     remise:  { lib: 'Remise',    ic: 'ok',      vue: vueRemise },
     caisse:  { lib: 'Caisse',    ic: 'billet',  vue: vueCaisse },
+    courses: { lib: 'Courses',   ic: 'moto',    vue: vueCourses },
     fiche:   { lib: 'Recherche', ic: 'loupe',   vue: vueFiche, cache: true },
   };
   // Anciens liens (#/chargement…) → onglet Scanner sur la bonne action
   const ANCIENS = { chargement: 'charger', arrivee: 'arrivee', guichet: 'guichet' };
-  const ongletsVisibles = () => ['depot', 'scanner', 'remise', 'caisse'];
+  const ongletsVisibles = () => estLivreur() ? ['courses', 'caisse'] : ['depot', 'scanner', 'remise', 'caisse'];
 
   // Pays et devise de l'agence de l'agent (admin sans agence : France / €)
   const paysAgent = () => CTX?.pays || null;
@@ -150,13 +161,14 @@
     if (arreterCamera) { try { await arreterCamera(); } catch {} arreterCamera = null; }
     if (!session.connecte()) { return connexion(); }
     const u = session.utilisateur();
-    if (!['agent', 'admin'].includes(u.role)) {
+    if (!['agent', 'admin', 'livreur'].includes(u.role)) {
       main.innerHTML = `<div class="pile"><h1>Accès réservé</h1><p class="muet">Ce compte n'est pas un compte agent. Demandez à l'administrateur de vous ajouter à l'équipe.</p><button class="btn" data-sortir>Se déconnecter</button></div>`;
       main.querySelector('[data-sortir]').onclick = () => { session.fermer(); router(); };
       return;
     }
     const lieu = CTX?.lieu;
-    document.querySelector('[data-qui]').textContent = `${u.prenom} ${u.nom[0]}. · ${lieu?.nom || (u.role === 'admin' ? 'Administrateur' : 'Lieu non défini')}`;
+    document.querySelector('[data-qui]').textContent = `${u.prenom} ${u.nom[0]}. · ${u.role === 'livreur' ? 'Livreur · ' : ''}${lieu?.nom || (u.role === 'admin' ? 'Administrateur' : 'Lieu non défini')}`;
+    document.querySelector('[data-recherche]').classList.toggle('cache', u.role === 'livreur');
     let onglet = location.hash.replace(/^#\/?/, '').split('/')[0];
     if (ANCIENS[onglet]) { stock.ecrire('action_scan', ANCIENS[onglet]); onglet = 'scanner'; }
     const visibles = ongletsVisibles();
@@ -350,7 +362,7 @@
         zone.innerHTML = r.colis.length ? r.colis.map((c, i) => `
           <button class="choix" data-i="${i}" style="width:100%">
             <span class="nom">${esc(c.numeroSuivi)} · ${esc(c.expediteur.nom)}</span>
-            <span class="sous">Pour ${esc(c.destinataire.nom)} · ${c.mode === 'mer' ? 'bateau' : 'avion'} · ${kg(c.poidsEstime)} annoncés</span>
+            <span class="sous">Pour ${esc(c.destinataire.nom)} · ${c.mode === 'mer' ? 'bateau' : 'avion'} · ${kg(c.poidsEstime)} annoncés${c.ramassage?.statut === 'faite' ? ` · ramassé par ${esc(c.ramassage.livreurNom || 'un livreur')}` : ''}</span>
           </button>`).join('') : '<p class="vide petit">Aucune réservation trouvée.</p>';
         zone.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', () => formulaireDepot(r.colis[b.dataset.i])));
       } catch (err) { zone.innerHTML = `<p class="bandeau bandeau-rouge">${esc(err.message)}</p>`; }
@@ -362,7 +374,10 @@
     const r = resa || {};
     // Agence de départ : celle de l'agent (un admin sans agence la choisit)
     const choisirDepart = !CTX?.lieu;
+    const ramasse = r.ramassage?.demande && r.ramassage.statut !== 'annulee' ? r.ramassage : null;
+    const livPrevue = r.livraison?.demande && r.livraison.statut !== 'annulee' ? r.livraison : null;
     const etat = {
+      livraison: !!livPrevue,
       depot: CTX?.lieu?.code || r.depot || CONFIG.agences[0]?.code,
       mode: r.mode || 'air', typeColis: r.typeColis || 'vetements', guichet: r.guichet || '',
       assurance: !!r.assurance, payeurArrivee: !!r.payeurArrivee, methode: 'especes',
@@ -396,6 +411,11 @@
         <label class="champ"><span data-lib-retrait>Agence de retrait</span>
           <select class="saisie saisie-forte" name="guichet" data-retrait></select>
         </label>
+        <label class="case"><input type="checkbox" name="livraisonDom" ${etat.livraison ? 'checked' : ''}> Livraison à domicile à l'arrivée</label>
+        <div class="pile ${etat.livraison ? '' : 'cache'}" style="--gap:8px" data-zone-liv>
+          ${K.champsAdresse('liv', livPrevue?.adresse || {}, { maPosition: false, positionFacultative: true, aide: 'Collez la localisation envoyée par le destinataire (WhatsApp). Sinon, il pourra l\'envoyer depuis son suivi.' })}
+        </div>
+        ${ramasse ? `<p class="bandeau bandeau-vert petit">${ic('moto', 'ic-sm')} Ramassé à domicile${ramasse.livreurNom ? ` par ${esc(ramasse.livreurNom)}` : ''} : ${esc(montant(ramasse.prix, ramasse.devise))} ajoutés au prix.</p>` : ''}
         <div class="grille-2">
           <label class="champ">Cartons <input class="saisie" name="nbCartons" type="number" inputmode="numeric" min="1" value="${r.nbCartons || 1}"></label>
           <label class="champ">Description <input class="saisie" name="description" value="${esc(r.description || '')}" placeholder="Ex. vêtements, riz"></label>
@@ -436,7 +456,16 @@
     const form = main.querySelector('[data-depot]');
     const $ = (s) => form.querySelector(s);
     let tarif = null, paysAffiche = null;
-    const aPayer = () => (devisePaie() === 'EUR' ? tarif.totalEur : tarif.totalGnf);
+    const adrLiv = K.brancherAdresse(form, 'liv', { valeur: livPrevue?.adresse || {}, agence: () => agenceDe(form.guichet.value), config: CONFIG, surChange: () => tarif && calc() });
+    // Courses à domicile en GNF au taux du colis : ramassage fait + livraison si son prix est connu
+    const domicileGnf = () => {
+      if (!tarif) return 0;
+      let t = ramasse?.prix ? KolisTarif.enGnf(ramasse.prix, ramasse.devise, tarif.taux) : 0;
+      const c = form.livraisonDom.checked ? adrLiv.course() : null;
+      if (c?.ok) t += c.prixGnf;
+      return t;
+    };
+    const aPayer = () => (devisePaie() === 'EUR' ? Math.round((tarif.totalEur + domicileGnf() / tarif.taux) * 100) / 100 : tarif.totalGnf + domicileGnf());
     const dev = (n) => montant(n, devisePaie());
     const majPays = () => {
       if (paysAffiche === paysDepart()) return;
@@ -462,6 +491,7 @@
       etat.typeColis = form.typeColis.value;
       $('[data-valeur]').classList.toggle('cache', !form.assurance.checked);
       $('[data-paiement]').classList.toggle('cache', form.payeurArrivee.checked);
+      $('[data-zone-liv]').classList.toggle('cache', !form.livraisonDom.checked);
       $('[data-champ-ref]').classList.toggle('cache', ['especes'].includes(etat.methode));
       form.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === etat.mode));
       form.querySelectorAll('[data-methode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.methode === etat.methode));
@@ -472,7 +502,8 @@
       $('[data-prix]').textContent = dev(aPayer());
       $('[data-prix-autre]').textContent = devisePaie() === 'EUR' ? gnf(tarif.totalGnf) : eur(tarif.totalEur);
       const md = (n) => montant(n, tarif.devise);
-      $('[data-detail]').textContent = `${kg(tarif.poidsFacture)} × ${md(tarif.prixKg)}${tarif.surcharge ? ` + ${md(tarif.surcharge)} supplément` : ''}${tarif.assurance ? ` + ${md(tarif.assurance)} assurance` : ''}`;
+      const cLiv = form.livraisonDom.checked ? adrLiv.course() : null;
+      $('[data-detail]').textContent = `${kg(tarif.poidsFacture)} × ${md(tarif.prixKg)}${tarif.surcharge ? ` + ${md(tarif.surcharge)} supplément` : ''}${tarif.assurance ? ` + ${md(tarif.assurance)} assurance` : ''}${ramasse?.prix ? ` + ${montant(ramasse.prix, ramasse.devise)} ramassage` : ''}${cLiv?.ok ? ` + ${montant(cLiv.prix, cLiv.devise)} livraison` : form.livraisonDom.checked ? ' + livraison (prix quand la position sera connue)' : ''}`;
       if (r.poidsEstime) {
         const ecart = Math.round((poids - r.poidsEstime) * 10) / 10;
         $('[data-ecart]').innerHTML = `Annoncé : ${kg(r.poidsEstime)} · ${ecart > 0 ? `<b style="color:var(--rouge)">+${kg(ecart)}</b>` : ecart < 0 ? `${kg(ecart)}` : 'identique'}`;
@@ -482,7 +513,7 @@
       $('[data-rendu]').innerHTML = etat.methode === 'especes' && recu > aPayer() ? `Monnaie à rendre : <b>${dev(recu - aPayer())}</b>` : recu < aPayer() && recu > 0 ? `<span style="color:var(--rouge)">Paiement partiel : reste ${dev(aPayer() - recu)}</span>` : '';
     };
     form.addEventListener('input', (e) => { if (e.target.name === 'montant') e.target.dataset.touche = '1'; calc(); });
-    form.addEventListener('change', calc);
+    form.addEventListener('change', (e) => { if (e.target.name === 'guichet') adrLiv.recalculer(); calc(); });
     form.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { etat.mode = b.dataset.mode; calc(); }));
     $('[data-retour]').addEventListener('click', vueDepot);
     calc();
@@ -494,9 +525,17 @@
       if (!form.guichet.value) { toast('Choisissez l\'agence de retrait.', 'erreur'); form.guichet.focus(); return; }
       const manque = ['expNom', 'expTel', 'destNom', 'destTel'].find(k => !form[k].value.trim());
       if (manque) { toast('Complétez les noms et téléphones.', 'erreur'); form[manque].focus(); return; }
+      let livraison;
+      if (form.livraisonDom.checked) {
+        const a = adrLiv.lire();
+        if (!a.quartier || !a.repere) { toast('Livraison : indiquez le quartier et un point de repère.', 'erreur'); return; }
+        const c = a.position ? adrLiv.course() : null;
+        if (c && !c.ok) { toast(`Livraison : ${c.message}`, 'erreur'); return; }
+        livraison = { demande: true, adresse: a };
+      } else if (livPrevue) livraison = { demande: false };
       const recu = parseFloat(form.montant.value) || 0;
       const paiement = !form.payeurArrivee.checked && recu > 0
-        ? { montant: Math.min(recu, aPayer()), devise: devisePaie(), methode: etat.methode, objet: 'transport', reference: form.reference.value.trim() || undefined } : undefined;
+        ? { montant: Math.min(recu, aPayer()), devise: devisePaie(), methode: etat.methode, objet: 'global', reference: form.reference.value.trim() || undefined } : undefined;
       const btn = form.querySelector('[type=submit]'); btn.disabled = true;
       try {
         const res = await api.post('/agent/depot', {
@@ -509,6 +548,7 @@
           valeurDeclaree: parseFloat(form.valeurDeclaree.value) || 0, payeurArrivee: form.payeurArrivee.checked,
           expediteur: { nom: form.expNom.value.trim(), telephone: normTel(form.expTel.value) },
           destinataire: { nom: form.destNom.value.trim(), telephone: normTel(form.destTel.value) },
+          livraison,
           paiement,
         });
         depotTermine(res.colis);
@@ -561,7 +601,7 @@
       const prets = (CTX?.colisPrets || []).filter(c => !q || c.destinataire.nom.toLowerCase().includes(q) || c.destinataire.telephone.includes(q) || c.numeroSuivi.toLowerCase().includes(q) || c.tiersAutorise?.nom?.toLowerCase().includes(q));
       liste.innerHTML = prets.length ? prets.slice(0, 40).map(c => `
         <button class="choix" data-num="${esc(c.numeroSuivi)}" style="width:100%">
-          <span class="nom">${esc(c.destinataire.nom)}${c.emplacement ? ` · étagère ${esc(c.emplacement)}` : ''}</span>
+          <span class="nom">${esc(c.destinataire.nom)}${c.emplacement ? ` · étagère ${esc(c.emplacement)}` : ''}${c.aLivrer ? ' · <span class="badge">à livrer</span>' : ''}</span>
           <span class="sous">${esc(c.numeroSuivi)} · depuis ${c.magasinage?.jours || 0} j${c.soldeGnf > 0 ? ` · reste ${deviseAgent() === 'EUR' ? eur(c.soldeEur) : gnf(c.soldeGnf)}` : ''}</span>
         </button>`).join('') : '<p class="vide petit">Aucun colis en attente.</p>';
       liste.querySelectorAll('[data-num]').forEach(b => b.addEventListener('click', () => ouvrirRemise(b.dataset.num)));
@@ -812,6 +852,194 @@
         toast(ecarts.length ? `Caisse clôturée. Écart : ${ecarts.map(([d, v]) => montant(v, d)).join(', ')}` : 'Caisse clôturée, aucun écart.', ecarts.length ? 'erreur' : 'ok');
         vueCaisse();
       } catch (err) { toast(err.message, 'erreur'); }
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  COURSES À DOMICILE (livreurs) : ramassages et livraisons
+  // ══════════════════════════════════════════════════════════
+  const MOTIFS_ECHEC = ['Absent', 'Ne répond pas au téléphone', 'Adresse introuvable', 'Ne peut pas payer', 'Refuse le colis'];
+  const libMoment = (k) => (CONFIG.moments || []).find(m => m.key === k)?.label || '';
+  const lienItineraire = (p) => p?.lat ? `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}` : '';
+  const telWa = (t) => String(t || '').replace(/[^\d]/g, '');
+  // Position du téléphone au moment de valider (contrôle a posteriori) — jamais bloquant
+  const positionRapide = () => Promise.race([K.gpsActuel().catch(() => null), new Promise(r => setTimeout(() => r(null), 8000))]);
+
+  async function vueCourses() {
+    if (navigator.onLine) await rafraichirContexte().catch(e => toast(e.message, 'erreur'));
+    const moi = session.utilisateur()._id;
+    const toutes = CTX?.courses || [];
+    const miennes = toutes.filter(c => String(c.livreur) === String(moi));
+    const libres = toutes.filter(c => !c.livreur);
+    const onglet = stock.lire('onglet_courses') || 'miennes';
+    const liste = onglet === 'miennes' ? miennes : libres;
+    main.innerHTML = `
+      <div class="pile">
+        <div class="segments" role="group" aria-label="Courses">
+          <button type="button" data-seg="miennes" aria-pressed="${onglet === 'miennes'}">Mes courses (${miennes.length})</button>
+          <button type="button" data-seg="libres" aria-pressed="${onglet === 'libres'}">À prendre (${libres.length})</button>
+        </div>
+        ${CTX?.majLe && !navigator.onLine ? `<p class="bandeau bandeau-ocre">${ic('horsligne', 'ic-sm')} Hors ligne : liste du ${esc(date(CTX.majLe))}.</p>` : ''}
+        <div class="pile" style="--gap:12px">${liste.length ? liste.map(carteCourse).join('') : `<p class="vide petit">${onglet === 'miennes' ? 'Aucune course pour vous. Regardez « À prendre ».' : 'Aucune course en attente.'}</p>`}</div>
+      </div>`;
+    main.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { stock.ecrire('onglet_courses', b.dataset.seg); vueCourses(); }));
+    main.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => actionCourse(b.dataset.act, toutes.find(c => c.numeroSuivi === b.dataset.num && c.type === b.dataset.type), b)));
+  }
+
+  function carteCourse(c) {
+    const a = c.adresse || {};
+    const p = a.position;
+    const aLAgence = c.type === 'ramassage' || ['pret', 'en_livraison'].includes(c.statutColis);
+    const moi = String(c.livreur) === String(session.utilisateur()._id);
+    const tel = a.telephone || c.contact?.telephone;
+    const devise = deviseAgent();
+    const btn = (act, lib, cls = '') => `<button type="button" class="btn ${cls}" data-act="${act}" data-num="${esc(c.numeroSuivi)}" data-type="${c.type}">${lib}</button>`;
+    let actions = '';
+    if (!c.livreur) actions = btn('prendre', `${ic('ok', 'ic-sm')} Je m'en charge`, 'btn-principal');
+    else if (moi && c.type === 'ramassage') actions = btn('ramasse', `${ic('ok', 'ic-sm')} Colis ramassé`, 'btn-principal') + btn('echec', 'Pas pu') + btn('lacher', 'Rendre');
+    else if (moi && c.statut === 'en_route') actions = btn('livrer', `${ic('ok', 'ic-sm')} Remettre le colis`, 'btn-principal') + btn('echec', 'Pas pu livrer');
+    else if (moi && aLAgence) actions = (p?.lat ? btn('depart', `${ic('moto', 'ic-sm')} Je pars livrer`, 'btn-principal') : '<p class="bandeau bandeau-ocre petit">Position du destinataire manquante : appelez-le pour qu\'il l\'envoie depuis son suivi.</p>') + btn('lacher', 'Rendre');
+    else if (moi) actions = '<p class="petit muet">Pas encore arrivé à l\'agence.</p>' + btn('lacher', 'Rendre');
+    return `
+      <div class="carte course">
+        <div class="entete-course">
+          <span class="type-course ${c.type}">${c.type === 'ramassage' ? 'Ramassage' : 'Livraison'}</span>
+          <span class="petit muet grandit">${esc(c.numeroSuivi)}</span>
+          ${c.prix ? `<span class="gras">${esc(montant(c.prix, c.devise))}</span>` : ''}
+        </div>
+        <div class="gras" style="font-size:17px">${esc(a.nom || c.contact?.nom || '')}</div>
+        <div class="adresse-course">${esc([a.quartier, a.ville].filter(Boolean).join(', '))}${a.repere ? `<br><span class="muet">${esc(a.repere)}</span>` : ''}</div>
+        <div class="petit muet">${esc([c.distanceKm && `${String(c.distanceKm).replace('.', ',')} km de l'agence`, [c.jour && date(c.jour, false), libMoment(c.moment)].filter(Boolean).join(' '), c.nbCartons && `${c.nbCartons} carton(s)`, c.poids && kg(c.poids)].filter(Boolean).join(' · '))}</div>
+        ${c.type === 'livraison' && c.soldeGnf > 0 ? `<div class="bandeau bandeau-ocre petit">${ic('billet', 'ic-sm')} À encaisser : <b>&nbsp;${esc(devise === 'EUR' ? eur(c.soldeEur) : gnf(c.soldeGnf))}</b></div>` : ''}
+        ${c.echecs?.length ? `<div class="tres-petit rouge">${c.echecs.length} passage(s) manqué(s) : ${esc(c.echecs.at(-1).motif)}</div>` : ''}
+        <div class="actions-course">
+          ${tel ? `<a class="btn btn-petit" href="tel:${esc(tel)}">${ic('tel', 'ic-sm')} Appeler</a><a class="btn btn-petit" href="https://wa.me/${esc(telWa(tel))}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} WhatsApp</a>` : ''}
+          ${p?.lat ? `<a class="btn btn-petit" href="${esc(lienItineraire(p))}" target="_blank" rel="noopener">${ic('lieu', 'ic-sm')} Itinéraire</a>` : ''}
+        </div>
+        <div class="actions-course">${actions}</div>
+      </div>`;
+  }
+
+  async function actionCourse(act, c, bouton) {
+    if (!c) return;
+    const corps = { numero: c.numeroSuivi, type: c.type };
+    try {
+      if (act === 'livrer') return formulaireLivraison(c);
+      if (act === 'echec') return echecCourse(c);
+      if (act === 'lacher' && !confirm('Rendre cette course ? Un autre livreur pourra la prendre.')) return;
+      bouton.disabled = true;
+      if (act === 'prendre') { await api.post('/livreur/prendre', corps); toast('Course ajoutée à vos courses.', 'ok'); stock.ecrire('onglet_courses', 'miennes'); }
+      if (act === 'lacher') { await api.post('/livreur/lacher', corps); toast('Course rendue.'); }
+      if (act === 'depart') { await api.post('/livreur/depart', corps); toast('Bonne route ! Le destinataire est prévenu.', 'ok'); }
+      if (act === 'ramasse') {
+        toast('Enregistrement…');
+        await api.post('/livreur/ramasse', { ...corps, opId: uid(), position: await positionRapide() });
+        toast('Ramassé. Rapportez le colis à l\'agence pour la pesée.', 'ok');
+      }
+      vueCourses();
+    } catch (e) { toast(e.reseau ? 'Pas de réseau : réessayez dans un instant.' : e.message, 'erreur'); if (bouton) bouton.disabled = false; }
+  }
+
+  function echecCourse(c) {
+    const { el, fermer } = modale(`
+      <form class="pile" style="--gap:12px">
+        <div class="ligne entre"><h2>Que s'est-il passé ?</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+        ${MOTIFS_ECHEC.map(m => `<button type="button" class="choix" data-motif="${esc(m)}"><span class="nom">${esc(m)}</span></button>`).join('')}
+        <label class="champ">Autre raison <input class="saisie" name="motif"></label>
+        <button class="btn btn-principal" type="submit">Valider</button>
+        ${c.type === 'livraison' ? '<p class="tres-petit muet">Rapportez le colis à l\'agence : il est remis en rayon.</p>' : ''}
+      </form>`);
+    const envoyer = async (motif) => {
+      try { await api.post('/livreur/echec', { numero: c.numeroSuivi, type: c.type, motif }); fermer(); toast('Noté. Le client est prévenu.'); vueCourses(); }
+      catch (e) { toast(e.message, 'erreur'); }
+    };
+    el.querySelectorAll('[data-motif]').forEach(b => b.addEventListener('click', () => envoyer(b.dataset.motif)));
+    el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); const m = e.target.motif.value.trim(); if (m) envoyer(m); else toast('Choisissez une raison.', 'erreur'); });
+  }
+
+  // Remise chez le destinataire : code (vérifié sur le téléphone), paiement, signature. Marche hors-ligne.
+  function formulaireLivraison(c) {
+    const opId = uid();
+    const devise = deviseAgent();
+    const solde = c.soldeGnf > 0 ? (devise === 'EUR' ? c.soldeEur : c.soldeGnf) : 0;
+    const etat = { code: '', codeOk: null, methode: 'especes' };
+    main.innerHTML = `
+      <form class="pile" novalidate>
+        <div class="ligne"><button type="button" class="btn btn-rond" data-retour aria-label="Retour">${ic('retour')}</button><h2 class="grandit">Remise à domicile</h2></div>
+        <div class="carte"><div class="gras">${esc(c.contact?.nom || '')}</div><div class="petit muet">${esc(c.numeroSuivi)} · ${c.nbCartons || 1} carton(s)</div></div>
+        <div class="carte pile">
+          <h3>1. Code donné par le destinataire</h3>
+          <div class="code-4" data-code>${[0, 1, 2, 3].map(i => `<input inputmode="numeric" maxlength="1" aria-label="Chiffre ${i + 1}" autocomplete="off">`).join('')}</div>
+          <p class="petit gras" data-verdict aria-live="polite"></p>
+        </div>
+        ${solde > 0 ? `
+        <div class="carte pile">
+          <div class="ligne entre"><h3>2. Encaisser</h3><span class="titre" style="font-size:20px">${montant(solde, devise)}</span></div>
+          <div class="grille-3">${methodesDe(devise).map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${k === 'especes'}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('')}</div>
+          <label class="champ cache" data-champ-ref>Référence de la transaction <input class="saisie" name="reference" autocomplete="off"></label>
+          <label class="case"><input type="checkbox" name="encaisse"> J'ai reçu ${montant(solde, devise)}</label>
+        </div>` : `<p class="bandeau bandeau-vert">${ic('ok', 'ic-sm')} Tout est payé.</p>`}
+        <div class="carte pile" style="--gap:10px">
+          <div class="ligne entre"><h3>Signature</h3><button type="button" class="btn btn-petit" data-effacer>Effacer</button></div>
+          <canvas class="signature" data-signature aria-label="Zone de signature"></canvas>
+        </div>
+        <button class="btn btn-principal btn-grand btn-plein" type="submit">${ic('ok')} Colis remis</button>
+      </form>`;
+    const form = main.querySelector('form');
+    const $ = (q) => form.querySelector(q);
+    $('[data-retour]').addEventListener('click', () => router());
+    const cases = [...form.querySelectorAll('[data-code] input')];
+    cases[0].focus();
+    const verifier = async () => {
+      etat.code = cases.map(i => i.value).join('');
+      const zone = $('[data-code]'), verdict = $('[data-verdict]');
+      zone.classList.remove('ok', 'faux'); verdict.textContent = ''; etat.codeOk = null;
+      if (etat.code.length < 4 || !c.empreinteCode) return;
+      etat.codeOk = (await K.sha256(`${c.numeroSuivi}:${etat.code}`)) === c.empreinteCode;
+      zone.classList.add(etat.codeOk ? 'ok' : 'faux');
+      verdict.innerHTML = etat.codeOk ? `<span class="vert">${ic('ok', 'ic-sm')} Code correct</span>` : '<span class="rouge">Code incorrect</span>';
+      Scanner.bip(etat.codeOk);
+    };
+    cases.forEach((inp, i) => {
+      inp.addEventListener('input', () => { inp.value = inp.value.replace(/\D/g, '').slice(-1); if (inp.value && cases[i + 1]) cases[i + 1].focus(); verifier(); });
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Backspace' && !inp.value && cases[i - 1]) cases[i - 1].focus(); });
+    });
+    form.querySelectorAll('[data-methode]').forEach(b => b.addEventListener('click', () => {
+      etat.methode = b.dataset.methode;
+      form.querySelectorAll('[data-methode]').forEach(x => x.setAttribute('aria-pressed', x === b));
+      $('[data-champ-ref]').classList.toggle('cache', etat.methode === 'especes');
+    }));
+    const sig = Signature($('[data-signature]'));
+    $('[data-effacer]').addEventListener('click', sig.effacer);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (etat.code.length !== 4) { toast('Tapez le code du destinataire.', 'erreur'); return; }
+      if (etat.codeOk === false) { toast('Code incorrect.', 'erreur'); return; }
+      if (solde > 0 && !form.encaisse.checked) { toast(`Encaissez ${montant(solde, devise)} avant de remettre.`, 'erreur'); return; }
+      if (sig.vide()) { toast('Faites signer le destinataire.', 'erreur'); return; }
+      const btn = form.querySelector('[type=submit]'); btn.disabled = true;
+      const payload = {
+        opId, numero: c.numeroSuivi, code: etat.code, signature: sig.image(), position: await positionRapide(),
+        paiement: solde > 0 ? { montant: solde, devise, methode: etat.methode, objet: 'global', reference: form.reference?.value || undefined } : undefined,
+      };
+      const fini = (horsLigne) => {
+        if (CTX?.courses) { CTX.courses = CTX.courses.filter(x => !(x.numeroSuivi === c.numeroSuivi && x.type === 'livraison')); stock.ecrire('ctx', CTX); }
+        main.innerHTML = `
+          <div class="pile centre">
+            <div class="carte-vert pile" style="--gap:8px"><h1>Colis livré</h1><p>${esc(c.numeroSuivi)} · ${esc(c.contact?.nom || '')}</p></div>
+            ${horsLigne ? `<p class="bandeau bandeau-ocre">${ic('horsligne', 'ic-sm')} Pas de réseau : la livraison est gardée sur ce téléphone et sera envoyée automatiquement.</p>` : ''}
+            <a class="btn btn-principal btn-grand btn-plein" href="#/courses" data-suivant>Course suivante</a>
+          </div>`;
+        main.querySelector('[data-suivant]').addEventListener('click', (ev) => { ev.preventDefault(); router(); });
+      };
+      try { await api.post('/livreur/livre', payload); fini(false); }
+      catch (err) {
+        if (err.reseau && etat.codeOk) {
+          file.ajouter({ opId, type: 'livre', payload, le: Date.now() });
+          journal.ajouter({ opId, numero: c.numeroSuivi, action: 'livraison', etat: 'attente', message: 'Livraison en attente d\'envoi', le: Date.now() });
+          fini(true);
+        } else { toast(err.reseau ? 'Pas de réseau et code impossible à vérifier ici.' : err.message, 'erreur'); btn.disabled = false; }
+      }
     });
   }
 
