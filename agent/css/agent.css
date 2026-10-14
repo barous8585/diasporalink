@@ -20,7 +20,7 @@ main > .pile { --gap: 16px; }
   width: min(536px, calc(100% - 24px)); height: 72px; border-radius: 24px; background: var(--encre);
   display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: center; z-index: 50;
 }
-.barre-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; color: #D6CFC0; font-size: 12px; font-weight: 600; text-decoration: none; }
+.barre-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; color: #8F8B83; font-size: 12px; font-weight: 600; text-decoration: none; }
 .barre-nav a[aria-current="page"] { color: var(--ocre); }
 
 /* Zone caméra */
@@ -35,7 +35,7 @@ main > .pile { --gap: 16px; }
 .viseur .consigne { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; color: #D6CFC0; font-size: 14px; }
 .viseur .btn { position: relative; }
 .viseur.flash { animation: flash .35s ease; }
-@keyframes flash { 0% { box-shadow: inset 0 0 0 0 var(--vert); } 50% { box-shadow: inset 0 0 0 8px #5CC08E; } }
+@keyframes flash { 0% { box-shadow: inset 0 0 0 0 var(--vert); } 50% { box-shadow: inset 0 0 0 8px #E3D8C3; } }
 .viseur.flash-erreur { animation: flashE .5s ease; }
 @keyframes flashE { 50% { box-shadow: inset 0 0 0 8px #D9463A; } }
 

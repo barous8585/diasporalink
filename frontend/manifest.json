@@ -4,8 +4,8 @@
   "description": "Envoyez et suivez vos colis entre l'Europe et la Guinée",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#F5F1E8",
-  "theme_color": "#0E5A3C",
+  "background_color": "#FFFFFF",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "lang": "fr",
   "icons": [

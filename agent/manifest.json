@@ -4,8 +4,8 @@
   "description": "Dépôt, scans, remise des colis et caisse",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#F5F1E8",
-  "theme_color": "#1B1A16",
+  "background_color": "#FFFFFF",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "lang": "fr",
   "icons": [

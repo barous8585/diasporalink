@@ -3,23 +3,27 @@
    Source : shared/kolis.css — copié dans chaque app par `npm run sync-apps`
    ───────────────────────────────────────────────────────────── */
 :root {
-  --fond: #F5F1E8;
+  /* Charte : blanc et noir, beige comme seule couleur d'accent.
+     Le rouge est gardé uniquement pour les erreurs (lisibilité, sécurité).
+     Les noms « vert », « ocre », « bleu » sont historiques : ils pointent
+     désormais vers le noir et les beiges. */
+  --fond: #FFFFFF;
   --carte: #FFFFFF;
-  --encre: #1B1A16;
-  --gris: #5E5A50;
-  --ligne: #E4DDCE;
-  --ligne-2: #DDD5C4;
-  --creme-2: #EFE9DC;
-  --vert: #0E5A3C;
-  --vert-fonce: #0A4430;
-  --vert-doux: #DCEBE2;
-  --ocre: #F2B544;
-  --ocre-doux: #FBEBC8;
-  --ocre-texte: #5C3A06;
-  --rouge: #9A2A20;
+  --encre: #111111;
+  --gris: #5C5C5C;
+  --ligne: #E7E3DA;
+  --ligne-2: #D9D3C7;
+  --creme-2: #F4F0E8;
+  --vert: #111111;        /* couleur principale : noir */
+  --vert-fonce: #000000;
+  --vert-doux: #F1ECE2;   /* beige clair : états « OK » */
+  --ocre: #E3D8C3;        /* beige : accent */
+  --ocre-doux: #F6F1E7;   /* beige très clair : encarts */
+  --ocre-texte: #3D3528;
+  --rouge: #9A2A20;       /* erreurs uniquement */
   --rouge-doux: #F8E1DE;
-  --bleu: #1F4E79;
-  --bleu-doux: #E3ECF5;
+  --bleu: #111111;
+  --bleu-doux: #F4F0E8;
   --r: 16px;
   --r-lg: 22px;
   --police-titre: 'Bricolage Grotesque', 'Figtree', system-ui, sans-serif;
@@ -117,7 +121,7 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
   display: flex; align-items: center; justify-content: center; color: var(--encre);
 }
 .code-4 input:focus { outline: none; border-color: var(--vert); background: #fff; }
-.code-4.ok input { border-color: var(--vert); background: #F3F8F5; }
+.code-4.ok input { border-color: var(--vert); background: #F6F1E7; }
 .code-4.faux input { border-color: var(--rouge); background: var(--rouge-doux); }
 
 /* Badges de statut */
@@ -191,5 +195,5 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
   .etiquette .grand { font-size: 16pt; font-weight: 800; }
 }
 
-:focus-visible { outline: 3px solid var(--ocre); outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--encre); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
