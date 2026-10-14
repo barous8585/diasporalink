@@ -78,3 +78,26 @@ main > .pile { --gap: 16px; }
   .grille-cartes { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
   .viseur { max-height: 420px; }
 }
+
+/* ── Aujourd'hui ── */
+.tache { display: flex; flex-direction: column; gap: 12px; }
+.tache.urgent { border-color: var(--rouge); box-shadow: inset 4px 0 0 var(--rouge); }
+.tache.info { background: var(--creme-2); }
+.nb-tache { min-width: 46px; height: 46px; padding: 0 8px; border-radius: 14px; background: var(--marine); color: #fff; font-weight: 800; font-size: 20px; display: inline-flex; align-items: center; justify-content: center; }
+.tache.info .nb-tache { background: var(--gris); }
+.guide summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.guide li { line-height: 1.5; }
+
+/* ── Résultat du dernier scan, en grand ── */
+.dernier-scan { border-radius: 18px; padding: 14px 16px; border: 2px solid var(--ligne, #DCE2EC); display: flex; flex-direction: column; gap: 8px; }
+.dernier-scan .ico { width: 44px; height: 44px; border-radius: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--creme-2); }
+.dernier-scan .message { font-size: 18px; font-weight: 800; line-height: 1.25; }
+.dernier-scan.ok { border-color: #1E6B3A; background: #EAF5EE; }
+.dernier-scan.ok .ico { background: #1E6B3A; color: #fff; }
+.dernier-scan.erreur { border-color: var(--rouge); background: var(--rouge-doux, #F6E3E1); }
+.dernier-scan.erreur .ico { background: var(--rouge); color: #fff; }
+.dernier-scan.info { border-color: var(--marine); background: var(--vert-doux); }
+.dernier-scan.info .ico { background: var(--marine); color: #fff; }
+.dernier-scan .avant { color: var(--gris); border-top: 1px solid rgba(0,0,0,.08); padding-top: 6px; }
+.scan.info .ico { background: var(--vert-doux); color: var(--marine); }
+.scan > .tres-petit.muet { white-space: nowrap; }

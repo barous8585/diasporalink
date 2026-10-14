@@ -44,7 +44,7 @@
         for (const res of r.resultats) {
           if (res.temporaire) continue;
           faits.add(res.opId);
-          journal.maj(res.opId, { etat: res.ok ? 'ok' : 'erreur', message: res.ok ? libelleOk(res) : res.erreur, destinataire: res.destinataire, horsLot: res.horsLot });
+          journal.maj(res.opId, { etat: res.ok ? (res.info ? 'info' : 'ok') : 'erreur', message: res.ok ? libelleOk(res) : res.erreur, destinataire: res.destinataire, horsLot: res.horsLot, avant: res.avant, actionFaite: res.actionFaite, aEnvoyer: res.aEnvoyer });
         }
         file.ecrire(file.lire().filter(o => !faits.has(o.opId)));
       }
@@ -76,6 +76,7 @@
   }
 
   function libelleOk(res) {
+    if (res.action === 'auto') return res.message || 'Fait';
     if (res.dejaFait) return 'Déjà enregistré';
     return ({ charger: `Chargé · lot ${res.lotCode || ''}`, arrivee: 'Arrivé', acheminer: `Envoyé vers ${res.versAgence || 'l\'agence'}`, guichet: 'Prêt · code envoyé' })[res.action] || 'OK';
   }
@@ -129,6 +130,7 @@
     const onglet = location.hash.replace(/^#\/?/, '').split('/')[0];
     const actif = document.activeElement;
     if (actif && main.contains(actif) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
+    if ((onglet === 'jour' || onglet === '') && !estLivreur() && main.querySelector('.guide') && !main.querySelector('.guide[open]')) { const y = window.scrollY; await vueAujourdhui(); window.scrollTo(0, y); }
     if (onglet === 'courses' && main.querySelector('[data-seg]')) { const y = window.scrollY; await vueCourses(); window.scrollTo(0, y); }
     if (onglet === 'remise' && main.querySelector('[data-liste]')) { await rafraichirContexte().catch(() => {}); main.querySelector('[data-filtre]')?.dispatchEvent(new Event('input')); }
   }, 60000);
@@ -138,8 +140,9 @@
   // ══════════════════════════════════════════════════════════
   // Chaque agence TMS fait tout : dépôt, scans, remise, caisse
   const ONGLETS = {
+    jour:    { lib: 'Accueil', ic: 'grille', vue: vueAujourdhui },
     depot:   { lib: 'Dépôt',     ic: 'balance', vue: vueDepot },
-    scanner: { lib: 'Scanner',   ic: 'scan',    vue: () => vueScan(stock.lire('action_scan') || 'charger') },
+    scanner: { lib: 'Scanner',   ic: 'scan',    vue: () => vueScan(stock.lire('action_scan') || 'auto') },
     remise:  { lib: 'Remise',    ic: 'ok',      vue: vueRemise },
     caisse:  { lib: 'Caisse',    ic: 'billet',  vue: vueCaisse },
     courses: { lib: 'Courses',   ic: 'moto',    vue: vueCourses },
@@ -147,7 +150,7 @@
   };
   // Anciens liens (#/chargement…) → onglet Scanner sur la bonne action
   const ANCIENS = { chargement: 'charger', arrivee: 'arrivee', guichet: 'guichet' };
-  const ongletsVisibles = () => estLivreur() ? ['courses', 'caisse'] : ['depot', 'scanner', 'remise', 'caisse'];
+  const ongletsVisibles = () => estLivreur() ? ['courses', 'caisse'] : ['jour', 'depot', 'scanner', 'remise', 'caisse'];
 
   // Pays et devise de l'agence de l'agent (admin sans agence : France / €)
   const paysAgent = () => CTX?.pays || null;
@@ -234,9 +237,57 @@
   }
 
   // ══════════════════════════════════════════════════════════
+  //  AUJOURD'HUI : le travail de l'agence, le même pour tous ses agents
+  // ══════════════════════════════════════════════════════════
+  const ETAPES_GUIDE = [
+    ['Dépôt', 'Le client apporte son colis : pesez-le, encaissez, collez l\'étiquette (onglet Dépôt).'],
+    ['Mise en lot', 'Avant le départ, scannez chaque colis : il entre tout seul dans le lot avion ou bateau qui part.'],
+    ['Départ', 'Le responsable marque le lot « parti » : les clients sont prévenus.'],
+    ['Arrivée', 'À la plateforme d\'arrivée, scannez chaque colis qui sort du lot.'],
+    ['En rayon', 'Dans l\'agence de retrait, scannez le colis en le posant sur l\'étagère : le destinataire reçoit son code. S\'il doit aller dans une autre agence, le scan l\'y envoie.'],
+    ['Remise', 'Le destinataire donne son code (onglet Remise) : pièce d\'identité, paiement du reste, signature.'],
+  ];
+  async function vueAujourdhui() {
+    let r = stock.lire('aujourdhui');
+    try { r = await api.get('/agent/aujourdhui'); stock.ecrire('aujourdhui', { ...r, le: Date.now() }); }
+    catch (e) { if (!e.reseau || !r) throw e; }
+    const u = session.utilisateur();
+    const taches = r.taches || [];
+    const aFaire = taches.filter(t => !t.info);
+    main.innerHTML = `
+      <div class="pile">
+        <div>
+          <h1 style="font-size:24px">Bonjour ${esc(u.prenom)}</h1>
+          <p class="muet petit">${esc(r.lieu?.nom || '')} · ${aFaire.length ? `${aFaire.length} chose(s) à faire` : 'tout est à jour'}${r.faitsAujourdhui ? ` · ${r.faitsAujourdhui} encaissement(s) aujourd'hui dans l'agence` : ''}</p>
+          ${r.le && !navigator.onLine ? `<p class="bandeau bandeau-ocre petit">${ic('horsligne', 'ic-sm')} Hors ligne : situation du ${esc(date(r.le))}.</p>` : ''}
+        </div>
+        <div class="pile grille-cartes" style="--gap:12px">
+          ${taches.length ? taches.map(t => `
+            <div class="carte tache ${t.urgent ? 'urgent' : ''} ${t.info ? 'info' : ''}">
+              <div class="ligne" style="--gap:12px;align-items:flex-start">
+                <span class="nb-tache">${esc(t.nb)}</span>
+                <div class="grandit"><div class="gras">${esc(t.titre)}</div><div class="petit muet">${esc(t.aide || '')}</div></div>
+              </div>
+              ${t.progression !== undefined ? `<div class="barre"><span style="width:${Math.round(t.progression * 100)}%"></span></div>` : ''}
+              ${t.onglet ? `<a class="btn btn-principal btn-plein" href="#/${t.onglet}" data-tache="${esc(t.cle)}">${t.onglet === 'scanner' ? `${ic('scan', 'ic-sm')} Scanner` : t.onglet === 'remise' ? `${ic('ok', 'ic-sm')} Remettre` : t.onglet === 'caisse' ? `${ic('billet', 'ic-sm')} Ma caisse` : `${ic('balance', 'ic-sm')} Dépôt`}</a>` : ''}
+            </div>`).join('') : `<div class="carte centre pile" style="--gap:6px"><div style="margin:0 auto">${ic('ok', 'ic-lg')}</div><div class="gras">Rien en attente</div><div class="petit muet">Les nouveaux dépôts et les lots en route apparaîtront ici.</div></div>`}
+        </div>
+        ${r.lotsPrepa?.length ? `<p class="petit muet">Lots en préparation : ${r.lotsPrepa.map(l => `${esc(l.code)} (${l.nb} colis)`).join(' · ')}. Un lot s'ouvre tout seul s'il n'y en a pas.</p>` : ''}
+        <details class="carte guide">
+          <summary class="gras">Comment ça marche ?</summary>
+          <ol class="pile" style="--gap:10px;margin-top:12px;padding-left:20px">${ETAPES_GUIDE.map(([t, d]) => `<li><b>${esc(t)}</b> : ${esc(d)}</li>`).join('')}</ol>
+          <p class="petit muet" style="margin-top:10px">Chaque étape peut être faite par un agent différent : l'app sait où en est chaque colis. Dans « Scanner », vous n'avez rien à choisir.</p>
+        </details>
+      </div>`;
+    // Les tâches de scan ouvrent le scanner en mode automatique
+    main.querySelectorAll('[data-tache]').forEach(a => a.addEventListener('click', () => { if (a.getAttribute('href') === '#/scanner') stock.ecrire('action_scan', 'auto'); }));
+  }
+
+  // ══════════════════════════════════════════════════════════
   //  SCAN : chargement, arrivée, guichet
   // ══════════════════════════════════════════════════════════
   const ACTIONS = {
+    auto:      { lib: 'Automatique', titre: 'Scanner',                    consigne: 'Scannez n\'importe quel colis' },
     charger:   { lib: 'Charger',     titre: 'Mettre dans un lot',         consigne: 'Scannez chaque colis chargé' },
     arrivee:   { lib: 'Arrivée',     titre: 'Réception d\'un lot',         consigne: 'Scannez chaque colis reçu' },
     acheminer: { lib: 'Vers agence', titre: 'Envoi vers une autre agence', consigne: 'Scannez les colis qui partent vers une autre agence' },
@@ -244,7 +295,8 @@
   };
 
   async function vueScan(action) {
-    if (!ACTIONS[action]) action = 'charger';
+    if (!ACTIONS[action]) action = 'auto';
+    const manuel = action !== 'auto';
     stock.ecrire('action_scan', action);
     const lots = action === 'charger' ? (CTX?.lotsPreparation || []) : action === 'arrivee' ? (CTX?.lotsEnRoute || []) : [];
     let lotChoisi = stock.lire(`lot_${action}`) || lots[0]?.code || '';
@@ -253,7 +305,11 @@
 
     main.innerHTML = `
       <div class="pile">
-        <div class="segments" role="group" aria-label="Type de scan">${Object.entries(ACTIONS).map(([k, a]) => `<button type="button" data-action="${k}" aria-pressed="${k === action}">${esc(a.lib)}</button>`).join('')}</div>
+        ${manuel ? `
+          <div class="ligne entre"><span class="petit gras">Étape choisie à la main</span><button type="button" class="btn-lien" data-action="auto">Revenir au mode automatique</button></div>
+          <div class="segments" role="group" aria-label="Étape">${Object.entries(ACTIONS).filter(([k]) => k !== 'auto').map(([k, a]) => `<button type="button" data-action="${k}" aria-pressed="${k === action}">${esc(a.lib)}</button>`).join('')}</div>`
+        : `<div class="bandeau bandeau-vert petit">${ic('scan', 'ic-sm')}<span>Scannez n'importe quel colis : l'app fait la bonne étape toute seule.</span></div>`}
+        <div data-dernier></div>
         ${action === 'acheminer' ? `
           <p class="bandeau bandeau-ocre">${ic('colis', 'ic-sm')}<span>${CTX?.aAcheminer ? `<b>${CTX.aAcheminer}</b> colis arrivé(s) ici doivent partir vers d'autres agences.` : 'Aucun colis en attente d\'envoi vers une autre agence.'} Le destinataire est prévenu par SMS.</span></p>` : ''}
         ${action === 'charger' || action === 'arrivee' ? `
@@ -282,6 +338,7 @@
           <button class="btn btn-noir btn-carre" type="submit" aria-label="Valider">${ic('ok')}</button>
         </form>
 
+        ${manuel ? '' : '<button type="button" class="btn-lien petit" data-action="charger" style="align-self:flex-start">Choisir l\'étape moi-même</button>'}
         <div class="ligne entre"><h3>Derniers scans</h3><span class="petit muet" data-compte></span></div>
         <div class="pile" style="--gap:8px" data-journal></div>
         ${action === 'charger' ? `<p class="petit muet">Quand tout est chargé, l'admin marque le lot « parti » : tous les clients sont prévenus.</p>` : ''}
@@ -296,10 +353,23 @@
 
     const dessinerJournal = () => {
       const lignes = journal.lire().filter(e => e.action === action).slice(0, 25);
+      const d = lignes[0];
+      const zoneDernier = $('[data-dernier]');
+      if (zoneDernier) zoneDernier.innerHTML = d ? `
+        <div class="dernier-scan ${d.etat}">
+          <div class="ligne" style="--gap:12px">
+            <div class="ico">${ic(d.etat === 'ok' ? 'ok' : d.etat === 'erreur' ? 'alerte' : d.etat === 'info' ? 'colis' : 'horloge')}</div>
+            <div class="grandit">
+              <div class="message">${esc(d.message || '')}</div>
+              <div class="petit">${esc(d.numero)}${d.destinataire ? ` · ${esc(d.destinataire)}` : ''}</div>
+            </div>
+          </div>
+          ${d.avant ? `<div class="tres-petit avant">Étape précédente : ${esc(d.avant.label)}${d.avant.lieu ? ` à ${esc(d.avant.lieu)}` : ''}${d.avant.par ? ` par ${esc(d.avant.par)}` : ''}, ${esc(date(d.avant.le))}</div>` : ''}
+        </div>` : '';
       $('[data-compte]').textContent = lignes.length ? `${lignes.filter(e => e.etat === 'ok').length} OK · ${lignes.filter(e => e.etat === 'attente').length} en attente` : '';
       $('[data-journal]').innerHTML = lignes.length ? lignes.map(e => `
         <div class="scan ${e.etat}">
-          <div class="ico">${ic(e.etat === 'ok' ? 'ok' : e.etat === 'erreur' ? 'alerte' : 'horloge', 'ic-sm')}</div>
+          <div class="ico">${ic(e.etat === 'ok' ? 'ok' : e.etat === 'erreur' ? 'alerte' : e.etat === 'info' ? 'colis' : 'horloge', 'ic-sm')}</div>
           <div class="grandit"><div class="gras">${esc(e.numero)}</div><div class="tres-petit">${esc(e.message || '')}${e.destinataire ? ` · ${esc(e.destinataire)}` : ''}</div></div>
           <span class="tres-petit muet">${esc(heure(e.le))}</span>
         </div>`).join('') : '<p class="vide petit">Aucun scan pour le moment.</p>';
@@ -1187,7 +1257,7 @@
           <button class="btn btn-plein" data-reimprimer>${ic('imprimer', 'ic-sm')} Réimprimer l'étiquette</button>
           ${c.tarif && !c.tarif.estime ? `<h3>Factures</h3><div class="pile" style="--gap:8px" data-factures-fiche></div>` : ''}
           <div class="carte"><h3 style="margin-bottom:12px">Historique</h3><div class="frise">${[...c.historique].reverse().map(h => `
-            <div class="etape"><div class="rail"><div class="point"></div><div class="trait"></div></div><div class="texte"><div class="gras">${esc(h.label)}</div><div class="petit muet">${esc(date(h.le))}${h.detail ? ` · ${esc(h.detail)}` : ''}</div></div></div>`).join('')}</div></div>
+            <div class="etape"><div class="rail"><div class="point"></div><div class="trait"></div></div><div class="texte"><div class="gras">${esc(h.label)}</div><div class="petit muet">${esc(date(h.le))}${h.detail ? ` · ${esc(h.detail)}` : ''}${h.agent?.prenom ? ` · par ${esc(h.agent.prenom)} ${esc((h.agent.nom || '')[0] || '')}.` : ''}</div></div></div>`).join('')}</div></div>
         </div>`;
       zone.querySelector('[data-douane]')?.addEventListener('submit', async (e) => {
         e.preventDefault();

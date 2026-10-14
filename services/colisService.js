@@ -9,7 +9,7 @@ const { Mouvement } = require('../models/Mouvement');
 const { calculerTarif, calculerSolde, calculerMagasinage, enGnf } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
 const {
-  STATUTS, STATUTS_LABELS, STATUTS_LOT, CODE_RETRAIT_ESSAIS_MAX, METHODES_PAIEMENT, DEVISES, PAYS, sensEntre, CGV_VERSION,
+  STATUTS, STATUTS_LABELS, STATUTS_LOT, CODE_RETRAIT_ESSAIS_MAX, METHODES_PAIEMENT, DEVISES, PAYS, sensEntre, CGV_VERSION, SENS: SENS_LISTE,
 } = require('../config/constants');
 
 const paysArriveeDe = (sens) => String(sens || 'FR-GN').split('-')[1];
@@ -255,7 +255,103 @@ async function mettrePret(colis, agent, emplacement) {
   if (colis.expediteur.telephone !== colis.destinataire.telephone) notifier(colis.expediteur.telephone, msg);
 }
 
+// ── Scan automatique : l'app décide de l'étape ───────────────
+// Un agent qui n'a jamais vu le colis le scanne : on regarde où il en est et où
+// se trouve l'agent, et on fait l'étape logique. Les autres cas sont expliqués en clair.
+const User = require('../models/User');
+async function etapePrecedente(colis) {
+  const h = [...(colis.historique || [])].reverse().find(e => e.statut);
+  if (!h) return null;
+  let par;
+  if (h.agent) { const u = await User.findById(h.agent).select('prenom nom').lean(); if (u) par = `${u.prenom} ${(u.nom || '')[0] || ''}.`.trim(); }
+  return { label: h.label, detail: h.detail, lieu: h.lieu ? await nomLieu(h.lieu) : undefined, par, le: h.le };
+}
+
+// Lot ouvert du bon sens et du bon mode ; ouvert automatiquement s'il n'y en a pas
+async function lotPourChargement(colis, agent, codeDemande) {
+  const filtre = { statut: STATUTS_LOT.PREPARATION, mode: colis.mode, sens: colis.sens || 'FR-GN' };
+  if (codeDemande) {
+    const l = await Lot.findOne({ ...filtre, code: String(codeDemande).toUpperCase() });
+    if (l) return { lot: l };
+  }
+  const existant = await Lot.findOne(filtre).sort({ createdAt: -1 });
+  if (existant) return { lot: existant };
+  const s = SENS_LISTE.find(x => x.key === (colis.sens || 'FR-GN'));
+  const [dep, arr] = await Promise.all([Config.plateforme(s.depart), Config.plateforme(s.arrivee)]);
+  const lot = await Lot.create({ sens: s.key, mode: colis.mode, depot: dep?.code, destination: arr?.code, creePar: agent._id, notes: 'Ouvert automatiquement au premier chargement' });
+  return { lot, nouveau: true };
+}
+
+async function scanAuto(agent, scan) {
+  const numero = String(scan.numero || '').trim().toUpperCase();
+  const colis = await Colis.findOne({ numeroSuivi: numero });
+  const base = { numero, action: 'auto' };
+  if (!colis) return { ...base, ok: false, erreur: 'Colis introuvable. Vérifiez l\'étiquette.' };
+  const agence = agent.lieu ? await Config.lieu(agent.lieu) : null;
+  const [paysDep, paysArr] = String(colis.sens || 'FR-GN').split('-');
+  const avant = await etapePrecedente(colis);
+  const info = { ...base, destinataire: colis.destinataire?.nom, avant, statut: colis.statut };
+  const ici = agent.lieu && colis.guichet === agent.lieu;
+  const guichetNom = await nomLieu(colis.guichet);
+  const faire = async (action, extra = {}) => {
+    const r = await appliquerScan(agent, { ...scan, numero, action, ...extra });
+    return { ...r, ...info, action: 'auto', actionFaite: r.ok ? action : undefined, statut: r.statut || colis.statut, avant };
+  };
+  const dire = (message, ok = true, extra = {}) => ({ ...info, ok, info: true, dejaFait: ok, message, erreur: ok ? undefined : message, ...extra });
+  if (!agence) return dire('Votre compte n\'est rattaché à aucune agence : utilisez le choix manuel de l\'étape.', false);
+
+  switch (colis.statut) {
+    case STATUTS.RESERVE:
+      return dire('Ce colis n\'est pas encore déposé : enregistrez-le d\'abord dans « Dépôt ».', false);
+    case STATUTS.DEPOSE: {
+      if (agence.pays !== paysDep) return dire(`Ce colis est encore au départ (${nomPays(paysDep)}).`, false);
+      const { lot, nouveau } = await lotPourChargement(colis, agent, scan.lot);
+      const r = await faire('charger', { lot: lot.code });
+      if (r.ok) r.message = `Mis dans le lot ${lot.code}${nouveau ? ' (lot ouvert automatiquement)' : ''}`;
+      return { ...r, lotCode: lot.code, lotNouveau: !!nouveau };
+    }
+    case STATUTS.CHARGE:
+      if (agence.pays === paysDep) return dire(`Déjà dans le lot ${colis.lotCode}. Il partira avec ce lot.`, true, { lotCode: colis.lotCode });
+      // Lot pas encore marqué « parti » mais colis déjà là : on le réceptionne
+      // falls through
+    case STATUTS.EN_TRANSIT: {
+      if (agence.pays !== paysArr) return dire(`Ce colis est en route vers ${nomPays(paysArr)}.`, false);
+      const r = await faire('arrivee');
+      if (!r.ok) return r;
+      if (ici) {
+        // Arrivé directement dans son agence de retrait : mis en rayon dans la foulée
+        const r2 = await faire('guichet');
+        if (r2.ok) return { ...r2, actionFaite: 'arrivee+guichet', message: 'Reçu et mis en rayon : le destinataire a son code' };
+      }
+      return { ...r, message: ici ? 'Reçu' : `Reçu ici. À envoyer vers ${guichetNom} : mettez-le de côté.`, aEnvoyer: !ici, versAgence: ici ? undefined : guichetNom };
+    }
+    case STATUTS.ARRIVE:
+    case STATUTS.ACHEMINEMENT: {
+      if (agence.pays !== paysArr) return dire(`Ce colis est déjà en ${nomPays(paysArr)}.`, false);
+      if (ici) {
+        const r = await faire('guichet');
+        if (r.ok) r.message = 'Mis en rayon : le destinataire a son code';
+        return r;
+      }
+      if (colis.statut === STATUTS.ACHEMINEMENT) return dire(`Déjà en route vers ${guichetNom}.`, true);
+      const r = await faire('acheminer');
+      if (r.ok) r.message = `Envoyé vers ${guichetNom}`;
+      return r;
+    }
+    case STATUTS.PRET:
+      return ici ? dire('Déjà en rayon, prêt à remettre : ouvrez « Remise » quand le client est là.', true, { pretARemettre: true })
+        : dire(`Ce colis attend son destinataire à ${guichetNom}.`, false);
+    case STATUTS.EN_LIVRAISON:
+      return dire('Ce colis est parti en livraison avec un livreur.', false);
+    case STATUTS.REMIS:
+      return dire('Ce colis a déjà été remis au destinataire.', false);
+    default:
+      return dire(`Statut : ${STATUTS_LABELS[colis.statut]}.`, false);
+  }
+}
+
 async function appliquerScan(agent, scan) {
+  if (scan.action === 'auto') return scanAuto(agent, scan);
   const numero = String(scan.numero || '').trim().toUpperCase();
   const action = ACTIONS_SCAN[scan.action];
   const base = { numero, action: scan.action };
@@ -436,5 +532,5 @@ async function colisDuGuichet(guichet) {
 module.exports = {
   ErreurMetier, normTel, masquerTel, lieAuCompte, vuePublique, vueComplete, avecOperation,
   encaisser, deposer, appliquerScan, sensDepuisAgences, paysArriveeDe, nomPays, remettre, changerStatutMasse, colisDuGuichet,
-  mettrePret, calculerMagasinage,
+  mettrePret, calculerMagasinage, etapePrecedente,
 };

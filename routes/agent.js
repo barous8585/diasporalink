@@ -41,9 +41,59 @@ router.get('/contexte', ah(async (req, res) => {
   });
 }));
 
+// ── GET /api/agent/aujourdhui ── le travail de l'agence (le même pour tous ses agents)
+router.get('/aujourdhui', ah(async (req, res) => {
+  const lieu = await Config.lieu(req.user.lieu);
+  if (!lieu) return res.json({ succes: true, lieu: null, taches: [] });
+  const pays = lieu.pays;
+  const sensDepart = SENS.filter(s => s.depart === pays).map(s => s.key);
+  const sensArrivee = SENS.filter(s => s.arrivee === pays).map(s => s.key);
+  const { Mouvement } = require('../models/Mouvement');
+  const debut = new Date(); debut.setHours(0, 0, 0, 0);
+  const [aCharger, lotsPrepa, lotsAttendus, aRecevoir, enRayon, aEnvoyer, prets, reservations, maCaisse, faitsAujourdhui] = await Promise.all([
+    Colis.find({ statut: STATUTS.DEPOSE, depot: lieu.code }).select('numeroSuivi mode poidsReel destinataire').lean(),
+    Lot.find({ statut: STATUTS_LOT.PREPARATION, sens: { $in: sensDepart } }).lean(),
+    Lot.find({ statut: { $in: [STATUTS_LOT.PARTI, STATUTS_LOT.ARRIVE] }, sens: { $in: sensArrivee } }).lean(),
+    // Colis partis vers mon pays, pas encore scannés à l'arrivée
+    Colis.countDocuments({ statut: { $in: [STATUTS.EN_TRANSIT] }, sens: { $in: sensArrivee } }),
+    Colis.find({ statut: { $in: [STATUTS.ARRIVE, STATUTS.ACHEMINEMENT] }, guichet: lieu.code }).select('numeroSuivi statut destinataire').lean(),
+    lieu.plateforme ? Colis.find({ statut: STATUTS.ARRIVE, sens: { $in: sensArrivee }, guichet: { $ne: lieu.code } }).select('numeroSuivi guichet').lean() : [],
+    Colis.find({ statut: STATUTS.PRET, guichet: lieu.code }).select('numeroSuivi livraison arriveGuichetLe').lean(),
+    Colis.countDocuments({ statut: STATUTS.RESERVE, depot: lieu.code }),
+    Mouvement.find({ agent: req.user._id, cloture: null }).select('montant devise le').lean(),
+    Mouvement.countDocuments({ lieu: lieu.code, le: { $gte: debut } }),
+  ]);
+  const nbParLot = await Colis.aggregate([{ $match: { lotCode: { $in: [...lotsPrepa, ...lotsAttendus].map(l => l.code) } } }, { $group: { _id: { lot: '$lotCode', statut: '$statut' }, nb: { $sum: 1 } } }]);
+  const compte = (code, statuts) => nbParLot.filter(x => x._id.lot === code && (!statuts || statuts.includes(x._id.statut))).reduce((t, x) => t + x.nb, 0);
+  const aLivrer = prets.filter(c => c.livraison?.demande && c.livraison.statut !== 'annulee').length;
+  const caisseAncienne = maCaisse.some(m => new Date(m.le) < debut);
+  const totaux = {};
+  maCaisse.forEach(m => { totaux[m.devise] = (totaux[m.devise] || 0) + m.montant; });
+  const taches = [];
+  if (reservations) taches.push({ cle: 'reservations', nb: reservations, titre: `${reservations} réservation(s) en ligne attendue(s) ici`, aide: 'Le client vient déposer : cherchez son numéro ou son téléphone dans « Dépôt ».', onglet: 'depot' });
+  if (aCharger.length) taches.push({ cle: 'charger', nb: aCharger.length, titre: `${aCharger.length} colis à mettre dans un lot`, aide: `${aCharger.filter(c => c.mode === 'air').length} avion · ${aCharger.filter(c => c.mode === 'mer').length} bateau. Scannez-les : le bon lot est choisi tout seul.`, onglet: 'scanner' });
+  for (const l of lotsAttendus) {
+    const total = compte(l.code), recus = compte(l.code, [STATUTS.ARRIVE, STATUTS.ACHEMINEMENT, STATUTS.PRET, STATUTS.EN_LIVRAISON, STATUTS.REMIS]);
+    if (total - recus > 0 && (lieu.plateforme || l.destination === lieu.code)) {
+      taches.push({ cle: `lot-${l.code}`, nb: total - recus, titre: `Lot ${l.code} : ${total - recus} colis à réceptionner`, aide: `${l.mode === 'mer' ? 'Bateau' : 'Avion'}${l.reference ? ` ${l.reference}` : ''} · ${recus} / ${total} déjà scannés. Scannez chaque colis à sa sortie.`, onglet: 'scanner', lot: l.code, progression: total ? recus / total : 0 });
+    }
+  }
+  if (enRayon.length) taches.push({ cle: 'rayon', nb: enRayon.length, titre: `${enRayon.length} colis arrivé(s) à mettre en rayon`, aide: 'Scannez-les en les posant sur l\'étagère : le destinataire reçoit son code.', onglet: 'scanner' });
+  if (aEnvoyer.length) {
+    const parAgence = {};
+    for (const c of aEnvoyer) parAgence[c.guichet] = (parAgence[c.guichet] || 0) + 1;
+    const noms = await Promise.all(Object.keys(parAgence).map(async k => `${(await Config.lieu(k))?.nom || k} (${parAgence[k]})`));
+    taches.push({ cle: 'envoyer', nb: aEnvoyer.length, titre: `${aEnvoyer.length} colis à envoyer vers une autre agence`, aide: `${noms.join(', ')}. Scannez-les au moment où ils partent.`, onglet: 'scanner' });
+  }
+  if (prets.length) taches.push({ cle: 'remettre', nb: prets.length, titre: `${prets.length} colis prêt(s) à remettre`, aide: aLivrer ? `Dont ${aLivrer} à livrer à domicile par un livreur.` : 'Les destinataires ont reçu leur code.', onglet: 'remise' });
+  if (maCaisse.length) taches.push({ cle: 'caisse', nb: maCaisse.length, titre: caisseAncienne ? 'Caisse d\'un jour précédent à fermer' : 'Fermer la caisse en fin de journée', aide: Object.entries(totaux).map(([d, v]) => `${Math.round(v * 100) / 100} ${d === 'EUR' ? '€' : 'GNF'}`).join(' · '), onglet: 'caisse', urgent: caisseAncienne });
+  if (aRecevoir && !lotsAttendus.length) taches.push({ cle: 'transit', nb: aRecevoir, titre: `${aRecevoir} colis en route vers ${lieu.pays === 'GN' ? 'la Guinée' : 'la France'}`, aide: 'Rien à faire pour l\'instant.', info: true });
+  res.json({ succes: true, lieu, taches, faitsAujourdhui, lotsPrepa: lotsPrepa.map(l => ({ code: l.code, mode: l.mode, sens: l.sens, nb: compte(l.code) })) });
+}));
+
 // ── GET /api/agent/colis/:numero ── fiche complète (remise, contrôle)
 router.get('/colis/:numero', ah(async (req, res) => {
-  const colis = await Colis.findOne({ numeroSuivi: req.params.numero.trim().toUpperCase() });
+  const colis = await Colis.findOne({ numeroSuivi: req.params.numero.trim().toUpperCase() }).populate('historique.agent', 'prenom nom');
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
   res.json({ succes: true, colis: await svc.vueComplete(colis) });
 }));
