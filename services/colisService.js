@@ -77,7 +77,8 @@ function vueCoursePublique(c) {
     statut: c.statut,
     quartier: c.adresse?.quartier || c.adresse?.commune || '',
     aPosition: !!c.adresse?.position?.lat,
-    prix: c.prix, devise: c.devise, distanceKm: c.distanceKm,
+    prix: c.prix, devise: c.devise, distanceKm: c.distanceKm, prixGnf: c.prixGnf,
+    payeGnf: c.payeGnf || 0, payee: !!(c.prixGnf > 0 && (c.payeGnf || 0) >= c.prixGnf),
     livreur: c.livreurNom ? prenomSeul(c.livreurNom) : undefined,
     jour: c.jour, moment: c.moment,
   };
@@ -105,6 +106,7 @@ async function vuePublique(colis) {
     soldeEur: solde.soldeEur,
     ramassage: vueCoursePublique(colis.ramassage),
     livraison: vueCoursePublique(colis.livraison),
+    paiementEnVerification: (colis.declarations || []).some(d => d.statut === 'a_verifier'),
     majLe: new Date(),
   };
 }
@@ -114,6 +116,7 @@ async function vueComplete(colis, { avecCode = false } = {}) {
   const obj = colis.toJSON();
   const solde = calculerSolde(colis, config);
   obj.solde = solde;
+  obj.domicileAPayerGnf = require('../utils/tarif').domicileAPayerGnf(colis);
   obj.guichetInfo = await Config.lieu(colis.guichet);
   if (avecCode && colis.codeRetrait && [STATUTS.PRET, STATUTS.EN_LIVRAISON].includes(colis.statut)) obj.codeRetrait = colis.codeRetrait;
   return obj;

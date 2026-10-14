@@ -26,10 +26,14 @@ const ADMIN_MDP = 'MotDePasseInitial!';
 const MDP = 'motdepasse123';
 
 // Connexion par mot de passe ; crée un compte client si prénom/nom fournis et compte absent
+// (jetons gardés : la connexion est limitée en nombre d'essais, comme en production)
+const jetons = {};
 async function connexion(telephone, prenom, nom) {
+  if (jetons[telephone]) return jetons[telephone];
   let r = await appel('POST', '/auth/connexion', { telephone, motDePasse: telephone === ADMIN_TEL ? ADMIN_MDP : MDP });
   if (r.status === 401 && prenom) r = await appel('POST', '/auth/inscription', { telephone, prenom, nom, motDePasse: MDP });
   assert.ok(r.token, r.message);
+  jetons[telephone] = r.token;
   return r.token;
 }
 
@@ -443,7 +447,9 @@ test('ramassage et livraison à domicile, prix au kilomètre', async () => {
   assert.ok(vueAdmin.livreurs.some(l => l.prenom === 'Sekou'));
   assert.ok(vueAdmin.faites.some(c => c.numeroSuivi === numero && c.type === 'ramassage'));
   const sekou = vueAdmin.livreurs.find(l => l.prenom === 'Sekou');
-  r = await appel('POST', '/admin/courses/assigner', { numero, type: 'livraison', livreur: sekou._id }, admin);
+  // Livraison pas payée d'avance : l'admin confirme (le livreur encaissera chez le client)
+  assert.strictEqual((await appel('POST', '/admin/courses/assigner', { numero, type: 'livraison', livreur: sekou._id }, admin)).code, 'non_payee');
+  r = await appel('POST', '/admin/courses/assigner', { numero, type: 'livraison', livreur: sekou._id, force: true }, admin);
   assert.strictEqual(r.course.livreurNom, 'Sekou Livreur');
   // Le livreur de Paris ne peut pas la prendre
   assert.strictEqual((await appel('POST', '/livreur/prendre', { numero, type: 'livraison' }, livParis)).status, 403);
@@ -851,4 +857,91 @@ test('articles à la pièce : réservation, pesée au comptoir, facture, catalog
   const valise = apres.find(a => a.label === 'Valise vide');
   assert.strictEqual(valise.cle, 'valise-vide');
   assert.deepStrictEqual(valise.prix['GN-FR'], {});
+});
+
+test('paiement en ligne : livraison payée d\'avance (mobile money vérifié), non remboursable, moyens par pays', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const client = await connexion('0655555555', 'Fanta', 'Camara');
+
+  // Moyens : rien en mobile money tant qu'aucun numéro marchand ; carte absente sans Stripe
+  let pub = await appel('GET', '/config');
+  assert.deepStrictEqual(pub.moyensPaiement.GN, []);
+  let r = await appel('PATCH', '/config/admin', { paiements: { GN: { orange_money: true, mtn_momo: false }, comptes: { orange_money: { numero: '622 00 00 00', titulaire: 'TMS' } } } }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  pub = await appel('GET', '/config');
+  assert.deepStrictEqual(pub.moyensPaiement.GN.map(m => [m.key, m.numero]), [['orange_money', '622 00 00 00']]);
+
+  // Réservation avec livraison à Kipé (position connue) : la livraison est à payer d'avance
+  r = await appel('POST', '/colis', { cgvAcceptees: true,
+    mode: 'air', typeColis: 'vetements', poidsEstime: 3, depot: 'PARIS', guichet: 'KALOUM',
+    destinataire: { nom: 'Binta Sow', telephone: '622333444' },
+    livraison: { demande: true, adresse: { ville: 'Conakry', quartier: 'Kipé', repere: 'Pharmacie', position: { lat: 9.5092 + 0.03, lng: -13.7122 } } },
+  }, client);
+  assert.strictEqual(r.status, 201, r.message);
+  const numero = r.colis.numeroSuivi;
+  const prixGnf = r.colis.livraison.prixGnf;
+  assert.ok(prixGnf > 0);
+  assert.strictEqual(r.colis.domicileAPayerGnf, prixGnf);
+  let du = await appel('GET', `/paiements/a-payer/${numero}`);
+  assert.strictEqual(du.domicile.gnf, prixGnf);
+  assert.strictEqual(du.solde.gnf, 0, 'pas de solde avant la pesée');
+
+  // L'admin ne peut pas envoyer le livreur sans prévenir : course pas payée
+  const sekou = (await appel('GET', '/admin/courses', null, admin)).livreurs.find(l => l.lieu === 'KALOUM');
+  r = await appel('POST', '/admin/courses/assigner', { numero, type: 'livraison', livreur: sekou._id }, admin);
+  assert.strictEqual(r.status, 409);
+  assert.strictEqual(r.code, 'non_payee');
+
+  // Le client paie par Orange Money et donne la référence ; doublon refusé
+  assert.strictEqual((await appel('POST', '/paiements/mobile', { numero, objet: 'domicile', methode: 'mtn_momo', reference: 'X1234' })).status, 400, 'MTN fermé');
+  r = await appel('POST', '/paiements/mobile', { numero, objet: 'domicile', methode: 'orange_money', reference: 'PP2610.1432.A1', telephone: '622333444' });
+  assert.strictEqual(r.status, 201, r.message);
+  assert.strictEqual(r.enAttente.length, 1);
+  assert.strictEqual((await appel('POST', '/paiements/mobile', { numero, objet: 'domicile', methode: 'orange_money', reference: 'pp2610.1432.a1' })).status, 409);
+  assert.strictEqual((await appel('GET', `/colis/suivi/${numero}`)).colis.paiementEnVerification, true);
+
+  // L'admin vérifie sur le compte marchand et valide
+  const decl = (await appel('GET', '/paiements/declarations', null, admin)).declarations.find(d => d.numeroSuivi === numero);
+  assert.strictEqual(decl.montantGnf, prixGnf);
+  assert.strictEqual((await appel('GET', '/paiements/declarations', null, client)).status, 403);
+  r = await appel('POST', `/paiements/declarations/${decl.id}`, { decision: 'valider' }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  let c = (await appel('GET', `/colis/${numero}`, null, client)).colis;
+  assert.strictEqual(c.livraison.payeGnf, prixGnf);
+  assert.strictEqual(c.domicileAPayerGnf, 0);
+  assert.ok(c.paiements.some(p => p.objet === 'domicile' && p.methode === 'orange_money' && p.devise === 'GNF'));
+  // Facture de la livraison émise tout de suite
+  const fs = (await appel('GET', `/factures/colis/${numero}`, null, client)).factures;
+  assert.deepStrictEqual(fs.flatMap(f => f.lignes.map(l => l.cle)), ['livraison']);
+  // Maintenant l'assignation passe
+  r = await appel('POST', '/admin/courses/assigner', { numero, type: 'livraison', livreur: sekou._id }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual(r.course.payee, true);
+
+  // Le client renonce : la livraison payée reste due (non remboursable), rien ne lui est rendu
+  r = await appel('POST', `/colis/${numero}/livraison`, { telephone: '622333444', demande: false });
+  assert.strictEqual(r.status, 200, r.message);
+  c = (await appel('GET', `/colis/${numero}`, null, client)).colis;
+  assert.strictEqual(c.livraison.statut, 'annulee');
+  assert.strictEqual(c.solde.domicileGnf, prixGnf, 'frais acquis');
+  // Redemandée plus tard : déjà payée
+  r = await appel('POST', `/colis/${numero}/livraison`, { telephone: '622333444', demande: true, adresse: { ville: 'Conakry', quartier: 'Kipé', repere: 'Pharmacie', position: { lat: 9.5092 + 0.03, lng: -13.7122 } } });
+  assert.strictEqual(r.status, 200, r.message);
+  du = await appel('GET', `/paiements/a-payer/${numero}`);
+  assert.strictEqual(du.domicile.gnf, 0);
+
+  // Refus d'un paiement non trouvé : rien n'est enregistré
+  const agentParis = await connexion('+33600000002');
+  r = await appel('POST', '/agent/depot', { cgvAcceptees: true, numeroSuivi: numero, poidsReel: 3, payeurArrivee: true }, agentParis);
+  assert.strictEqual(r.status, 201, r.message);
+  du = await appel('GET', `/paiements/a-payer/${numero}`);
+  assert.ok(du.solde.gnf > 0);
+  r = await appel('POST', '/paiements/mobile', { numero, objet: 'global', methode: 'orange_money', reference: 'FAUX-999' });
+  assert.strictEqual(r.status, 201, r.message);
+  const d2 = (await appel('GET', '/paiements/declarations', null, admin)).declarations.find(d => d.reference === 'FAUX-999');
+  assert.strictEqual(d2.montantGnf, du.solde.gnf);
+  await appel('POST', `/paiements/declarations/${d2.id}`, { decision: 'refuser', motif: 'Introuvable' }, admin);
+  assert.strictEqual((await appel('GET', `/paiements/a-payer/${numero}`)).solde.gnf, du.solde.gnf);
+  // Carte : sans clés Stripe, le serveur le dit clairement
+  assert.strictEqual((await appel('POST', '/paiements/creer-session', { numero, objet: 'solde' })).status, 503);
 });

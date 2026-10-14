@@ -71,7 +71,7 @@
       <h2>4. Prix et paiement</h2>
       <p>Les prix sont indiqués toutes taxes comprises. Le transport est payé au dépôt par l'expéditeur, ou à l'arrivée par le destinataire si cette option a été choisie. Les droits et taxes de douane du pays d'arrivée sont refacturés à l'identique au destinataire.</p>
       <p>Le colis est gardé gratuitement ${nb(m.joursGratuits)} jours à l'agence de retrait. Ensuite, des frais de garde s'appliquent : ${nb(m.fraisJourGnf)} GNF par jour en Guinée, ${nb(m.fraisJourEur)} € par jour en France.</p>
-      <p>Le ramassage et la livraison à domicile sont facultatifs. Leur prix dépend de la distance entre l'agence et l'adresse ; il est affiché avant validation.</p>
+      <p>Le ramassage et la livraison à domicile sont facultatifs. Leur prix dépend de la distance entre l'agence et l'adresse ; il est affiché avant validation. Il se paie en ligne, d'avance (carte bancaire, Orange Money ou MTN MoMo selon le pays) : la course est programmée dès le paiement reçu. Une course payée n'est pas remboursée si le client l'annule ou change d'avis ; si elle est redemandée pour le même colis, le paiement déjà fait est conservé. Un paiement Orange Money ou MTN MoMo est validé après vérification de sa réception par TMS.</p>
       <p>Le colis n'est remis qu'une fois toutes les sommes payées. Une facture est délivrée pour chaque paiement.</p>
 
       <h2>5. Délais</h2>

@@ -139,7 +139,9 @@
     if (vedette) main.querySelector('[data-vedette]').innerHTML = carteVedette(vedette);
     const autres = actifs.filter(c => c !== vedette).slice(0, 4);
     if (autres.length) {
-      main.querySelector('[data-autres]').innerHTML = `<h2>Mes autres colis</h2>${autres.map(ligneColis).join('')}`;
+      const zone = main.querySelector('[data-autres]');
+      zone.innerHTML = `<div class="ligne entre"><h2>Mes autres colis</h2><a class="petit" href="#/mes-colis">Tout voir</a></div>${autres.map(c => carteColis(c, u)).join('')}`;
+      brancherCartes(zone, autres);
     }
   }
 
@@ -318,7 +320,8 @@
     main.querySelector('[data-livraison]')?.addEventListener('click', (e) => demanderLivraison(c, liv, e.currentTarget.dataset.livraison));
     if (complet && !['reserve', 'annule'].includes(c.statut) && !horsLigne) chargerFacturesEtReclamations(c);
     if (complet && !['remis', 'annule'].includes(c.statut)) K.notifications.carte(main.querySelector('[data-notifs-suivi]'), { texte: 'Être prévenu dès que ce colis arrive et recevoir le code ici.' });
-    main.querySelector('[data-payer]')?.addEventListener('click', () => payer(c, solde));
+    main.querySelector('[data-payer]')?.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'solde', c }));
+    main.querySelectorAll('[data-payer-domicile]').forEach(b => b.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c })));
     main.querySelector('[data-annuler]')?.addEventListener('click', async () => {
       if (!confirm('Annuler cette réservation ?')) return;
       try { await api.del(`/colis/${c.numeroSuivi}`); toast('Réservation annulée.', 'ok'); router(); }
@@ -441,11 +444,21 @@
   const LIB_COURSE = { a_planifier: 'Livreur bientôt choisi', assignee: 'Livreur choisi', en_route: 'Livreur en route', faite: 'Fait' };
   function carteCourses(c, ram, liv) {
     const blocs = [];
+    const enVerif = c.paiementEnVerification || (c.declarations || []).some(d => d.statut === 'a_verifier' && d.objet === 'domicile');
+    // Paiement d'avance de la course : payée, en vérification, ou bouton pour payer
+    const etatPaiement = (x) => {
+      if (!x?.prixGnf || x.statut === 'faite') return '';
+      if ((x.payeGnf || 0) >= x.prixGnf) return `<p class="petit" style="color:var(--vert);font-weight:600">${ic('ok', 'ic-sm')} Payée</p>`;
+      if (enVerif) return `<p class="bandeau bandeau-ocre">${ic('horloge', 'ic-sm')}<span>Paiement en cours de vérification.</span></p>`;
+      if (['remis', 'annule'].includes(c.statut)) return '';
+      return `<div class="a-payer"><span><b>À payer : ${esc(montant(x.prix, x.devise))}</b><br><span class="tres-petit">La course est programmée dès le paiement.</span></span><button class="btn btn-principal btn-petit" data-payer-domicile>Payer</button></div>`;
+    };
     if (ram) {
       blocs.push(`
         <div class="carte pile" style="--gap:6px">
           <div class="ligne entre"><h3>${ic('moto', 'ic-sm')} Ramassage à domicile</h3><span class="badge">${esc(ram.statut === 'faite' ? 'Ramassé' : LIB_COURSE[ram.statut] || '')}</span></div>
           <p class="petit">${esc(ram.quartier || '')}${ram.prix ? ` · ${esc(montant(ram.prix, ram.devise))}` : ''}${ram.livreur ? ` · ${esc(ram.livreur)}` : ''}</p>
+          ${etatPaiement(ram)}
           ${ram.statut !== 'faite' ? '<p class="tres-petit muet">Le livreur vous appelle avant de passer. Le colis sera pesé à l\'agence.</p>' : ''}
         </div>`);
     }
@@ -455,6 +468,7 @@
         <div class="carte pile" style="--gap:8px">
           <div class="ligne entre"><h3>${ic('moto', 'ic-sm')} Livraison à domicile</h3>${c.statut === 'remis' ? '<span class="badge">Livré</span>' : liv.statut === 'en_route' ? '<span class="badge">En route</span>' : ''}</div>
           <p class="petit">${esc(liv.quartier || '')}${liv.prix ? ` · ${esc(montant(liv.prix, liv.devise))} (${esc(String(liv.distanceKm).replace('.', ','))} km)` : ''}${liv.livreur ? ` · ${esc(liv.livreur)}` : ''}</p>
+          ${etatPaiement(liv)}
           ${!liv.aPosition && ouvert ? `
             <p class="bandeau bandeau-ocre">${ic('gps', 'ic-sm')}<span>Il manque la position exacte du destinataire pour calculer le prix et lui livrer le colis.</span></p>
             <button class="btn btn-principal btn-plein" data-livraison="position">${ic('gps', 'ic-sm')} Envoyer la position</button>` : ''}
@@ -484,10 +498,11 @@
         ${action === 'modifier' ? '<button class="btn btn-lien" type="button" data-annuler-liv>Je viendrai plutôt le retirer à l\'agence</button>' : ''}
       </form>`);
     const adr = K.brancherAdresse(el, 'd', { agence: () => agence(codeAgence), config: CONFIG });
-    const envoyer = async (corps) => {
+    const envoyer = async (corps, payerEnsuite) => {
       try {
         await api.post(`/colis/${c.numeroSuivi}/livraison`, corps);
-        fermer(); toast(corps.demande === false ? 'Livraison annulée : retrait à l\'agence.' : 'Adresse enregistrée.', 'ok'); router();
+        fermer(); toast(corps.demande === false ? 'Livraison annulée : retrait à l\'agence.' : 'Adresse enregistrée.', 'ok'); await router();
+        if (payerEnsuite) ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c });
       } catch (err) { toast(err.message, 'erreur'); }
     };
     el.querySelector('[data-annuler-liv]')?.addEventListener('click', () => {
@@ -503,8 +518,8 @@
       if (!a.position) { toast('Envoyez votre position : « Je suis sur place » ou lien de localisation.', 'erreur'); return; }
       const course = adr.course();
       if (course && !course.ok) { toast(course.message, 'erreur'); return; }
-      if (course && !confirm(`Livraison : ${montant(course.prix, course.devise)} (${course.distanceKm.toLocaleString('fr-FR')} km), à payer au livreur. Confirmer ?`)) return;
-      envoyer({ telephone: normTel(tel), demande: true, adresse: a });
+      if (course && !confirm(`Livraison : ${montant(course.prix, course.devise)} (${course.distanceKm.toLocaleString('fr-FR')} km), à payer en ligne maintenant. Une livraison payée n'est pas remboursée si vous l'annulez. Continuer ?`)) return;
+      envoyer({ telephone: normTel(tel), demande: true, adresse: a }, true);
     });
   }
 
@@ -547,20 +562,101 @@
     });
   }
 
-  function payer(c, solde) {
-    const { el } = modale(`
-      <div class="pile" style="--gap:14px">
-        <div class="ligne entre"><h2>Payer ${deviseDe(paysArrivee(c)) === 'EUR' ? eur(solde.soldeEur) : gnf(solde.soldeGnf)}</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
-        <button class="btn btn-plein btn-grand" data-carte>${ic('carte')} Carte bancaire (${eur(solde.soldeEur)})</button>
-        <button class="btn btn-plein btn-grand" disabled>Orange Money · bientôt</button>
-        <button class="btn btn-plein btn-grand" disabled>MTN MoMo · bientôt</button>
-        <p class="bandeau bandeau-ocre">${ic('billet', 'ic-sm')}<span>Vous pouvez aussi payer en espèces à l'agence, au moment du retrait.</span></p>
+  // ── Paiement en ligne : solde du colis, ou courses à domicile payées d'avance ──
+  // Moyens proposés selon le pays d'où l'on paie : carte (Stripe) en France,
+  // Orange Money / MTN MoMo (et carte) en Guinée, réglés dans le back-office.
+  const PAYS_DRAPEAU = { FR: 'France', GN: 'Guinée' };
+  async function ouvrirPaiement(numero, { objet, c } = {}) {
+    let r;
+    try { r = await api.get(`/paiements/a-payer/${encodeURIComponent(numero)}`); }
+    catch (err) { toast(err.message, 'erreur'); return; }
+    const choix = objet === 'domicile' || (r.domicile.gnf > 0 && !(r.solde.gnf > 0)) ? 'domicile' : 'solde';
+    const du = choix === 'domicile' ? r.domicile : r.solde;
+    const [depart, arrivee] = String(r.sens || 'FR-GN').split('-');
+    const u = session.utilisateur();
+    const estDestinataire = u && c?.destinataire?.telephone === u.telephone;
+    // Le pays de la personne qui paie passe en premier
+    const paysPayeur = estDestinataire || (choix === 'solde' && r.payeurArrivee) ? arrivee : depart;
+    const pays = [paysPayeur, paysPayeur === depart ? arrivee : depart];
+    const enAttente = r.enAttente.filter(d => d.objet === (choix === 'domicile' ? 'domicile' : 'global'));
+    if (!(du.gnf > 0)) {
+      toast(enAttente.length ? 'Votre paiement est en cours de vérification.' : 'Rien à payer pour le moment.', enAttente.length ? '' : 'ok');
+      return;
+    }
+    const groupe = (p) => {
+      const liste = r.moyens[p] || [];
+      if (!liste.length) return '';
+      return `<div class="pile" style="--gap:8px">
+        <div class="tres-petit gras muet">Je paie depuis ${p === 'FR' ? 'la France' : 'la Guinée'}</div>
+        ${liste.map(m => `<button type="button" class="moyen-paiement" data-moyen="${m.key}">
+          <span class="logo-moyen ${m.key}" aria-hidden="true">${m.key === 'carte' ? ic('carte') : m.key === 'orange_money' ? 'OM' : 'MoMo'}</span>
+          <span class="grandit"><span class="gras" style="display:block">${esc(m.label)}</span><span class="petit muet">${m.devise === 'EUR' ? `${eur(du.eur)} · paiement sécurisé` : `${gnf(du.gnf)} · validé sous 24 h`}</span></span>
+          ${ic('suivant', 'ic-sm')}
+        </button>`).join('')}
+      </div>`;
+    };
+    const blocs = [...new Set(pays)].map(groupe).filter(Boolean);
+    // Montant affiché en grand dans la devise du premier moyen proposé
+    const premier = [...new Set(pays)].flatMap(p => r.moyens[p] || [])[0];
+    const enGnfD = premier ? premier.devise === 'GNF' : paysPayeur === 'GN';
+    const { el, fermer } = modale(`
+      <div class="pile" style="--gap:16px" data-etape-paiement>
+        <div class="ligne entre"><h2>${choix === 'domicile' ? 'Payer la livraison' : 'Payer le colis'}</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
+        <div class="carte-noire pile" style="--gap:2px">
+          <div class="petit" style="color:var(--gris)">${choix === 'domicile' ? 'Ramassage / livraison à domicile' : 'Reste à payer'} · ${esc(numero)}</div>
+          <div class="prix-gnf">${enGnfD ? gnf(du.gnf) : eur(du.eur)}</div>
+          <div class="petit">soit ${enGnfD ? eur(du.eur) : gnf(du.gnf)}</div>
+        </div>
+        ${enAttente.length ? `<p class="bandeau bandeau-ocre">${ic('horloge', 'ic-sm')}<span>Un paiement de ${gnf(enAttente[0].montantGnf)} (réf. ${esc(enAttente[0].reference)}) est déjà en vérification.</span></p>` : ''}
+        ${blocs.length ? blocs.join('') : '<p class="bandeau bandeau-ocre">Le paiement en ligne n\'est pas encore ouvert. Payez à l\'agence.</p>'}
+        ${choix === 'domicile'
+          ? '<p class="tres-petit muet">Le ramassage ou la livraison est programmé dès le paiement reçu. Une course payée n\'est pas remboursée si vous l\'annulez ensuite.</p>'
+          : `<p class="tres-petit muet">${ic('billet', 'ic-sm')} Vous pouvez aussi payer en espèces à l'agence.</p>`}
       </div>`);
-    el.querySelector('[data-carte]').addEventListener('click', async (e) => {
-      e.target.disabled = true;
-      try { const r = await api.post('/paiements/creer-session', { numero: c.numeroSuivi }); location.href = r.url; }
-      catch (err) { toast(err.message, 'erreur'); e.target.disabled = false; }
-    });
+    el.querySelectorAll('[data-moyen]').forEach(b => b.addEventListener('click', async () => {
+      const m = b.dataset.moyen;
+      if (m === 'carte') {
+        b.disabled = true;
+        try { const s2 = await api.post('/paiements/creer-session', { numero, objet: choix }); location.href = s2.url; }
+        catch (err) { toast(err.message, 'erreur'); b.disabled = false; }
+        return;
+      }
+      const moyen = Object.values(r.moyens).flat().find(x => x.key === m);
+      const zone = el.querySelector('[data-etape-paiement]');
+      zone.innerHTML = `
+        <div class="ligne entre"><h2>${esc(moyen.label)}</h2><button type="button" class="btn btn-rond" data-fermer2 aria-label="Fermer">${ic('fermer')}</button></div>
+        <ol class="etapes-paiement">
+          <li>Envoyez <b>${gnf(du.gnf)}</b> par ${esc(moyen.label)} au <b class="chiffres">${esc(moyen.numero)}</b>${moyen.titulaire ? ` (${esc(moyen.titulaire)})` : ''}.
+            <button type="button" class="btn btn-petit" data-copier="${esc(moyen.numero)}" style="margin-top:6px">${ic('copier', 'ic-sm')} Copier le numéro</button></li>
+          <li>Notez la <b>référence de la transaction</b> dans le SMS de confirmation.</li>
+          <li>Écrivez-la ci-dessous : nous vérifions et vous prévenons par SMS.</li>
+        </ol>
+        <form class="pile" style="--gap:10px" novalidate>
+          <label class="champ">Référence de la transaction <input class="saisie saisie-forte" name="reference" required autocomplete="off" autocapitalize="characters" placeholder="Ex. PP231015.1432.C12345"></label>
+          <label class="champ">Numéro qui a payé <input class="saisie" name="telephone" type="tel" inputmode="tel" value="${esc(u?.telephone || '')}" placeholder="6XX XX XX XX"></label>
+          <button class="btn btn-principal btn-grand" type="submit">J'ai payé, envoyer la référence</button>
+        </form>`;
+      zone.querySelector('[data-fermer2]').addEventListener('click', fermer);
+      zone.querySelector('[data-copier]').addEventListener('click', async (e) => {
+        try { await navigator.clipboard.writeText(e.currentTarget.dataset.copier); toast('Numéro copié.', 'ok'); } catch { toast(moyen.numero); }
+      });
+      zone.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = new FormData(e.target);
+        const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
+        try {
+          await api.post('/paiements/mobile', { numero, objet: choix === 'domicile' ? 'domicile' : 'global', methode: m, reference: f.get('reference'), telephone: f.get('telephone') });
+          zone.innerHTML = `
+            <div class="pile centre" style="--gap:12px;padding:12px 0">
+              <span class="pastille-notif" style="margin:0 auto">${ic('horloge')}</span>
+              <h2>Paiement en vérification</h2>
+              <p class="petit">Nous vérifions la réception de <b>${gnf(du.gnf)}</b> sur notre compte ${esc(moyen.label)}. Vous recevez un SMS dès que c'est validé (en général dans la journée).</p>
+              <button class="btn btn-principal btn-plein" type="button" data-ok>Compris</button>
+            </div>`;
+          zone.querySelector('[data-ok]').addEventListener('click', () => { fermer(); router(); });
+        } catch (err) { toast(err.message, 'erreur'); btn.disabled = false; }
+      });
+    }));
   }
 
   // ════════════════════════════════════════════════════════
@@ -709,6 +805,7 @@
       const ligne = (lib, c, defaut) => lignes.push(`+ ${lib} : ${c?.ok ? `<b>${esc(K.montant(c.prix, c.devise))}</b> (${esc(c.distanceKm.toLocaleString('fr-FR'))} km)` : esc(defaut)}`);
       if (etat.depart === 'domicile') ligne('ramassage', adrRam.course(), 'selon la distance, dès que la position est connue');
       if (etat.arrivee === 'domicile') ligne('livraison', adrLiv.course(), 'selon la distance, dès que la position est connue');
+      if (lignes.length) lignes.push('<span class="tres-petit">À payer en ligne juste après la réservation · non remboursable si vous annulez</span>');
       zone.innerHTML = lignes.join('<br>');
     }
     const majDomicile = () => {
@@ -876,6 +973,13 @@
           <div class="titre" style="font-size:34px;font-weight:800;letter-spacing:1px">${esc(c.numeroSuivi)}</div>
           <p>Prix estimé : <b>${prixColis(c.tarif)}</b></p>
         </div>
+        ${c.domicileAPayerGnf > 0 ? `
+        <div class="carte-ocre pile" style="--gap:8px">
+          <h3>${c.ramassage?.demande && c.livraison?.demande && c.livraison?.prix ? 'Payez le ramassage et la livraison' : c.ramassage?.demande ? 'Payez le ramassage' : 'Payez la livraison'}</h3>
+          <div class="titre" style="font-size:26px;font-weight:800">${[c.ramassage, c.livraison].filter(x => x?.demande && x.prix).map(x => esc(montant(x.prix, x.devise))).join(' + ')}</div>
+          <p class="petit">La course est programmée dès le paiement reçu. Elle n'est pas remboursée si vous l'annulez ensuite.</p>
+          <button class="btn btn-noir btn-grand btn-plein" data-payer-domicile>Payer maintenant</button>
+        </div>` : ''}
         <div class="carte pile">
           <h3>Et maintenant ?</h3>
           ${c.ramassage?.demande ? `
@@ -894,11 +998,79 @@
         <a class="btn btn-plein" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Je t'envoie un colis. Numéro de suivi : ${c.numeroSuivi}`)}`)}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} Prévenir ${esc(c.destinataire.nom.split(' ')[0])} sur WhatsApp</a>
       </div>`;
     K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Soyez prévenu à chaque étape de ce colis : départ, arrivée, code de retrait.' });
+    const payerDom = main.querySelector('[data-payer-domicile]');
+    if (payerDom) {
+      payerDom.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c }));
+      ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c });
+    }
   }
 
   // ════════════════════════════════════════════════════════
   //  MES COLIS
   // ════════════════════════════════════════════════════════
+  // Ce que le client doit faire maintenant pour ce colis (ou où il en est), en une ligne
+  function prochaineAction(c, u) {
+    const g = c.guichetInfo || agence(c.guichet) || {};
+    const dep = agence(c.depot) || {};
+    const deviseArr = deviseDe(paysArrivee(c));
+    const recu = u && c.destinataire?.telephone === u.telephone && c.expediteur?.telephone !== u.telephone;
+    const enVerif = (c.declarations || []).some(d => d.statut === 'a_verifier');
+    const livDem = c.livraison?.demande && c.livraison.statut !== 'annulee';
+    if (c.statut === 'remis') return { ton: 'fini', texte: `Remis${c.remise?.le ? ` le ${date(c.remise.le, false)}` : ''}` };
+    if (c.statut === 'annule') return { ton: 'fini', texte: 'Réservation annulée' };
+    if (enVerif) return { ton: 'info', texte: 'Paiement en vérification' };
+    if (c.domicileAPayerGnf > 0) return { ton: 'action', texte: `${c.ramassage?.demande && c.ramassage.statut !== 'annulee' && !(c.ramassage.payeGnf >= c.ramassage.prixGnf) ? 'Ramassage' : 'Livraison'} à payer`, bouton: 'Payer', objet: 'domicile' };
+    if (c.statut === 'pret' || c.statut === 'en_livraison') {
+      if (c.codeRetrait) return { ton: 'pret', texte: `${livDem ? 'Livraison en cours' : `À retirer à ${g.nom || 'l\'agence'}`} · code ${c.codeRetrait}` };
+      return { ton: 'pret', texte: livDem ? 'Bientôt livré à domicile' : `À retirer à ${g.nom || 'l\'agence'}` };
+    }
+    if (c.solde?.soldeGnf > 0 && !c.tarif?.estime) return { ton: 'action', texte: `Reste ${deviseArr === 'EUR' ? eur(c.solde.soldeEur) : gnf(c.solde.soldeGnf)}`, bouton: 'Payer', objet: 'solde' };
+    if (livDem && !c.livraison.adresse?.position?.lat) return { ton: 'action', texte: recu ? 'Envoyez votre position pour la livraison' : 'Position du destinataire manquante' };
+    if (c.statut === 'reserve') {
+      if (recu) return { ton: 'info', texte: 'Pas encore déposé par l\'expéditeur' };
+      if (c.ramassage?.demande && c.ramassage.statut !== 'annulee') return { ton: 'info', texte: c.ramassage.statut === 'faite' ? 'Ramassé, en route vers l\'agence' : 'Un livreur vient le chercher' };
+      return { ton: 'action', texte: `À déposer à ${dep.nom || 'l\'agence'}` };
+    }
+    return { ton: 'info', texte: titreStatut(c, g) };
+  }
+
+  // Carte d'un colis dans les listes : qui, trajet, statut, avancement, prochaine action
+  function carteColis(c, u = session.utilisateur()) {
+    const recu = u && c.destinataire?.telephone === u.telephone && c.expediteur?.telephone !== u.telephone;
+    const i = indexEtape(c.statut);
+    const a = prochaineAction(c, u);
+    const dep = agence(c.depot), arr = c.guichetInfo || agence(c.guichet);
+    const lieu = (x, pays) => x?.ville || x?.nom || nomPays(pays);
+    const [pd, pa] = String(c.sens || 'FR-GN').split('-');
+    const fini = ['remis', 'annule'].includes(c.statut);
+    return `
+      <article class="carte-colis ${fini ? 'finie' : ''}">
+        <a class="cc-lien" href="#/suivi/${encodeURIComponent(c.numeroSuivi)}" aria-label="Colis ${esc(c.numeroSuivi)}, ${esc(c.statutLabel)}"></a>
+        <div class="cc-tete">
+          <span class="pastille ${c.statut === 'pret' ? 'pret' : c.mode}" aria-hidden="true">${c.statut === 'pret' ? ic('ok') : icMode(c.mode)}</span>
+          <div class="grandit" style="min-width:0">
+            <div class="cc-qui">${recu ? `De ${esc(c.expediteur?.nom || '')}` : `Pour ${esc(c.destinataire?.nom || '')}`}</div>
+            <div class="cc-trajet"><span>${esc(lieu(dep, pd))}</span>${ic('fleche', 'ic-xs')}<span>${esc(lieu(arr, pa))}</span><span>· ${c.mode === 'mer' ? 'bateau' : 'avion'}</span></div>
+          </div>
+        </div>
+        ${fini ? '' : `<div class="cc-avancement" aria-hidden="true">${ETAPES.map((e, k) => `<span class="${k <= i ? 'fait' : ''}"><i></i>${esc(e.lib)}</span>`).join('')}</div>`}
+        <div class="cc-pied">
+          <span class="tres-petit muet">${esc(c.numeroSuivi)} · ${esc(date(c.createdAt, false))}${(c.poidsReel || c.poidsEstime) ? ` · ${esc(kg(c.poidsReel || c.poidsEstime))}` : ''}</span>
+          <span class="badge b-${esc(c.statut)}">${esc(c.statutLabel)}</span>
+        </div>
+        <div class="cc-action ${a.ton}">
+          <span>${esc(a.texte)}</span>
+          ${a.bouton ? `<button type="button" class="btn btn-petit ${a.ton === 'action' ? 'btn-noir' : ''}" data-payer-liste="${esc(c.numeroSuivi)}" data-objet="${a.objet}">${esc(a.bouton)}</button>` : ic('suivant', 'ic-sm')}
+        </div>
+      </article>`;
+  }
+  function brancherCartes(zone, liste) {
+    zone.querySelectorAll('[data-payer-liste]').forEach(b => b.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      ouvrirPaiement(b.dataset.payerListe, { objet: b.dataset.objet, c: liste.find(x => x.numeroSuivi === b.dataset.payerListe) });
+    }));
+  }
+
   async function mesColis() {
     if (!exigerConnexion()) return;
     let mes = stock.lire('mes_colis');
@@ -908,15 +1080,68 @@
       stock.ecrire('mes_colis', mes);
     } catch (e) { if (!e.reseau || !mes) throw e; bandeauReseau(mes.le); }
     const u = session.utilisateur();
-    const envoyes = mes.colis.filter(c => c.expediteur?.telephone === u.telephone || c.client === u._id);
-    const recus = mes.colis.filter(c => !envoyes.includes(c));
-    const bloc = (titre, liste) => liste.length ? `<h2>${titre}</h2><div class="pile" style="--gap:10px">${liste.map(ligneColis).join('')}</div>` : '';
+    const tous = mes.colis;
+    const recu = (c) => c.destinataire?.telephone === u.telephone && c.expediteur?.telephone !== u.telephone;
+    const etat = { vue: stock.lire('mes_colis_vue') || 'cours', qui: stock.lire('mes_colis_qui') || 'tous', q: '' };
+    if (!tous.length) {
+      main.innerHTML = `
+        <div class="pile">
+          <h1>Mes colis</h1>
+          <div class="vide pile"><span class="pastille-notif" style="margin:0 auto">${ic('colis')}</span>
+            <p class="gras">Aucun colis pour le moment</p>
+            <p class="petit muet">Les colis qu'on vous envoie apparaissent ici tout seuls, grâce à votre numéro de téléphone.</p>
+            <a class="btn btn-principal" href="#/envoyer">Envoyer un colis</a></div>
+        </div>`;
+      return;
+    }
+    const enCours = tous.filter(c => !['remis', 'annule'].includes(c.statut));
+    const termines = tous.filter(c => ['remis', 'annule'].includes(c.statut));
     main.innerHTML = `
       <div class="pile">
-        <h1>Mes colis</h1>
-        ${mes.colis.length ? bloc('Je reçois', recus) + bloc('J\'envoie', envoyes)
-          : `<div class="vide pile"><p>Aucun colis pour le moment.</p><p class="petit">Les colis qui vous sont envoyés apparaissent ici automatiquement grâce à votre numéro de téléphone.</p><a class="btn btn-principal" href="#/envoyer">Envoyer un colis</a></div>`}
+        <div class="ligne entre"><h1>Mes colis</h1><a class="btn btn-principal btn-petit" href="#/envoyer">${ic('plus', 'ic-sm')} Envoyer</a></div>
+        <div class="resume-colis">
+          <div><b>${enCours.length}</b><span>en cours</span></div>
+          <div><b>${enCours.filter(c => ['pret', 'en_livraison'].includes(c.statut)).length}</b><span>prêts</span></div>
+          <div><b>${tous.filter(c => prochaineAction(c, u).ton === 'action').length}</b><span>à faire</span></div>
+        </div>
+        <div class="segments" role="group" aria-label="Période">
+          <button type="button" data-vue="cours">En cours · ${enCours.length}</button>
+          <button type="button" data-vue="fini">Terminés · ${termines.length}</button>
+        </div>
+        <div class="ligne puces" style="--gap:8px" role="group" aria-label="Filtrer">
+          <button type="button" class="puce" data-qui="tous">Tous</button>
+          <button type="button" class="puce" data-qui="envoi">${ic('envoi', 'ic-xs')} J'envoie</button>
+          <button type="button" class="puce" data-qui="recu">${ic('recu', 'ic-xs')} Je reçois</button>
+        </div>
+        ${tous.length > 6 ? `<label class="recherche-liste">${ic('loupe', 'ic-sm')}<input data-q placeholder="Nom, numéro…" aria-label="Rechercher dans mes colis"></label>` : ''}
+        <div class="pile" style="--gap:18px" data-liste></div>
       </div>`;
+    const liste = main.querySelector('[data-liste]');
+    const dessiner = () => {
+      stock.ecrire('mes_colis_vue', etat.vue); stock.ecrire('mes_colis_qui', etat.qui);
+      main.querySelectorAll('[data-vue]').forEach(b => b.setAttribute('aria-pressed', b.dataset.vue === etat.vue));
+      main.querySelectorAll('[data-qui]').forEach(b => b.setAttribute('aria-pressed', b.dataset.qui === etat.qui));
+      const q = etat.q.trim().toLowerCase();
+      let l = (etat.vue === 'cours' ? enCours : termines)
+        .filter(c => etat.qui === 'tous' || (etat.qui === 'recu') === recu(c))
+        .filter(c => !q || [c.numeroSuivi, c.destinataire?.nom, c.expediteur?.nom].some(x => String(x || '').toLowerCase().includes(q)));
+      const rang = (c) => ({ action: 0, pret: 1, info: 2, fini: 3 }[prochaineAction(c, u).ton] ?? 2);
+      l = l.sort((a, b) => rang(a) - rang(b) || new Date(b.updatedAt) - new Date(a.updatedAt));
+      if (!l.length) { liste.innerHTML = `<p class="vide petit">${etat.vue === 'cours' ? 'Aucun colis en cours ici.' : 'Aucun colis terminé ici.'}</p>`; return; }
+      if (etat.vue === 'cours') {
+        const aFaire = l.filter(c => ['action', 'pret'].includes(prochaineAction(c, u).ton));
+        const reste = l.filter(c => !aFaire.includes(c));
+        liste.innerHTML = [
+          aFaire.length ? `<section class="pile" style="--gap:10px"><h2 class="titre-section">À faire maintenant</h2>${aFaire.map(c => carteColis(c, u)).join('')}</section>` : '',
+          reste.length ? `<section class="pile" style="--gap:10px"><h2 class="titre-section">${aFaire.length ? 'En chemin' : 'Vos colis'}</h2>${reste.map(c => carteColis(c, u)).join('')}</section>` : '',
+        ].join('');
+      } else liste.innerHTML = `<div class="pile" style="--gap:10px">${l.map(c => carteColis(c, u)).join('')}</div>`;
+      brancherCartes(liste, tous);
+    };
+    main.querySelectorAll('[data-vue]').forEach(b => b.addEventListener('click', () => { etat.vue = b.dataset.vue; dessiner(); }));
+    main.querySelectorAll('[data-qui]').forEach(b => b.addEventListener('click', () => { etat.qui = b.dataset.qui; dessiner(); }));
+    main.querySelector('[data-q]')?.addEventListener('input', (e) => { etat.q = e.target.value; dessiner(); });
+    dessiner();
   }
 
   // Mentions légales (pied des pages Guichets et Compte)

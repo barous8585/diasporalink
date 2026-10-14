@@ -29,6 +29,8 @@ router.get('/', ah(async (req, res) => {
     moments: MOMENTS,
     facturation: { capital: c.facturation?.capital, email: c.facturation?.email, telephone: c.facturation?.telephone, site: c.facturation?.site, mediateur: c.facturation?.mediateur },
     litiges: c.litiges,
+    // Moyens de paiement en ligne par pays d'où l'on paie (carte seulement si Stripe est configuré)
+    moyensPaiement: require('../controllers/paiementController').moyensEnLigne(c),
     cgvVersion: CGV_VERSION,
     frontendUrl: process.env.FRONTEND_URL || '',
     agences: (c.agences || []).filter(a => a.actif !== false),
@@ -120,6 +122,25 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
     }
     doc.articles = liste;
     doc.markModified('articles');
+  }
+  if (b.paiements && typeof b.paiements === 'object') {
+    const pa = JSON.parse(JSON.stringify(actuel.paiements || {}));
+    for (const [pays, cles] of [['FR', ['carte']], ['GN', ['orange_money', 'mtn_momo', 'carte']]]) {
+      if (!b.paiements[pays]) continue;
+      pa[pays] = pa[pays] || {};
+      for (const k of cles) if (typeof b.paiements[pays][k] === 'boolean') pa[pays][k] = b.paiements[pays][k];
+    }
+    for (const m of ['orange_money', 'mtn_momo']) {
+      const cpt = b.paiements.comptes?.[m];
+      if (!cpt) continue;
+      pa.comptes = pa.comptes || {};
+      pa.comptes[m] = {
+        numero: String(cpt.numero || '').replace(/[^0-9+ ]/g, '').trim().slice(0, 20),
+        titulaire: String(cpt.titulaire || '').trim().slice(0, 60),
+      };
+    }
+    doc.paiements = pa;
+    doc.markModified('paiements');
   }
   const assu = nombre(b.tauxAssurance);
   if (assu !== undefined && assu < 1) doc.tauxAssurance = assu;

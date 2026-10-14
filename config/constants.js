@@ -111,6 +111,18 @@ const CONFIG_DEFAUT = {
     },
     conditionsPaiement: 'Payable comptant au dépôt ou à la remise du colis. Pas d\'escompte pour paiement anticipé.',
   },
+  // Paiement en ligne depuis l'espace client. Par pays : moyens proposés à quelqu'un qui paie
+  // depuis ce pays. La carte passe par Stripe (clés dans Render). Orange Money / MTN MoMo :
+  // le client envoie l'argent sur le compte marchand de TMS et indique la référence ;
+  // l'équipe vérifie la réception puis valide (en attendant un agrégateur automatique).
+  paiements: {
+    FR: { carte: true },
+    GN: { orange_money: true, mtn_momo: true, carte: true },
+    comptes: {
+      orange_money: { numero: '', titulaire: 'Talib Multi Services' },
+      mtn_momo:     { numero: '', titulaire: 'Talib Multi Services' },
+    },
+  },
   // Litiges
   litiges: {
     indemnisationKgEur: 20,   // plafond par kg sans assurance (€)
@@ -120,7 +132,7 @@ const CONFIG_DEFAUT = {
 };
 
 // Version des conditions générales : changer la date quand le texte change
-const CGV_VERSION = '2026-10-14';
+const CGV_VERSION = '2026-10-15';
 
 // ── STATUTS COLIS (ordre du circuit) ──────
 const STATUTS = {
