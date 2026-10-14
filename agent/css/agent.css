@@ -25,7 +25,10 @@ main > .pile { --gap: 16px; }
 
 /* Zone caméra */
 .viseur { position: relative; border-radius: 22px; background: var(--marine-fonce); overflow: hidden; aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; }
-.viseur video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.viseur video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.viseur .cadre, .viseur .consigne, .viseur .btn { z-index: 1; }
+.viseur.actif .consigne { text-shadow: 0 1px 3px rgba(0,0,0,.8); color: #fff; }
+.viseur .actions-viseur { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 2; }
 .viseur .cadre { position: relative; width: 58%; aspect-ratio: 1; pointer-events: none; }
 .viseur .cadre i { position: absolute; width: 40px; height: 40px; border: 5px solid var(--or); }
 .viseur .cadre i:nth-child(1) { left: 0; top: 0; border-right: none; border-bottom: none; border-top-left-radius: 14px; }

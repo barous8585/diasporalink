@@ -18,5 +18,7 @@ for (const app of ['frontend', 'agent', 'admin']) {
   for (const [src, dst] of fichiers) {
     fs.copyFileSync(path.join(racine, src), path.join(racine, app, dst));
   }
+  // Bibliothèques auto-hébergées (scanner, QR, carte) : pas de dépendance à un CDN
+  fs.cpSync(path.join(racine, 'shared/vendor'), path.join(racine, app, 'commun/vendor'), { recursive: true });
   console.log(`✓ ${app}/commun`);
 }

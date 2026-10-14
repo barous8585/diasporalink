@@ -679,9 +679,14 @@
         <label class="champ">Adresse <input class="saisie" name="adresse" value="${esc(a.adresse || '')}"></label>
         <label class="champ">Téléphone / WhatsApp <input class="saisie" name="telephone" value="${esc(a.telephone || '')}"></label>
         <label class="champ">Horaires <input class="saisie" name="horaires" value="${esc(a.horaires || '')}" placeholder="Lun–sam 9 h – 18 h"></label>
-        <label class="champ">Position GPS <span class="tres-petit muet">${a.position?.lat ? `${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)} · <a href="${esc(K.lienCarte(a.position))}" target="_blank" rel="noopener">voir</a>` : 'non renseignée : pas de courses à domicile'}</span>
-          <input class="saisie" name="lienPosition" placeholder="Lien Google Maps ou « 9.51, -13.71 »" autocomplete="off">
-          <input type="hidden" name="positionLat" value="${a.position?.lat ?? ''}"><input type="hidden" name="positionLng" value="${a.position?.lng ?? ''}"></label>
+        <div class="champ" style="grid-column:1/-1">Position GPS de l'agence
+          <span class="petit" data-etat-pos>${a.position?.lat ? `<span class="vert">${ic('ok', 'ic-sm')} ${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)}</span>` : '<span class="rouge">Non renseignée : pas de ramassage ni de livraison depuis cette agence</span>'}</span>
+          <span class="ligne" style="--gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn btn-petit" data-placer>${ic('lieu', 'ic-sm')} Placer sur la carte</button>
+            <button type="button" class="btn btn-petit" data-ici>${ic('gps', 'ic-sm')} Je suis à l'agence</button>
+            <input class="saisie" name="lienPosition" placeholder="ou coller un lien Google Maps" autocomplete="off" style="flex:1;min-width:200px;min-height:40px">
+          </span>
+          <input type="hidden" name="positionLat" value="${a.position?.lat ?? ''}"><input type="hidden" name="positionLng" value="${a.position?.lng ?? ''}"></div>
         <label class="case"><input type="checkbox" name="plateforme" ${a.plateforme ? 'checked' : ''}> Plateforme d'arrivée des lots</label>
         <label class="case"><input type="checkbox" name="actif" ${a.actif !== false ? 'checked' : ''}> Ouverte</label>
       </div>`;
@@ -760,6 +765,31 @@
       b.querySelector('[data-exemples]').textContent = `Exemples : 2 km → ${prix(2)} · 5 km → ${prix(5)} · 10 km → ${prix(10)} · 20 km → ${prix(20)}`;
     });
     form.addEventListener('input', majExemples);
+    // Position d'une agence : carte ou GPS du téléphone
+    const poserPosition = (bloc, p) => {
+      bloc.querySelector('[name=positionLat]').value = p.lat;
+      bloc.querySelector('[name=positionLng]').value = p.lng;
+      bloc.querySelector('[name=lienPosition]').value = '';
+      bloc.querySelector('[data-etat-pos]').innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span> <span class="muet">(pensez à enregistrer)</span>`;
+    };
+    form.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-placer], [data-ici]');
+      if (!b) return;
+      const bloc = b.closest('[data-agence]');
+      const lat = parseFloat(bloc.querySelector('[name=positionLat]').value), lng = parseFloat(bloc.querySelector('[name=positionLng]').value);
+      const pays = bloc.querySelector('[name=pays]').value;
+      try {
+        if (b.matches('[data-placer]')) {
+          const p = await K.choisirSurCarte({ position: lat ? { lat, lng } : null, pays, titre: `Où est ${bloc.querySelector('[name=nom]').value || 'l\'agence'} ?` });
+          if (p) poserPosition(bloc, p);
+        } else {
+          b.disabled = true;
+          const p = await K.gpsActuel();
+          poserPosition(bloc, p);
+          if (p.precision > 60) toast(`Position à ± ${p.precision} m : vérifiez-la avec « Placer sur la carte ».`);
+        }
+      } catch (err) { toast(err.message, 'erreur'); } finally { b.disabled = false; }
+    });
     majExemples();
     form.querySelector('[data-ajout]').addEventListener('click', () => {
       form.querySelector('[data-liste-agences]').insertAdjacentHTML('beforeend', agenceHtml({ pays: 'GN' }));
