@@ -1,6 +1,6 @@
 // Service worker de l'app agent : l'app s'ouvre sans réseau.
 // Les scans et remises sont gardés par l'app elle-même (file d'attente).
-const CACHE = 'kolis-agent-v3';
+const CACHE = 'kolis-agent-v4';
 const ASSETS = ['./', './index.html', './css/agent.css', './js/agent.js', './js/scanner.js', './commun/kolis.css', './commun/kolis.js', './commun/tarif.js', './commun/legal.js',
   './commun/vendor/jsqr.min.js', './commun/vendor/qrcode-generator.min.js', './manifest.json'];
 const CDN = [];

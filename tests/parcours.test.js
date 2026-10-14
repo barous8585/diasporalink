@@ -622,3 +622,64 @@ test('conditions, factures conformes, photo au dépôt et réclamation', async (
   assert.strictEqual((await appel('GET', `/factures/colis/${numero}`, null, admin)).factures.length, 3, 'les factures restent');
   await mongoose.disconnect();
 });
+
+test('scan automatique : un agent différent à chaque étape, l\'app choisit l\'étape', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');   // Awa, Paris
+  const agentKaloum = await connexion('620000003');     // Ibrahima, Kaloum (plateforme)
+  const agentLabe = await connexion('620000004');       // Mariama, Labé
+  const dep = (guichet, tel) => appel('POST', '/agent/depot', {
+    poidsReel: 3, mode: 'mer', typeColis: 'vetements', guichet, cgvAcceptees: true,
+    expediteur: { nom: 'Sékou Bah', telephone: '0655555555' }, destinataire: { nom: `Dest ${tel}`, telephone: tel },
+  }, agentParis);
+  const n1 = (await dep('KALOUM', '626000001')).colis.numeroSuivi;
+  const n2 = (await dep('LABE', '626000002')).colis.numeroSuivi;
+  const auto = async (numero, token) => (await appel('POST', '/agent/scans', { scans: [{ opId: `a-${numero}-${Math.random()}`, numero, action: 'auto' }] }, token)).resultats[0];
+
+  // Paris : « Aujourd'hui » montre les colis à mettre en lot ; aucun lot bateau ouvert → ouvert automatiquement
+  let auj = await appel('GET', '/agent/aujourdhui', null, agentParis);
+  assert.ok(auj.taches.some(t => t.cle === 'charger' && t.nb >= 2), JSON.stringify(auj.taches));
+  let r = await auto(n1, agentParis);
+  assert.ok(r.ok, r.erreur);
+  assert.strictEqual(r.actionFaite, 'charger');
+  assert.match(r.lotCode, /^MER-\d{4}$/);
+  const lot = r.lotCode;
+  r = await auto(n2, agentParis);
+  assert.strictEqual(r.lotCode, lot, 'même lot pour le même sens et le même mode');
+  assert.strictEqual(r.avant.par, 'Awa A.');
+  r = await auto(n2, agentParis);
+  assert.ok(r.dejaFait && /Déjà dans le lot/.test(r.message));
+  // Un agent en Guinée ne peut pas « réceptionner » un colis encore au départ… mais un colis chargé peut l'être
+  assert.strictEqual((await auto(n1, agentLabe)).ok, true, 'colis chargé, lot pas encore marqué parti : réceptionné quand même');
+  await appel('POST', `/lots/${lot}/statut`, { statut: 'parti' }, admin);
+
+  // Kaloum (plateforme) : n1 arrive dans son agence → reçu et mis en rayon d'un coup
+  auj = await appel('GET', '/agent/aujourdhui', null, agentKaloum);
+  assert.ok(auj.taches.some(t => t.cle === `lot-${lot}`), JSON.stringify(auj.taches.map(t => t.cle)));
+  // n2 : reçu à la plateforme, à envoyer vers Labé
+  r = await auto(n2, agentKaloum);
+  assert.strictEqual(r.actionFaite, 'arrivee');
+  assert.strictEqual(r.aEnvoyer, true);
+  assert.match(r.message, /Labé/);
+  auj = await appel('GET', '/agent/aujourdhui', null, agentKaloum);
+  assert.ok(auj.taches.some(t => t.cle === 'envoyer'));
+  r = await auto(n2, agentKaloum);
+  assert.strictEqual(r.actionFaite, 'acheminer');
+  // Labé : un autre agent met en rayon
+  r = await auto(n2, agentLabe);
+  assert.strictEqual(r.actionFaite, 'guichet');
+  assert.strictEqual(r.statut, 'pret');
+  assert.strictEqual(r.avant.par, 'Ibrahima A.');
+  auj = await appel('GET', '/agent/aujourdhui', null, agentLabe);
+  assert.ok(auj.taches.some(t => t.cle === 'remettre'));
+  // Paris rescanne un colis déjà en rayon à Labé : explication claire, rien ne bouge
+  r = await auto(n2, agentParis);
+  assert.strictEqual(r.ok, false);
+  assert.match(r.erreur, /attend son destinataire à Agence Labé/);
+  r = await auto(n2, agentLabe);
+  assert.ok(r.pretARemettre);
+  // L'historique dit qui a fait quoi
+  const fiche = (await appel('GET', `/agent/colis/${n2}`, null, agentLabe)).colis;
+  const noms = fiche.historique.map(h => h.agent?.prenom).filter(Boolean);
+  assert.deepStrictEqual([...new Set(noms)], ['Awa', 'Admin', 'Ibrahima', 'Mariama']);
+});
