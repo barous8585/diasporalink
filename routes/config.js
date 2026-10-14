@@ -19,6 +19,7 @@ router.get('/', ah(async (req, res) => {
     sens: SENS.map(s => ({ ...s, devise: c.tarifs?.[s.key]?.devise || PAYS[s.depart].devise })),
     modes: MODES_INFO,
     tarifs: c.tarifs,
+    articles: (c.articles || []).filter(a => a.actif !== false),
     typesColis: TYPES_COLIS.map(t => ({ ...t, surcharge: c.surcharges?.[t.key] ?? t.surcharge })),
     tauxAssurance: c.tauxAssurance,
     tauxEurGnf: c.tauxEurGnf,
@@ -35,7 +36,7 @@ router.get('/', ah(async (req, res) => {
     statuts: STATUTS_LABELS,
     // Même forme que la config serveur : utilisée par KolisTarif côté navigateur
     regles: {
-      tarifs: c.tarifs, surcharges: c.surcharges, tauxAssurance: c.tauxAssurance,
+      tarifs: c.tarifs, surcharges: c.surcharges, tauxAssurance: c.tauxAssurance, articles: c.articles,
       tauxEurGnf: c.tauxEurGnf, magasinage: c.magasinage, domicile: c.domicile,
     },
   });
@@ -95,6 +96,30 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
     }
     doc.surcharges = s;
     doc.markModified('surcharges');
+  }
+  // Catalogue des articles à la pièce : la liste envoyée remplace l'ancienne
+  if (Array.isArray(b.articles)) {
+    const vus = new Set();
+    const liste = [];
+    for (const a of b.articles.slice(0, 40)) {
+      const label = String(a?.label || '').trim().slice(0, 60);
+      if (!label) continue;
+      let cle = String(a.cle || '').trim().toLowerCase();
+      if (!/^[a-z0-9_-]{2,30}$/.test(cle)) cle = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'article';
+      while (vus.has(cle)) cle = `${cle.slice(0, 27)}-${vus.size}`;
+      vus.add(cle);
+      const prix = {};
+      for (const s of SENS) {
+        prix[s.key] = {};
+        for (const mode of ['air', 'mer']) {
+          const v = nombre(a.prix?.[s.key]?.[mode]);
+          if (v !== undefined) prix[s.key][mode] = v;
+        }
+      }
+      liste.push({ cle, label, poids: nombre(a.poids) ?? 0, actif: a.actif !== false, prix });
+    }
+    doc.articles = liste;
+    doc.markModified('articles');
   }
   const assu = nombre(b.tauxAssurance);
   if (assu !== undefined && assu < 1) doc.tauxAssurance = assu;

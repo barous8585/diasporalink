@@ -786,3 +786,69 @@ test('notifications push : client, agents de l\'agence, admin', async () => {
   // Abonnement disparu chez Google/Apple (410) : il est supprimé
   srv.close();
 });
+
+test('articles à la pièce : réservation, pesée au comptoir, facture, catalogue de l\'admin', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');
+  const client = await connexion('0655555555', 'Fanta', 'Camara');
+
+  // Le catalogue est public, avec les prix par sens et par mode
+  const cfg = await appel('GET', '/config');
+  const chaussures = cfg.articles.find(a => a.cle === 'chaussures');
+  assert.ok(chaussures, 'catalogue présent');
+  assert.strictEqual(chaussures.prix['FR-GN'].air, 15);
+
+  // Réservation : 4 kg de vêtements + 2 paires de chaussures (3 kg) = 7 kg annoncés
+  let r = await appel('POST', '/colis', {
+    mode: 'air', typeColis: 'vetements', poidsEstime: 7, depot: 'PARIS', guichet: 'KALOUM', cgvAcceptees: true,
+    articles: [{ cle: 'chaussures', quantite: 2 }, { cle: 'nimporte', quantite: 4 }],
+    destinataire: { nom: 'Aïssatou Camara', telephone: '625555555' },
+  }, client);
+  assert.strictEqual(r.status, 201, r.message);
+  assert.deepStrictEqual(r.colis.articles.map(a => [a.cle, a.quantite]), [['chaussures', 2]]);
+  assert.strictEqual(r.colis.nbCartons, 1);
+  assert.strictEqual(r.colis.tarif.totalEur, 4 * 12 + 30);
+  const numero = r.colis.numeroSuivi;
+
+  // Seulement des chaussures : réservation possible sans poids au kilo
+  r = await appel('POST', '/colis', {
+    mode: 'mer', typeColis: 'vetements', poidsEstime: 1.5, depot: 'PARIS', guichet: 'KALOUM', cgvAcceptees: true,
+    articles: [{ cle: 'chaussures', quantite: 1 }], destinataire: { nom: 'B', telephone: '625555556' },
+  }, client);
+  assert.strictEqual(r.status, 201, r.message);
+  assert.strictEqual(r.colis.tarif.totalEur, 8, 'pas de minimum de 10 kg en bateau');
+
+  // Comptoir : l'agent ajoute un téléphone, la balance indique 8 kg
+  r = await appel('POST', '/agent/depot', {
+    numeroSuivi: numero, poidsReel: 8, articles: [{ cle: 'chaussures', quantite: 2 }, { cle: 'telephone', quantite: 1 }],
+    paiement: { montant: 1000, devise: 'EUR', methode: 'especes' },
+  }, agentParis);
+  assert.strictEqual(r.status, 201, r.message);
+  const t = r.colis.tarif;
+  assert.strictEqual(t.poidsArticles, 3.5);
+  assert.strictEqual(t.poidsFacture, 4.5);
+  assert.strictEqual(t.totalEur, 4.5 * 12 + 30 + 25);
+  assert.match(r.colis.historique.at(-1).detail || r.colis.historique.at(-1).label, /chaussures|Pesé/);
+
+  const fa = (await appel('GET', `/factures/colis/${numero}`, null, client)).factures[0];
+  const lignes = Object.fromEntries(fa.lignes.map(l => [l.cle, l]));
+  assert.strictEqual(lignes.transport.quantite, 4.5);
+  assert.strictEqual(lignes['article:chaussures'].quantite, 2);
+  assert.strictEqual(lignes['article:chaussures'].montantTTC, 30);
+  assert.strictEqual(lignes['article:telephone'].montantTTC, 25);
+  assert.strictEqual(fa.totalTTC, t.totalEur);
+
+  // L'admin modifie le catalogue : nouveau prix, nouvel article, article retiré
+  const articles = (await appel('GET', '/config/admin', null, admin)).config.articles
+    .filter(a => a.cle !== 'parfum')
+    .map(a => (a.cle === 'chaussures' ? { ...a, prix: { ...a.prix, 'FR-GN': { air: 18, mer: 9 } } } : a));
+  articles.push({ label: 'Valise vide', poids: 4, prix: { 'FR-GN': { air: 30 } } });
+  r = await appel('PATCH', '/config/admin', { articles }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  const apres = (await appel('GET', '/config')).articles;
+  assert.ok(!apres.some(a => a.cle === 'parfum'));
+  assert.strictEqual(apres.find(a => a.cle === 'chaussures').prix['FR-GN'].air, 18);
+  const valise = apres.find(a => a.label === 'Valise vide');
+  assert.strictEqual(valise.cle, 'valise-vide');
+  assert.deepStrictEqual(valise.prix['GN-FR'], {});
+});

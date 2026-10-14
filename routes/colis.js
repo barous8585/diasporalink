@@ -11,7 +11,7 @@ const { ah, valider } = require('../utils/http');
 const { calculerTarif } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
 const { STATUTS, MODES, TYPES_COLIS, ROLES, SENS, CGV_VERSION } = require('../config/constants');
-const { normTel, vuePublique, vueComplete, sensDepuisAgences } = require('../services/colisService');
+const { normTel, vuePublique, vueComplete, sensDepuisAgences, nettoyerArticles } = require('../services/colisService');
 const dom = require('../services/domicileService');
 
 // Limite le « balayage » des numéros de suivi
@@ -74,7 +74,8 @@ router.get('/:numero', auth, ah(async (req, res) => {
 router.post('/', auth, [
   body('mode').isIn(Object.values(MODES)).withMessage('Choisissez avion ou bateau'),
   body('typeColis').isIn(TYPES_COLIS.map(t => t.key)).withMessage('Type de colis invalide'),
-  body('poidsEstime').isFloat({ min: 0.1, max: 2000 }).withMessage('Poids invalide'),
+  body('poidsEstime').isFloat({ min: 0.1, max: 2000 }).withMessage('Indiquez le poids, ou ajoutez au moins un article à la pièce'),
+  body('articles').optional().isArray({ max: 40 }),
   body('depot').trim().notEmpty().withMessage('Choisissez l\'agence où vous déposez le colis'),
   body('guichet').trim().notEmpty().withMessage('Choisissez l\'agence de retrait'),
   body('destinataire.nom').trim().notEmpty().withMessage('Nom du destinataire requis'),
@@ -86,20 +87,21 @@ router.post('/', auth, [
   const config = await Config.get();
   const b = req.body;
   const sens = await sensDepuisAgences(b.depot, b.guichet);
+  const articles = nettoyerArticles(config, b.articles);
 
   const colis = new Colis({
     client: req.user._id,
     expediteur: { nom: `${req.user.prenom} ${req.user.nom}`, telephone: req.user.telephone },
     destinataire: { nom: b.destinataire.nom, telephone: normTel(b.destinataire.telephone) },
     sens, mode: b.mode, typeColis: b.typeColis, depot: b.depot, guichet: b.guichet,
-    description: b.description, nbCartons: b.nbCartons || 1,
+    description: b.description, nbCartons: b.nbCartons || 1, articles,
     poidsEstime: parseFloat(b.poidsEstime),
     valeurDeclaree: b.valeurDeclaree || 0, assurance: !!b.assurance,
     payeurArrivee: !!b.payeurArrivee,
     cgv: { version: CGV_VERSION, accepteesLe: new Date(), par: 'en_ligne' },
   });
   colis.tarif = { ...calculerTarif(config, {
-    sens, mode: b.mode, poidsKg: b.poidsEstime, typeColis: b.typeColis, valeurDeclaree: b.valeurDeclaree, assurance: b.assurance,
+    sens, mode: b.mode, poidsKg: b.poidsEstime, typeColis: b.typeColis, valeurDeclaree: b.valeurDeclaree, assurance: b.assurance, articles,
   }), estime: true };
   colis.ajouterEvenement(STATUTS.RESERVE, 'Réservation en ligne');
   if (b.ramassage?.demande) await dom.demanderCourse(colis, 'ramassage', b.ramassage);

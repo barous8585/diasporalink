@@ -117,3 +117,30 @@ test('solde : la livraison à domicile s\'ajoute, sauf annulée', () => {
   colis.livraison.statut = 'annulee';
   assert.strictEqual(calculerSolde(colis, config).soldeGnf, 100000);
 });
+
+test('articles à la pièce : prix fixe, poids forfaitaire retiré de la pesée', () => {
+  // 7 kg sur la balance dont 2 paires de chaussures (2 × 1,5 kg) : 4 kg au kilo
+  const t = calculerTarif(config, { sens: 'FR-GN', mode: 'air', poidsKg: 7, typeColis: 'vetements', articles: [{ cle: 'chaussures', quantite: 2 }] });
+  assert.strictEqual(t.poidsArticles, 3);
+  assert.strictEqual(t.poidsFacture, 4);
+  assert.strictEqual(t.transport, 48);
+  assert.strictEqual(t.articlesTotal, 30);
+  assert.deepStrictEqual(t.articles.map(a => [a.cle, a.quantite, a.montant]), [['chaussures', 2, 30]]);
+  assert.strictEqual(t.totalEur, 78);
+});
+
+test('articles seuls : pas de minimum au kilo, supplément seulement sur le kilo', () => {
+  const t = calculerTarif(config, { sens: 'FR-GN', mode: 'mer', poidsKg: 0.5, typeColis: 'electronique', articles: [{ cle: 'telephone', quantite: 1 }] });
+  assert.strictEqual(t.poidsFacture, 0);
+  assert.strictEqual(t.transport, 0);
+  assert.strictEqual(t.surcharge, 0);
+  assert.strictEqual(t.totalEur, 15);
+});
+
+test('articles : inconnus ou sans prix ignorés, GNF dans le sens Guinée → France', () => {
+  const cfg = { ...config, articles: [...config.articles, { cle: 'velo', label: 'Vélo', poids: 10, prix: { 'FR-GN': { mer: 40 } } }] };
+  const t = calculerTarif(cfg, { sens: 'GN-FR', mode: 'air', poidsKg: 2, typeColis: 'mixte', articles: [{ cle: 'inconnu', quantite: 3 }, { cle: 'velo', quantite: 1 }, { cle: 'parfum', quantite: 2 }] });
+  assert.deepStrictEqual(t.articles.map(a => a.cle), ['parfum']);
+  assert.strictEqual(t.poidsFacture, 1);
+  assert.strictEqual(t.totalGnf, 120000 + 200000);
+});

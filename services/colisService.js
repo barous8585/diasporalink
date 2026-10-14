@@ -157,6 +157,22 @@ async function encaisser(colis, agent, paiement, { opId } = {}) {
   return p;
 }
 
+// Articles à la pièce demandés : on garde ceux du catalogue (quantité 1 à 99)
+function nettoyerArticles(config, articles) {
+  if (!Array.isArray(articles)) return undefined;
+  const sortie = [];
+  for (const a of articles) {
+    const art = (config.articles || []).find(x => x.cle === a?.cle && x.actif !== false);
+    const quantite = Math.min(parseInt(a?.quantite, 10) || 0, 99);
+    if (!art || quantite < 1) continue;
+    const exist = sortie.find(x => x.cle === art.cle);
+    if (exist) exist.quantite = Math.min(exist.quantite + quantite, 99);
+    else sortie.push({ cle: art.cle, label: art.label, quantite });
+  }
+  return sortie;
+}
+const articlesTexte = (articles) => (articles || []).map(a => `${a.quantite} × ${a.label.toLowerCase()}`).join(', ');
+
 // ── Dépôt / pesée ───────────────────────────────────────────
 // Crée un colis (client sans réservation) ou complète une réservation.
 async function deposer(agent, data) {
@@ -180,6 +196,7 @@ async function deposer(agent, data) {
   if (data.expediteur) colis.expediteur = { nom: data.expediteur.nom, telephone: normTel(data.expediteur.telephone) };
   if (data.destinataire) colis.destinataire = { nom: data.destinataire.nom, telephone: normTel(data.destinataire.telephone) };
   if (!colis.guichet) throw new ErreurMetier('Agence de retrait requise.');
+  if (data.articles !== undefined) colis.articles = nettoyerArticles(config, data.articles);
 
   colis.poidsReel = poidsReel;
   // Le colis part de l'agence où il est pesé
@@ -187,7 +204,7 @@ async function deposer(agent, data) {
   colis.sens = await sensDepuisAgences(colis.depot, colis.guichet);
   const tarif = calculerTarif(config, {
     sens: colis.sens, mode: colis.mode, poidsKg: poidsReel, typeColis: colis.typeColis,
-    valeurDeclaree: colis.valeurDeclaree, assurance: colis.assurance,
+    valeurDeclaree: colis.valeurDeclaree, assurance: colis.assurance, articles: colis.articles,
   });
   colis.tarif = { ...tarif, estime: false };
   if (data.livraison === undefined && colis.livraison?.demande && guichetAvant && guichetAvant !== colis.guichet) {
@@ -202,7 +219,7 @@ async function deposer(agent, data) {
 
   const ecart = colis.poidsEstime ? Math.round((poidsReel - colis.poidsEstime) * 10) / 10 : 0;
   colis.ajouterEvenement(STATUTS.DEPOSE,
-    `Pesé ${poidsReel} kg${colis.poidsEstime ? ` (déclaré ${colis.poidsEstime} kg)` : ''}`,
+    `Pesé ${poidsReel} kg${colis.poidsEstime ? ` (déclaré ${colis.poidsEstime} kg)` : ''}${colis.articles?.length ? ` · ${articlesTexte(colis.articles)}` : ''}`,
     { lieu: colis.depot, agent: agent._id });
 
   // Conditions générales et objets interdits : confirmés par le client au comptoir
@@ -584,5 +601,5 @@ async function colisDuGuichet(guichet) {
 module.exports = {
   ErreurMetier, normTel, masquerTel, lieAuCompte, vuePublique, vueComplete, avecOperation,
   encaisser, deposer, appliquerScan, sensDepuisAgences, paysArriveeDe, nomPays, remettre, changerStatutMasse, colisDuGuichet,
-  mettrePret, calculerMagasinage, etapePrecedente, annulerEtape,
+  mettrePret, calculerMagasinage, etapePrecedente, annulerEtape, nettoyerArticles, articlesTexte,
 };

@@ -64,6 +64,17 @@ const CONFIG_DEFAUT = {
     'GN-FR': { devise: 'GNF', air: { prixKg: 120000, poidsMin: 1 }, mer: { prixKg: 40000, poidsMin: 10 } },
   },
   surcharges: Object.fromEntries(TYPES_COLIS.map(t => [t.key, t.surcharge])),
+  // Articles facturés à la pièce plutôt qu'au kilo. Prix par sens et par mode, dans la
+  // devise du sens. « poids » = kilos forfaitaires retirés de la pesée pour chaque article
+  // (le surplus éventuel est facturé au kilo). Valeurs de départ À AJUSTER par l'admin.
+  articles: [
+    { cle: 'chaussures', label: 'Paire de chaussures', poids: 1.5, actif: true, prix: { 'FR-GN': { air: 15, mer: 8 },  'GN-FR': { air: 150000, mer: 80000 } } },
+    { cle: 'telephone',  label: 'Téléphone',           poids: 0.5, actif: true, prix: { 'FR-GN': { air: 25, mer: 15 }, 'GN-FR': { air: 250000, mer: 150000 } } },
+    { cle: 'tablette',   label: 'Tablette',            poids: 1,   actif: true, prix: { 'FR-GN': { air: 35, mer: 20 }, 'GN-FR': { air: 350000, mer: 200000 } } },
+    { cle: 'ordinateur', label: 'Ordinateur portable', poids: 3,   actif: true, prix: { 'FR-GN': { air: 50, mer: 30 }, 'GN-FR': { air: 500000, mer: 300000 } } },
+    { cle: 'television', label: 'Télévision',          poids: 12,  actif: true, prix: { 'FR-GN': { air: 150, mer: 60 }, 'GN-FR': { air: 1500000, mer: 600000 } } },
+    { cle: 'parfum',     label: 'Parfum',              poids: 0.5, actif: true, prix: { 'FR-GN': { air: 10, mer: 6 },  'GN-FR': { air: 100000, mer: 60000 } } },
+  ],
   tauxAssurance: 0.023,      // 2,3 % de la valeur déclarée (optionnel)
   tauxEurGnf: 10000,         // 1 € = X GNF — À METTRE À JOUR par l'admin
   magasinage: {

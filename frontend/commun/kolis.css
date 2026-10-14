@@ -287,3 +287,13 @@ main.entree > * { animation: pgIn .28s var(--ease) both; }
 .barre > span { transition: width .5s var(--ease); }
 .toast { animation: pgIn .22s var(--ease); }
 .pastille-notif { width: 44px; height: 44px; border-radius: 14px; background: var(--vert-doux); color: var(--marine); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+/* Articles à la pièce (compteur − n +) */
+.ligne-article { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--ligne, #eee); }
+.ligne-article:first-child { border-top: none; }
+.ligne-article .nom { font-weight: 600; }
+.ligne-article.choisi .nom { color: var(--marine, #13294b); }
+.ligne-article .compteur { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.ligne-article .compteur .gras { min-width: 22px; text-align: center; font-size: 17px; }
+.ligne-article .compteur .btn { width: 40px; height: 40px; font-size: 22px; padding: 0; }
+.ligne-article .compteur .btn:disabled { opacity: .35; }
