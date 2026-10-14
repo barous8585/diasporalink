@@ -29,6 +29,17 @@ Nom affiché : `APP_NOM` (Talib Multi Services), nom court pour les SMS : `APP_N
 - **Destinataires reconnus par leur téléphone.** Un destinataire qui se connecte avec son numéro voit les colis qui lui sont envoyés, avec le code.
 - **Douchette.** Une douchette USB/Bluetooth marche directement dans le champ de saisie (elle tape le numéro + Entrée).
 
+## Ramassage et livraison à domicile
+
+- **Facultatif, au choix du client** : « On vient chercher » au départ, « Livraison à domicile » à l'arrivée. Au comptoir, l'agent peut aussi cocher la livraison.
+- **Prix au kilomètre** : base + prix par km × distance entre l'agence et le client (vol d'oiseau + 30 % pour les routes), arrondi au millier de GNF ou au demi-euro, plafond et distance maximum facultatifs. Réglable par pays dans *Tarifs & agences*. Valeurs de départ : Guinée 10 000 GNF + 2 000 GNF/km, France 8 € + 1 €/km.
+- **Adresse** : quartier, point de repère, téléphone sur place, et position GPS (bouton « Je suis sur place » ou lien de localisation WhatsApp / Google Maps collé). Chaque agence doit avoir sa position GPS pour proposer le service.
+- **Position du destinataire** : si l'expéditeur ne l'a pas, le destinataire l'envoie lui-même depuis la page de suivi (vérifié par son numéro). Il peut aussi y demander ou annuler la livraison.
+- **Livreurs dédiés** (rôle « Livreur » dans *Équipe*) : ils se connectent à l'app agent et ne voient que « Courses » et « Caisse ». Ils prennent les courses de leur agence ou l'admin les assigne (*Courses à domicile*).
+- **Ramassage** : « Colis ramassé » → le livreur le rapporte à l'agence, où il est pesé ; le prix du ramassage s'ajoute au prix à payer.
+- **Livraison** : « Je pars livrer » à l'agence → chez le destinataire : code de retrait (vérifié même hors-ligne), encaissement du solde, signature. En cas d'échec, le colis revient en rayon.
+- **Contrôle** : la position du téléphone du livreur est notée quand il valide ; l'admin voit l'écart avec l'adresse (alerte au-delà de 500 m).
+
 ## Démarrer en local
 
 ```bash

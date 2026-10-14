@@ -350,3 +350,157 @@ test('redistribution vers une autre agence, et envoi Guinée → France payé en
   }, agentParis);
   assert.strictEqual(remiseParis.status, 200, remiseParis.message);
 });
+
+test('ramassage et livraison à domicile, prix au kilomètre', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  // Positions des agences : lien Google Maps (Paris) et coordonnées (Kaloum)
+  const cfg = (await appel('GET', '/config/admin', null, admin)).config;
+  const agences = cfg.agences.map(a => a.code === 'PARIS' ? { ...a, lienPosition: 'https://www.google.com/maps/place/TMS/@48.8925,2.3484,17z/data=!3m1' }
+    : a.code === 'KALOUM' ? { ...a, position: { lat: 9.5092, lng: -13.7122 } } : a);
+  let r = await appel('PATCH', '/config/admin', { agences }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.deepStrictEqual(r.config.agences.find(a => a.code === 'PARIS').position, { lat: 48.8925, lng: 2.3484 });
+  const pub = await appel('GET', '/config');
+  assert.strictEqual(pub.domicile.GN.parKm, 2000);
+  assert.deepStrictEqual((await appel('GET', '/config/position?lien=' + encodeURIComponent('9.55, -13.71'))).position, { lat: 9.55, lng: -13.71 });
+
+  // Livreurs dédiés
+  for (const [tel, prenom, lieu] of [['+33600000010', 'Moussa', 'PARIS'], ['620000011', 'Sekou', 'KALOUM']]) {
+    r = await appel('POST', '/utilisateurs/equipe', { telephone: tel, prenom, nom: 'Livreur', role: 'livreur', lieu, motDePasse: MDP }, admin);
+    assert.strictEqual(r.status, 201, r.message);
+  }
+  const livParis = await connexion('+33600000010');
+  const livKaloum = await connexion('620000011');
+  const agentParis = await connexion('+33600000002');
+  const agentKaloum = await connexion('620000003');
+  assert.strictEqual((await appel('GET', '/agent/contexte', null, livParis)).status, 403, 'un livreur n\'est pas un agent');
+
+  // Réservation : ramassage à 3 km de l'agence de Paris, livraison sans position (le destinataire l'enverra)
+  const client = await connexion('0622334455', 'Fanta', 'Camara');
+  r = await appel('POST', '/colis', {
+    mode: 'air', typeColis: 'vetements', poidsEstime: 5, depot: 'PARIS', guichet: 'KALOUM',
+    destinataire: { nom: 'Oumar Camara', telephone: '622111222' },
+    ramassage: { demande: true, adresse: { ville: 'Paris', quartier: 'Barbès', repere: '3e étage, interphone Camara', position: { lat: 48.8925 + 0.027, lng: 2.3484 } }, moment: 'matin' },
+    livraison: { demande: true, adresse: { ville: 'Conakry', commune: 'Ratoma', quartier: 'Kipé', repere: 'Près de la pharmacie Kipé' } },
+  }, client);
+  assert.strictEqual(r.status, 201, r.message);
+  const numero = r.colis.numeroSuivi;
+  assert.strictEqual(r.colis.ramassage.prix, 12); // 8 € + 1 €/km × 3,9 km → 12 €
+  assert.strictEqual(r.colis.ramassage.devise, 'EUR');
+  assert.strictEqual(r.colis.livraison.prix, undefined);
+  // Ramassage sans position refusé
+  const sansPos = await appel('POST', '/colis', {
+    mode: 'air', typeColis: 'vetements', poidsEstime: 5, depot: 'PARIS', guichet: 'KALOUM',
+    destinataire: { nom: 'X', telephone: '622111223' },
+    ramassage: { demande: true, adresse: { quartier: 'Barbès', repere: 'x' } },
+  }, client);
+  assert.strictEqual(sansPos.status, 400);
+
+  let suivi = (await appel('GET', `/colis/suivi/${numero}`)).colis;
+  assert.strictEqual(suivi.livraison.aPosition, false);
+  assert.ok(!JSON.stringify(suivi).includes('interphone'), 'pas d\'adresse précise en public');
+
+  // Le livreur de Paris voit le ramassage, pas la livraison de Kaloum
+  let courses = (await appel('GET', '/livreur/courses', null, livParis)).courses;
+  assert.deepStrictEqual(courses.filter(c => c.numeroSuivi === numero).map(c => c.type), ['ramassage']);
+  r = await appel('POST', '/livreur/prendre', { numero, type: 'ramassage' }, livParis);
+  assert.strictEqual(r.course.statut, 'assignee');
+  r = await appel('POST', '/livreur/ramasse', { numero, opId: 'ram-1', position: { lat: 48.8925 + 0.0271, lng: 2.3484 } }, livParis);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual(r.course.statut, 'faite');
+  assert.ok(r.course.ecartM < 50, `écart ${r.course.ecartM} m`);
+  assert.strictEqual((await appel('POST', '/livreur/ramasse', { numero, opId: 'ram-1' }, livParis)).rejoue, true);
+
+  // Dépôt à l'agence : transport + ramassage à payer (la livraison n'a pas encore de prix)
+  r = await appel('POST', '/agent/depot', { numeroSuivi: numero, poidsReel: 5 }, agentParis);
+  assert.strictEqual(r.status, 201, r.message);
+  const taux = r.colis.tarif.taux;
+  assert.strictEqual(r.colis.solde.domicileGnf, 12 * taux);
+  assert.strictEqual(r.colis.solde.soldeEur, 60 + 12);
+  await appel('POST', '/agent/encaisser', { numero, paiement: { montant: 72, devise: 'EUR', methode: 'carte' } }, agentParis);
+
+  // Le destinataire envoie sa position depuis la page de suivi (vérifié par son numéro)
+  r = await appel('POST', `/colis/${numero}/livraison`, { telephone: '620999999', adresse: { quartier: 'Kipé', repere: 'x', lien: '9.5542, -13.7122' } });
+  assert.strictEqual(r.status, 403);
+  r = await appel('POST', `/colis/${numero}/livraison`, { telephone: '622 11 12 22', adresse: { commune: 'Ratoma', quartier: 'Kipé', repere: 'Près de la pharmacie Kipé', lien: 'https://maps.google.com/?q=9.5542,-13.7122' } });
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual(r.colis.livraison.prix, 23000); // 10 000 + 2 000 × 6,5 km
+  assert.strictEqual(r.colis.soldeGnf, 23000);
+
+  // Voyage : lot, arrivée, mise en rayon à Kaloum
+  const lot = (await appel('POST', '/lots', { mode: 'air' }, admin)).lot;
+  await appel('POST', '/agent/scans', { scans: [{ opId: 'd1', numero, action: 'charger', lot: lot.code }] }, agentParis);
+  await appel('POST', `/lots/${lot.code}/statut`, { statut: 'parti' }, admin);
+  r = await appel('POST', '/agent/scans', { scans: [{ opId: 'd2', numero, action: 'arrivee', lot: lot.code }, { opId: 'd3', numero, action: 'guichet' }] }, agentKaloum);
+  assert.ok(r.resultats.every(x => x.ok), JSON.stringify(r.resultats));
+  const ctx = await appel('GET', '/agent/contexte', null, agentKaloum);
+  assert.strictEqual(ctx.colisPrets.find(c => c.numeroSuivi === numero).aLivrer, true);
+
+  // L'admin assigne la livraison au livreur de Kaloum
+  const vueAdmin = await appel('GET', '/admin/courses', null, admin);
+  assert.ok(vueAdmin.livreurs.some(l => l.prenom === 'Sekou'));
+  assert.ok(vueAdmin.faites.some(c => c.numeroSuivi === numero && c.type === 'ramassage'));
+  const sekou = vueAdmin.livreurs.find(l => l.prenom === 'Sekou');
+  r = await appel('POST', '/admin/courses/assigner', { numero, type: 'livraison', livreur: sekou._id }, admin);
+  assert.strictEqual(r.course.livreurNom, 'Sekou Livreur');
+  // Le livreur de Paris ne peut pas la prendre
+  assert.strictEqual((await appel('POST', '/livreur/prendre', { numero, type: 'livraison' }, livParis)).status, 403);
+
+  r = await appel('POST', '/livreur/depart', { numero }, livKaloum);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual(r.course.statutColis, 'en_livraison');
+  // Le guichet ne peut plus le remettre
+  const code = (await appel('GET', `/admin/colis/${numero}`, null, admin)).colis.codeRetrait;
+  assert.match(code, /^\d{4}$/);
+  r = await appel('POST', '/agent/remise', { numero, code, pieceVerifiee: true }, agentKaloum);
+  assert.strictEqual(r.status, 409);
+  // Le client voit son code pendant la livraison
+  assert.strictEqual((await appel('GET', `/colis/${numero}`, null, client)).colis.codeRetrait, code);
+
+  // Chez le destinataire : mauvais code, puis bon code sans payer, puis paiement
+  assert.strictEqual((await appel('POST', '/livreur/livre', { numero, code: code === '0000' ? '1111' : '0000' }, livKaloum)).status, 401);
+  r = await appel('POST', '/livreur/livre', { numero, code }, livKaloum);
+  assert.strictEqual(r.status, 402, r.message);
+  r = await appel('POST', '/livreur/livre', {
+    numero, code, opId: 'liv-1', signature: 'data:image/png;base64,AAAA',
+    paiement: { montant: 23000, devise: 'GNF', methode: 'especes' }, position: { lat: 9.5543, lng: -13.7121 },
+  }, livKaloum);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual(r.colis.statut, 'remis');
+  assert.strictEqual(r.colis.remise.aDomicile, true);
+  assert.strictEqual(r.colis.livraison.statut, 'faite');
+  assert.ok(r.colis.livraison.ecartM < 50);
+  // L'argent est dans la caisse du livreur
+  const caisse = await appel('GET', '/caisse/moi', null, livKaloum);
+  assert.strictEqual(caisse.totaux.GNF.especes, 23000);
+
+  // ── Échec de livraison : le colis revient en rayon ──
+  r = await appel('POST', '/agent/depot', {
+    poidsReel: 2, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM',
+    expediteur: { nom: 'Ali Sow', telephone: '0633333333' }, destinataire: { nom: 'Binta Sow', telephone: '623333333' },
+    livraison: { demande: true, adresse: { quartier: 'Taouyah', repere: 'Portail bleu', position: { lat: 9.53, lng: -13.69 } } },
+    paiement: { montant: 24, devise: 'EUR', methode: 'especes' },
+  }, agentParis);
+  assert.strictEqual(r.status, 201, r.message);
+  const num2 = r.colis.numeroSuivi;
+  assert.ok(r.colis.livraison.prix > 10000);
+  assert.ok(r.colis.solde.soldeGnf > 0, 'la livraison reste à payer à l\'arrivée');
+  const lot2 = (await appel('POST', '/lots', { mode: 'air' }, admin)).lot;
+  await appel('POST', '/agent/scans', { scans: [{ opId: 'e1', numero: num2, action: 'charger', lot: lot2.code }] }, agentParis);
+  await appel('POST', `/lots/${lot2.code}/statut`, { statut: 'parti' }, admin);
+  await appel('POST', '/agent/scans', { scans: [{ opId: 'e2', numero: num2, action: 'arrivee', lot: lot2.code }, { opId: 'e3', numero: num2, action: 'guichet' }] }, agentKaloum);
+  courses = (await appel('GET', '/livreur/courses', null, livKaloum)).courses;
+  assert.ok(courses.some(c => c.numeroSuivi === num2 && c.type === 'livraison' && c.empreinteCode));
+  await appel('POST', '/livreur/prendre', { numero: num2, type: 'livraison' }, livKaloum);
+  await appel('POST', '/livreur/depart', { numero: num2 }, livKaloum);
+  r = await appel('POST', '/livreur/echec', { numero: num2, type: 'livraison', motif: 'Absent, téléphone éteint' }, livKaloum);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual(r.course.statut, 'a_planifier');
+  assert.strictEqual(r.course.statutColis, 'pret');
+  assert.strictEqual(r.course.echecs.length, 1);
+  // Le destinataire peut finalement venir le chercher : il annule la livraison et ne la paie pas
+  r = await appel('POST', `/colis/${num2}/livraison`, { telephone: '623333333', demande: false });
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual(r.colis.livraison, null);
+  assert.strictEqual(r.colis.soldeGnf, 0);
+});

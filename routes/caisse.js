@@ -7,7 +7,7 @@ const { auth, role } = require('../middleware/auth');
 const { ah } = require('../utils/http');
 const { ROLES } = require('../config/constants');
 
-router.use(auth, role(ROLES.AGENT, ROLES.ADMIN));
+router.use(auth, role(ROLES.AGENT, ROLES.LIVREUR, ROLES.ADMIN));
 
 // totaux[devise][methode]
 function totaliser(mouvements) {

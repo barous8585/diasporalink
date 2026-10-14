@@ -79,6 +79,14 @@ const CONFIG_DEFAUT = {
     { code: 'KALOUM', nom: 'Agence Kaloum', pays: 'GN', ville: 'Conakry', commune: 'Kaloum', adresse: '', telephone: '', horaires: '', plateforme: true },
     { code: 'MATOTO', nom: 'Agence Matoto', pays: 'GN', ville: 'Conakry', commune: 'Matoto', adresse: '', telephone: '', horaires: '', plateforme: false },
   ],
+  // Ramassage chez l'expéditeur et livraison chez le destinataire, par des livreurs TMS.
+  // Prix = base + prix par km × distance (vol d'oiseau × majoration, pour suivre les routes)
+  // entre l'agence et l'adresse du client. Dans la devise du pays où se fait la course.
+  domicile: {
+    majoration: 1.3,
+    FR: { actif: true, base: 8,     parKm: 1,    plafond: 0, rayonMaxKm: 60 },
+    GN: { actif: true, base: 10000, parKm: 2000, plafond: 0, rayonMaxKm: 40 },
+  },
 };
 
 // ── STATUTS COLIS (ordre du circuit) ──────
@@ -90,6 +98,7 @@ const STATUTS = {
   ARRIVE:       'arrive',       // arrivé dans le pays de destination (plateforme)
   ACHEMINEMENT: 'acheminement', // en route vers l'agence de retrait
   PRET:         'pret',         // disponible à l'agence de retrait, code envoyé
+  EN_LIVRAISON: 'en_livraison', // parti avec le livreur vers le destinataire
   REMIS:        'remis',        // remis au destinataire
   ANNULE:       'annule',
 };
@@ -102,6 +111,7 @@ const STATUTS_LABELS = {
   arrive:       'Arrivé à destination',
   acheminement: 'En route vers l\'agence',
   pret:         'Prêt à l\'agence',
+  en_livraison: 'En cours de livraison',
   remis:        'Remis au destinataire',
   annule:       'Annulé',
 };
@@ -128,8 +138,24 @@ const DEVISES = ['EUR', 'GNF'];
 const ROLES = {
   CLIENT: 'client',
   AGENT:  'agent',
+  LIVREUR:'livreur',
   ADMIN:  'admin',
 };
+
+// ── COURSES À DOMICILE ────────────────────
+const TYPES_COURSE = ['ramassage', 'livraison'];
+const STATUTS_COURSE = {
+  A_PLANIFIER: 'a_planifier', // demandée, pas encore de livreur
+  ASSIGNEE:    'assignee',    // un livreur s'en charge
+  EN_ROUTE:    'en_route',    // livraison : le colis est parti avec le livreur
+  FAITE:       'faite',
+  ANNULEE:     'annulee',
+};
+const MOMENTS = [
+  { key: 'matin', label: 'Matin (8 h – 12 h)' },
+  { key: 'apres_midi', label: 'Après-midi (12 h – 17 h)' },
+  { key: 'soir', label: 'Soir (17 h – 20 h)' },
+];
 
 // ── SÉCURITÉ CODE DE RETRAIT ──────────────
 const CODE_RETRAIT_ESSAIS_MAX = 5;
@@ -151,5 +177,8 @@ module.exports = {
   METHODES_PAIEMENT,
   DEVISES,
   ROLES,
+  TYPES_COURSE,
+  STATUTS_COURSE,
+  MOMENTS,
   CODE_RETRAIT_ESSAIS_MAX,
 };

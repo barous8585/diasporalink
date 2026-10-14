@@ -6,7 +6,7 @@ const Lot = require('../models/Lot');
 const Config = require('../models/Config');
 const OperationSync = require('../models/OperationSync');
 const { Mouvement } = require('../models/Mouvement');
-const { calculerTarif, calculerSolde, calculerMagasinage } = require('../utils/tarif');
+const { calculerTarif, calculerSolde, calculerMagasinage, enGnf } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
 const {
   STATUTS, STATUTS_LABELS, STATUTS_LOT, CODE_RETRAIT_ESSAIS_MAX, METHODES_PAIEMENT, DEVISES, PAYS, sensEntre,
@@ -62,6 +62,19 @@ async function nomLieu(code) {
 }
 
 // ── Vues ────────────────────────────────────────────────────
+// Course à domicile vue par tout le monde : pas d'adresse précise ni de téléphone
+function vueCoursePublique(c) {
+  if (!c?.demande || c.statut === 'annulee') return null;
+  return {
+    statut: c.statut,
+    quartier: c.adresse?.quartier || c.adresse?.commune || '',
+    aPosition: !!c.adresse?.position?.lat,
+    prix: c.prix, devise: c.devise, distanceKm: c.distanceKm,
+    livreur: c.livreurNom ? prenomSeul(c.livreurNom) : undefined,
+    jour: c.jour, moment: c.moment,
+  };
+}
+
 async function vuePublique(colis) {
   const config = await Config.get();
   const solde = calculerSolde(colis, config);
@@ -82,6 +95,8 @@ async function vuePublique(colis) {
     magasinage: solde.magasinage,
     soldeGnf: solde.soldeGnf,
     soldeEur: solde.soldeEur,
+    ramassage: vueCoursePublique(colis.ramassage),
+    livraison: vueCoursePublique(colis.livraison),
     majLe: new Date(),
   };
 }
@@ -92,7 +107,7 @@ async function vueComplete(colis, { avecCode = false } = {}) {
   const solde = calculerSolde(colis, config);
   obj.solde = solde;
   obj.guichetInfo = await Config.lieu(colis.guichet);
-  if (avecCode && colis.codeRetrait && colis.statut === STATUTS.PRET) obj.codeRetrait = colis.codeRetrait;
+  if (avecCode && colis.codeRetrait && [STATUTS.PRET, STATUTS.EN_LIVRAISON].includes(colis.statut)) obj.codeRetrait = colis.codeRetrait;
   return obj;
 }
 
@@ -152,6 +167,7 @@ async function deposer(agent, data) {
 
   // Champs modifiables au comptoir (l'agent corrige la réservation si besoin)
   const champs = ['mode', 'typeColis', 'guichet', 'description', 'nbCartons', 'valeurDeclaree', 'assurance', 'payeurArrivee'];
+  const guichetAvant = colis.guichet;
   champs.forEach(k => { if (data[k] !== undefined && data[k] !== '') colis[k] = data[k]; });
   if (data.expediteur) colis.expediteur = { nom: data.expediteur.nom, telephone: normTel(data.expediteur.telephone) };
   if (data.destinataire) colis.destinataire = { nom: data.destinataire.nom, telephone: normTel(data.destinataire.telephone) };
@@ -166,6 +182,15 @@ async function deposer(agent, data) {
     valeurDeclaree: colis.valeurDeclaree, assurance: colis.assurance,
   });
   colis.tarif = { ...tarif, estime: false };
+  if (data.livraison === undefined && colis.livraison?.demande && guichetAvant && guichetAvant !== colis.guichet) {
+    data.livraison = { demande: true, adresse: colis.livraison.adresse, jour: colis.livraison.jour, moment: colis.livraison.moment };
+  }
+  if (data.livraison !== undefined) {
+    await require('./domicileService').demanderCourse(colis, 'livraison', data.livraison);
+  } else if (colis.livraison?.demande && colis.livraison.prix && colis.livraison.devise) {
+    // Taux du jour figé à la pesée : on recalcule l'équivalent GNF de la livraison
+    colis.livraison.prixGnf = enGnf(colis.livraison.prix, colis.livraison.devise, tarif.taux);
+  }
 
   const ecart = colis.poidsEstime ? Math.round((poidsReel - colis.poidsEstime) * 10) / 10 : 0;
   colis.ajouterEvenement(STATUTS.DEPOSE,
@@ -202,7 +227,9 @@ async function mettrePret(colis, agent, emplacement) {
   const { soldeGnf, soldeEur } = calculerSolde(colis, config);
   const enFrance = paysArriveeDe(colis.sens) === 'FR';
   const reste = soldeGnf > 0 ? (enFrance ? `${soldeEur.toLocaleString('fr-FR')} €` : `${soldeGnf.toLocaleString('fr-FR')} GNF`) : '';
-  const msg = MESSAGES.pret(colis, code, nomGuichet, reste);
+  const msg = colis.livraison?.demande && colis.livraison.statut !== 'annulee'
+    ? MESSAGES.pretLivraison(colis, code, reste)
+    : MESSAGES.pret(colis, code, nomGuichet, reste);
   notifier(colis.destinataire.telephone, msg);
   if (colis.tiersAutorise?.telephone) notifier(colis.tiersAutorise.telephone, msg);
   if (colis.expediteur.telephone !== colis.destinataire.telephone) notifier(colis.expediteur.telephone, msg);
@@ -288,7 +315,11 @@ async function remettre(agent, data) {
     if (data.opId && colis.remise?.opId === data.opId) return { colis: await vueComplete(colis), rejoue: true };
     throw new ErreurMetier('Ce colis a déjà été remis.', 409);
   }
-  if (colis.statut !== STATUTS.PRET) throw new ErreurMetier(`Pas encore disponible (« ${STATUTS_LABELS[colis.statut]} »).`, 409);
+  const aDomicile = !!data.aDomicile;
+  if (aDomicile ? colis.statut !== STATUTS.EN_LIVRAISON : colis.statut !== STATUTS.PRET) {
+    if (colis.statut === STATUTS.EN_LIVRAISON) throw new ErreurMetier('Ce colis est parti en livraison avec un livreur.', 409);
+    throw new ErreurMetier(`Pas encore disponible (« ${STATUTS_LABELS[colis.statut]} »).`, 409);
+  }
   if (agent.lieu && colis.guichet !== agent.lieu) throw new ErreurMetier('Ce colis est attendu dans une autre agence.', 409);
 
   if ((colis.codeEssais || 0) >= CODE_RETRAIT_ESSAIS_MAX) {
@@ -299,7 +330,8 @@ async function remettre(agent, data) {
     await colis.save();
     throw new ErreurMetier(`Code incorrect (${CODE_RETRAIT_ESSAIS_MAX - colis.codeEssais} essai(s) restant(s)).`, 401, 'code_faux');
   }
-  if (!data.pieceVerifiee) throw new ErreurMetier('Vérifiez la pièce d\'identité.');
+  // Au guichet, la pièce d'identité est obligatoire ; à domicile, le code suffit.
+  if (!data.pieceVerifiee && !aDomicile) throw new ErreurMetier('Vérifiez la pièce d\'identité.');
   if (data.retirePar === 'tiers' && !colis.tiersAutorise?.nom && !data.nomRetrait) {
     throw new ErreurMetier('Nom de la personne qui retire requis.');
   }
@@ -307,7 +339,10 @@ async function remettre(agent, data) {
   // Vérifie que le paiement couvre le solde AVANT d'enregistrer quoi que ce soit en caisse.
   const config = await Config.get();
   const p = validerPaiement(data.paiement);
-  const essai = { sens: colis.sens, paiements: [...colis.paiements, ...(p ? [p] : [])], tarif: colis.tarif, fraisDouaneGnf: colis.fraisDouaneGnf, arriveGuichetLe: colis.arriveGuichetLe };
+  const essai = {
+    sens: colis.sens, paiements: [...colis.paiements, ...(p ? [p] : [])], tarif: colis.tarif, fraisDouaneGnf: colis.fraisDouaneGnf,
+    arriveGuichetLe: colis.arriveGuichetLe, ramassage: colis.ramassage, livraison: colis.livraison,
+  };
   const solde = calculerSolde(essai, config);
   if (solde.soldeGnf > 0) {
     throw new ErreurMetier(`Il reste ${solde.soldeGnf.toLocaleString('fr-FR')} GNF à payer.`, 402, 'solde_du');
@@ -318,11 +353,13 @@ async function remettre(agent, data) {
     le: new Date(), agent: agent._id,
     retirePar: data.retirePar === 'tiers' ? 'tiers' : 'destinataire',
     nomRetrait: data.retirePar === 'tiers' ? (data.nomRetrait || colis.tiersAutorise?.nom) : colis.destinataire.nom,
-    pieceVerifiee: true,
+    pieceVerifiee: !!data.pieceVerifiee,
+    aDomicile,
     signature: typeof data.signature === 'string' && data.signature.startsWith('data:image/') && data.signature.length < 300000 ? data.signature : undefined,
     opId: data.opId,
   };
-  colis.ajouterEvenement(STATUTS.REMIS, `Remis à ${colis.remise.nomRetrait}`, { lieu: agent.lieu, agent: agent._id });
+  colis.ajouterEvenement(STATUTS.REMIS, `Remis à ${colis.remise.nomRetrait}${aDomicile ? ' à domicile' : ''}`, { lieu: agent.lieu, agent: agent._id });
+  if (typeof data.avantSauvegarde === 'function') data.avantSauvegarde(colis);
   await colis.save();
   notifier(colis.expediteur.telephone, MESSAGES.remis(colis));
   if (colis.destinataire.telephone !== colis.expediteur.telephone) notifier(colis.destinataire.telephone, MESSAGES.remis(colis));
@@ -370,6 +407,7 @@ async function colisDuGuichet(guichet) {
       soldeEur: solde.soldeEur,
       magasinage: solde.magasinage,
       empreinteCode: Colis.empreinteCode(c.numeroSuivi, c.codeRetrait),
+      aLivrer: !!(c.livraison?.demande && c.livraison.statut !== 'annulee'),
     };
   });
 }

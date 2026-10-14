@@ -76,3 +76,44 @@ test('solde : paiements en EUR et GNF au taux figé du colis', () => {
   assert.strictEqual(s.duGnf, 735000);
   assert.strictEqual(s.soldeGnf, 25000);
 });
+
+// ── Courses à domicile ──
+const { calculerCourse, distanceKm } = require('../utils/tarif');
+const kaloum = { code: 'KALOUM', nom: 'Agence Kaloum', pays: 'GN', position: { lat: 9.5092, lng: -13.7122 } };
+const paris = { code: 'PARIS', nom: 'Agence Paris', pays: 'FR', position: { lat: 48.8925, lng: 2.3484 } };
+
+test('distance à vol d\'oiseau', () => {
+  const d = distanceKm(kaloum.position, { lat: 9.5092 + 0.09, lng: -13.7122 }); // ≈ 10 km au nord
+  assert.ok(d > 9.9 && d < 10.1, d);
+});
+
+test('course en Guinée : base + km par la route, arrondi au millier', () => {
+  const c = calculerCourse(config, kaloum, { lat: 9.5092 + 0.045, lng: -13.7122 }); // 5 km → 6,5 km par la route
+  assert.strictEqual(c.ok, true);
+  assert.strictEqual(c.devise, 'GNF');
+  assert.strictEqual(c.distanceKm, 6.5);
+  assert.strictEqual(c.prix, 23000); // 10 000 + 2 000 × 6,5
+  assert.strictEqual(c.prixGnf, 23000);
+});
+
+test('course en France : en €, arrondi au demi-euro, converti en GNF', () => {
+  const c = calculerCourse(config, paris, { lat: 48.8925 + 0.027, lng: 2.3484 }); // 3 km → 3,9 km
+  assert.strictEqual(c.devise, 'EUR');
+  assert.strictEqual(c.prix, 12); // 8 + 3,9 = 11,9 → 12
+  assert.strictEqual(c.prixGnf, 120000);
+});
+
+test('course : plafond, trop loin, agence sans position', () => {
+  const cfg = { ...config, domicile: { ...config.domicile, GN: { ...config.domicile.GN, plafond: 20000 } } };
+  assert.strictEqual(calculerCourse(cfg, kaloum, { lat: 9.5092 + 0.09, lng: -13.7122 }).prix, 20000);
+  assert.strictEqual(calculerCourse(config, kaloum, { lat: 10.5, lng: -13.7 }).raison, 'trop_loin');
+  assert.strictEqual(calculerCourse(config, { ...kaloum, position: null }, { lat: 9.6, lng: -13.7 }).raison, 'agence_sans_position');
+  assert.strictEqual(calculerCourse(config, kaloum, null).raison, 'sans_position');
+});
+
+test('solde : la livraison à domicile s\'ajoute, sauf annulée', () => {
+  const colis = { tarif: { totalGnf: 100000, taux: 10000 }, paiements: [], livraison: { demande: true, prixGnf: 23000, statut: 'a_planifier' } };
+  assert.strictEqual(calculerSolde(colis, config).soldeGnf, 123000);
+  colis.livraison.statut = 'annulee';
+  assert.strictEqual(calculerSolde(colis, config).soldeGnf, 100000);
+});

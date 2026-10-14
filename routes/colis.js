@@ -12,6 +12,7 @@ const { calculerTarif } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
 const { STATUTS, MODES, TYPES_COLIS, ROLES, SENS } = require('../config/constants');
 const { normTel, vuePublique, vueComplete, sensDepuisAgences } = require('../services/colisService');
+const dom = require('../services/domicileService');
 
 // Limite le « balayage » des numéros de suivi
 const suiviLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { succes: false, message: 'Trop de recherches, patientez une minute.' } });
@@ -99,8 +100,29 @@ router.post('/', auth, [
     sens, mode: b.mode, poidsKg: b.poidsEstime, typeColis: b.typeColis, valeurDeclaree: b.valeurDeclaree, assurance: b.assurance,
   }), estime: true };
   colis.ajouterEvenement(STATUTS.RESERVE, 'Réservation en ligne');
+  if (b.ramassage?.demande) await dom.demanderCourse(colis, 'ramassage', b.ramassage);
+  if (b.livraison?.demande) await dom.demanderCourse(colis, 'livraison', b.livraison);
   await colis.save();
   res.status(201).json({ succes: true, colis: await vueComplete(colis) });
+}));
+
+// ── POST /api/colis/:numero/livraison ── demander, préciser ou annuler la livraison à domicile.
+// Ouvert sans compte : le destinataire prouve qui il est avec son numéro de téléphone
+// (le même que sur le colis). Il peut ainsi envoyer sa position depuis la page de suivi.
+const livraisonLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { succes: false, message: 'Trop d\'essais, patientez un peu.' } });
+router.post('/:numero/livraison', livraisonLimiter, ah(async (req, res) => {
+  const colis = await Colis.findOne({ numeroSuivi: req.params.numero.trim().toUpperCase() });
+  if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
+  const tel = normTel(req.body.telephone);
+  const autorise = tel && [colis.destinataire?.telephone, colis.expediteur?.telephone, colis.tiersAutorise?.telephone].includes(tel);
+  if (!autorise) return res.status(403).json({ succes: false, message: 'Ce numéro ne correspond pas à ce colis.' });
+  if ([STATUTS.REMIS, STATUTS.ANNULE, STATUTS.EN_LIVRAISON].includes(colis.statut)) {
+    return res.status(409).json({ succes: false, message: colis.statut === STATUTS.EN_LIVRAISON ? 'Le livreur est déjà en route.' : 'Ce colis n\'est plus modifiable.' });
+  }
+  await dom.demanderCourse(colis, 'livraison', req.body.demande === false ? { demande: false } : { ...req.body, demande: true });
+  colis.markModified('livraison');
+  await colis.save();
+  res.json({ succes: true, colis: await vuePublique(colis) });
 }));
 
 // ── PATCH /api/colis/:numero/tiers ── autoriser quelqu'un d'autre à retirer

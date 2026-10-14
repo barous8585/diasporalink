@@ -12,6 +12,8 @@ const agenceSchema = new mongoose.Schema({
   telephone:  { type: String, trim: true, default: '' },
   horaires:   { type: String, trim: true, default: '' },
   plateforme: { type: Boolean, default: false }, // les lots arrivent ici dans ce pays
+  // Position GPS : sert à calculer le prix des courses à domicile depuis cette agence
+  position:   { lat: Number, lng: Number },
   actif:      { type: Boolean, default: true },
 }, { _id: false });
 
@@ -29,6 +31,7 @@ const configSchema = new mongoose.Schema({
     fraisJourEur:  Number,
   },
   agences: [agenceSchema],
+  domicile: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true, minimize: false });
 
 let cache = null;
@@ -43,6 +46,7 @@ configSchema.statics.get = async function () {
   // Complète une config créée avant l'arrivée des agences / des deux sens
   if (!config.agences?.length) config.agences = CONFIG_DEFAUT.agences;
   if (!config.tarifs?.['FR-GN']) config.tarifs = CONFIG_DEFAUT.tarifs;
+  if (!config.domicile) config.domicile = CONFIG_DEFAUT.domicile;
   if (config.magasinage && config.magasinage.fraisJourEur === undefined) config.magasinage.fraisJourEur = CONFIG_DEFAUT.magasinage.fraisJourEur;
   cache = config;
   cacheAt = Date.now();

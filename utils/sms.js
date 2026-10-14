@@ -63,6 +63,9 @@ const MESSAGES = {
     `${APP_NOM} : le colis ${c.numeroSuivi} vous attend à ${agence}. Code de retrait : ${code}. ` +
     (reste ? `Reste à payer : ${reste}. ` : '') +
     `Venez avec une pièce d'identité.`,
+  pretLivraison: (c, code, reste) =>
+    `${APP_NOM} : le colis ${c.numeroSuivi} est arrivé, un livreur vous l'apporte bientôt. Code à lui donner : ${code}. ` +
+    (reste ? `À payer à la livraison : ${reste}.` : ''),
   remis: (c) => `${APP_NOM} : le colis ${c.numeroSuivi} a été remis. Merci de votre confiance !`,
   tiers: (c, nom) => `${APP_NOM} : ${nom} est autorisé(e) à retirer le colis ${c.numeroSuivi}.`,
   relance: (c, guichet, jours) =>
