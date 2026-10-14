@@ -42,7 +42,18 @@ const envoyerWhatsApp = async (to, body) => {
   return false;
 };
 
+// Notification push sur les appareils du client (même texte), avec le lien vers le suivi
+function pousser(to, body) {
+  try {
+    const push = require('./push');
+    if (!push.actif()) return;
+    const numero = String(body).match(/[A-Z]{2,4}-\d{2}-\d{4,6}/)?.[0];
+    push.sansAttendre(push.auTelephone(to, { titre: APP_NOM, corps: String(body).replace(new RegExp(`^${APP_NOM} : `), ''), chemin: numero ? `/#/suivi/${numero}` : '/', etiquette: numero }));
+  } catch (e) { console.error('[push]', e.message); }
+}
+
 const notifier = async (to, body) => {
+  pousser(to, body);
   const ok = await envoyerWhatsApp(to, body);
   if (!ok) return envoyerSMS(to, body);
   return true;

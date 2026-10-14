@@ -105,6 +105,9 @@ router.post('/', auth, [
   if (b.ramassage?.demande) await dom.demanderCourse(colis, 'ramassage', b.ramassage);
   if (b.livraison?.demande) await dom.demanderCourse(colis, 'livraison', b.livraison);
   await colis.save();
+  const push = require('../utils/push');
+  push.sansAttendre(push.aLAgence(colis.depot, { titre: 'Nouvelle réservation', corps: `${colis.expediteur.nom} : ${colis.numeroSuivi}, ${colis.poidsEstime} kg ${colis.mode === 'mer' ? 'bateau' : 'avion'}${colis.ramassage?.demande ? ', ramassage à domicile' : ', viendra déposer'}.`, chemin: '/#/jour' }));
+  if (colis.ramassage?.demande) push.sansAttendre(push.aLAgence(colis.depot, { titre: 'Nouveau ramassage', corps: `${colis.expediteur.nom}${colis.ramassage.adresse?.quartier ? ` à ${colis.ramassage.adresse.quartier}` : ''}.`, chemin: '/#/courses' }, { roles: ['livreur'] }));
   res.status(201).json({ succes: true, colis: await vueComplete(colis) });
 }));
 

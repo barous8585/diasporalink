@@ -7,6 +7,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 const PORT = 5099;
+const VAPID = require('web-push').generateVAPIDKeys();
 const API = `http://127.0.0.1:${PORT}/api`;
 const ADMIN_TEL = '+33600000001';
 let serveur;
@@ -42,7 +43,8 @@ test.before(async () => {
   await mongoose.disconnect();
   serveur = spawn('node', ['server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT, MONGODB_URI: uri, JWT_SECRET: 'test', NODE_ENV: 'development', ADMIN_TELEPHONES: ADMIN_TEL, ADMIN_MOT_DE_PASSE: ADMIN_MDP, AUTH_MODE: '' },
+    env: { ...process.env, PORT, MONGODB_URI: uri, JWT_SECRET: 'test', NODE_ENV: 'development', ADMIN_TELEPHONES: ADMIN_TEL, ADMIN_MOT_DE_PASSE: ADMIN_MDP, AUTH_MODE: '',
+      VAPID_PUBLIC_KEY: VAPID.publicKey, VAPID_PRIVATE_KEY: VAPID.privateKey, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   serveur.stderr.on('data', d => process.stderr.write(d));
@@ -682,4 +684,105 @@ test('scan automatique : un agent différent à chaque étape, l\'app choisit l\
   const fiche = (await appel('GET', `/agent/colis/${n2}`, null, agentLabe)).colis;
   const noms = fiche.historique.map(h => h.agent?.prenom).filter(Boolean);
   assert.deepStrictEqual([...new Set(noms)], ['Awa', 'Admin', 'Ibrahima', 'Mariama']);
+});
+
+test('erreurs : double scan sans effet, annulation d\'une étape, départ de lot annulé', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');
+  const agentKaloum = await connexion('620000003');
+  const n = (await appel('POST', '/agent/depot', { poidsReel: 2, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM', cgvAcceptees: true,
+    expediteur: { nom: 'Test Erreur', telephone: '0677777777' }, destinataire: { nom: 'Dest Erreur', telephone: '627777777' } }, agentParis)).colis.numeroSuivi;
+  const auto = async (token) => (await appel('POST', '/agent/scans', { scans: [{ opId: `e-${Math.random()}`, numero: n, action: 'auto' }] }, token)).resultats[0];
+  let r = await auto(agentParis);
+  const lot = r.lotCode;
+  // Double scan : aucun effet
+  r = await auto(agentParis);
+  assert.ok(r.dejaFait);
+  let fiche = (await appel('GET', `/agent/colis/${n}`, null, agentParis)).colis;
+  assert.strictEqual(fiche.historique.filter(h => h.statut === 'charge').length, 1);
+  // Mauvais colis mis dans le lot : l'agent annule
+  r = await appel('POST', '/agent/annuler', { numero: n, motif: 'Mauvais colis' }, agentParis);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual(r.statut, 'depose');
+  assert.strictEqual(r.colis.lotCode, undefined);
+  // Rien d'autre à annuler par l'agent (le dépôt ne s'annule pas ici)
+  assert.strictEqual((await appel('POST', '/agent/annuler', { numero: n }, agentParis)).status, 409);
+  // Rechargé, lot marqué parti par erreur, puis départ annulé
+  r = await auto(agentParis);
+  assert.strictEqual(r.lotCode, lot);
+  assert.strictEqual((await appel('POST', `/lots/${lot}/statut`, { statut: 'parti' }, admin)).status, 200);
+  r = await appel('POST', `/lots/${lot}/statut`, { statut: 'preparation' }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  fiche = (await appel('GET', `/agent/colis/${n}`, null, agentParis)).colis;
+  assert.strictEqual(fiche.statut, 'charge');
+  // Arrivée + mise en rayon, puis l'agent de Kaloum annule la mise en rayon ; un agent de Paris ne peut pas
+  await appel('POST', `/lots/${lot}/statut`, { statut: 'parti' }, admin);
+  r = await auto(agentKaloum);
+  assert.strictEqual(r.statut, 'pret');
+  assert.strictEqual((await appel('POST', '/agent/annuler', { numero: n }, agentParis)).status, 403);
+  r = await appel('POST', '/agent/annuler', { numero: n, motif: 'Pas la bonne étagère' }, agentKaloum);
+  assert.strictEqual(r.statut, 'arrive');
+  r = await auto(agentKaloum);
+  assert.strictEqual(r.statut, 'pret');
+  // Remise annulée : seulement par l'admin
+  const code = (await appel('GET', `/admin/colis/${n}`, null, admin)).colis.codeRetrait;
+  const reste = (await appel('GET', `/agent/colis/${n}`, null, agentKaloum)).colis.solde.soldeGnf;
+  r = await appel('POST', '/agent/remise', { numero: n, code, pieceVerifiee: true, paiement: { montant: reste, devise: 'GNF', methode: 'especes' } }, agentKaloum);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual((await appel('POST', '/agent/annuler', { numero: n }, agentKaloum)).status, 403);
+  r = await appel('POST', '/agent/annuler', { numero: n, motif: 'Remis à la mauvaise personne, récupéré' }, admin);
+  assert.strictEqual(r.statut, 'pret');
+  assert.ok(!r.colis.remise?.le);
+  fiche = (await appel('GET', `/agent/colis/${n}`, null, agentKaloum)).colis;
+  assert.ok(fiche.historique.some(h => h.label === 'Étape annulée' && /mauvaise personne/.test(h.detail)));
+});
+
+
+test('notifications push : client, agents de l\'agence, admin', async () => {
+  // Faux service de notifications (comme celui de Google ou d'Apple), en HTTPS local
+  const https = require('https');
+  const fs = require('fs');
+  const SP = process.env.SCRATCH || '/tmp/claude-0/-home-claude-diasporalink/f3bf26df-ba64-59c5-bbb9-5bdbe7a08ab4/scratchpad';
+  if (!fs.existsSync(`${SP}/cert.pem`)) return; // pas de certificat de test : on saute
+  const recus = {};
+  const srv = https.createServer({ key: fs.readFileSync(`${SP}/cle.pem`), cert: fs.readFileSync(`${SP}/cert.pem`) }, (req, res) => {
+    let n = 0; req.on('data', d => { n += d.length; }); req.on('end', () => { recus[req.url] = (recus[req.url] || 0) + 1; res.writeHead(201); res.end(); });
+  });
+  await new Promise(r => srv.listen(5098, r));
+  const abonnement = (nom) => {
+    const ecdh = crypto.createECDH('prime256v1'); ecdh.generateKeys();
+    return { endpoint: `https://127.0.0.1:5098/${nom}`, keys: { p256dh: ecdh.getPublicKey('base64url'), auth: crypto.randomBytes(16).toString('base64url') } };
+  };
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');
+  const agentKaloum = await connexion('620000003');
+  const destinataire = await connexion('628888888', 'Awa', 'Destinataire');
+  assert.strictEqual((await appel('GET', '/push/cle')).actif, true);
+  for (const [tok, nom, app] of [[admin, 'admin', 'admin'], [agentKaloum, 'kaloum', 'agent'], [destinataire, 'client', 'client']]) {
+    const r = await appel('POST', '/push/abonner', { abonnement: abonnement(nom), app }, tok);
+    assert.strictEqual(r.status, 200, r.message);
+  }
+  // Un client ne peut pas s'abonner aux alertes du back-office
+  assert.strictEqual((await appel('POST', '/push/abonner', { abonnement: abonnement('pirate'), app: 'admin' }, destinataire)).status, 403);
+  const attendre = () => new Promise(r => setTimeout(r, 600));
+
+  // Dépôt à Paris pour ce destinataire, chargement, départ du lot → Kaloum prévenu, client prévenu
+  const n = (await appel('POST', '/agent/depot', { poidsReel: 2, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM', cgvAcceptees: true, paiement: { montant: 24, devise: 'EUR', methode: 'carte' },
+    expediteur: { nom: 'Exp Push', telephone: '0688888888' }, destinataire: { nom: 'Awa Destinataire', telephone: '628888888' } }, agentParis)).colis.numeroSuivi;
+  const lot = (await appel('POST', '/agent/scans', { scans: [{ opId: 'p1', numero: n, action: 'auto' }] }, agentParis)).resultats[0].lotCode;
+  await appel('POST', `/lots/${lot}/statut`, { statut: 'parti' }, admin);
+  await attendre();
+  assert.ok(recus['/kaloum'] >= 1, `agent prévenu du lot : ${JSON.stringify(recus)}`);
+  assert.ok(recus['/client'] >= 1, 'client prévenu du départ');
+  // Mise en rayon → le client reçoit son code en notification
+  const avant = recus['/client'];
+  await appel('POST', '/agent/scans', { scans: [{ opId: 'p2', numero: n, action: 'auto' }] }, agentKaloum);
+  await attendre();
+  assert.ok(recus['/client'] > avant, 'client prévenu que le colis est prêt');
+  // Réclamation → l'admin est prévenu
+  await appel('POST', '/reclamations', { numero: n, motif: 'retard', description: 'Test de notification au service client.' }, destinataire);
+  await attendre();
+  assert.ok(recus['/admin'] >= 1, 'admin prévenu de la réclamation');
+  // Abonnement disparu chez Google/Apple (410) : il est supprimé
+  srv.close();
 });

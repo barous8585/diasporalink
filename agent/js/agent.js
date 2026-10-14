@@ -44,7 +44,7 @@
         for (const res of r.resultats) {
           if (res.temporaire) continue;
           faits.add(res.opId);
-          journal.maj(res.opId, { etat: res.ok ? (res.info ? 'info' : 'ok') : 'erreur', message: res.ok ? libelleOk(res) : res.erreur, destinataire: res.destinataire, horsLot: res.horsLot, avant: res.avant, actionFaite: res.actionFaite, aEnvoyer: res.aEnvoyer });
+          journal.maj(res.opId, { etat: res.ok ? (res.info ? 'info' : 'ok') : 'erreur', message: res.ok ? libelleOk(res) : res.erreur, destinataire: res.destinataire, horsLot: res.horsLot, avant: res.avant, actionFaite: res.actionFaite || (res.ok && !res.dejaFait && !res.info ? res.action : undefined), aEnvoyer: res.aEnvoyer });
         }
         file.ecrire(file.lire().filter(o => !faits.has(o.opId)));
       }
@@ -127,6 +127,7 @@
   // Écrans « liste » redessinés seuls toutes les 60 s (courses du livreur, colis prêts au guichet)
   setInterval(async () => {
     if (document.hidden || !navigator.onLine || document.querySelector('.modale-fond') || arreterCamera) return;
+    main.classList.remove('entree'); // rafraîchissement silencieux : pas d'animation
     const onglet = location.hash.replace(/^#\/?/, '').split('/')[0];
     const actif = document.activeElement;
     if (actif && main.contains(actif) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
@@ -187,6 +188,7 @@
     if (!ONGLETS[onglet] || (!visibles.includes(onglet) && !ONGLETS[onglet].cache)) onglet = visibles[0];
     document.querySelector('[data-titre]').textContent = ONGLETS[onglet].lib;
     dessinerNav(onglet);
+    main.classList.add('entree');
     main.innerHTML = '<div class="chargement"></div>';
     try { await ONGLETS[onglet].vue(); }
     catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
@@ -261,6 +263,7 @@
           <p class="muet petit">${esc(r.lieu?.nom || '')} · ${aFaire.length ? `${aFaire.length} chose(s) à faire` : 'tout est à jour'}${r.faitsAujourdhui ? ` · ${r.faitsAujourdhui} encaissement(s) aujourd'hui dans l'agence` : ''}</p>
           ${r.le && !navigator.onLine ? `<p class="bandeau bandeau-ocre petit">${ic('horsligne', 'ic-sm')} Hors ligne : situation du ${esc(date(r.le))}.</p>` : ''}
         </div>
+        <div data-notifs></div>
         <div class="pile grille-cartes" style="--gap:12px">
           ${taches.length ? taches.map(t => `
             <div class="carte tache ${t.urgent ? 'urgent' : ''} ${t.info ? 'info' : ''}">
@@ -279,6 +282,7 @@
           <p class="petit muet" style="margin-top:10px">Chaque étape peut être faite par un agent différent : l'app sait où en est chaque colis. Dans « Scanner », vous n'avez rien à choisir.</p>
         </details>
       </div>`;
+    K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Lot en route vers votre agence, colis à mettre en rayon, nouvelle réservation : prévenu tout de suite.' });
     // Les tâches de scan ouvrent le scanner en mode automatique
     main.querySelectorAll('[data-tache]').forEach(a => a.addEventListener('click', () => { if (a.getAttribute('href') === '#/scanner') stock.ecrire('action_scan', 'auto'); }));
   }
@@ -364,6 +368,7 @@
               <div class="petit">${esc(d.numero)}${d.destinataire ? ` · ${esc(d.destinataire)}` : ''}</div>
             </div>
           </div>
+          ${d.etat === 'ok' && d.actionFaite ? `<button type="button" class="btn btn-petit" data-annuler-scan="${esc(d.opId)}" style="align-self:flex-start">Annuler cette étape</button>` : ''}
           ${d.avant ? `<div class="tres-petit avant">Étape précédente : ${esc(d.avant.label)}${d.avant.lieu ? ` à ${esc(d.avant.lieu)}` : ''}${d.avant.par ? ` par ${esc(d.avant.par)}` : ''}, ${esc(date(d.avant.le))}</div>` : ''}
         </div>` : '';
       $('[data-compte]').textContent = lignes.length ? `${lignes.filter(e => e.etat === 'ok').length} OK · ${lignes.filter(e => e.etat === 'attente').length} en attente` : '';
@@ -375,6 +380,19 @@
         </div>`).join('') : '<p class="vide petit">Aucun scan pour le moment.</p>';
     };
     dessinerJournal();
+    // Erreur de scan (mauvais colis, mauvaise étape) : on annule la dernière étape du colis
+    main.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-annuler-scan]');
+      if (!b) return;
+      const ent = journal.lire().find(x => x.opId === b.dataset.annulerScan);
+      if (!ent || !confirm(`Annuler « ${ent.message} » pour ${ent.numero} ?`)) return;
+      b.disabled = true;
+      try {
+        const r = await api.post('/agent/annuler', { numero: ent.numero, motif: 'Erreur de scan' });
+        journal.maj(ent.opId, { etat: 'info', message: `Étape annulée : ${r.annulee}`, actionFaite: undefined });
+        Scanner.bip(true); dessinerJournal(); rafraichirContexte().catch(() => {});
+      } catch (err) { toast(err.reseau ? 'Pas de réseau : réessayez dans un instant.' : err.message, 'erreur'); b.disabled = false; }
+    });
     let delaiManifeste;
     const ecoute = () => {
       dessinerJournal();
@@ -1036,6 +1054,7 @@
     const liste = onglet === 'miennes' ? miennes : libres;
     main.innerHTML = `
       <div class="pile">
+        <div data-notifs></div>
         <div class="segments" role="group" aria-label="Courses">
           <button type="button" data-seg="miennes" aria-pressed="${onglet === 'miennes'}">Mes courses (${miennes.length})</button>
           <button type="button" data-seg="libres" aria-pressed="${onglet === 'libres'}">À prendre (${libres.length})</button>
@@ -1044,6 +1063,7 @@
         <div class="pile grille-cartes" style="--gap:12px">${liste.length ? liste.map(carteCourse).join('') : `<p class="vide petit">${onglet === 'miennes' ? 'Aucune course pour vous. Regardez « À prendre ».' : 'Aucune course en attente.'}</p>`}</div>
       </div>`;
     main.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { stock.ecrire('onglet_courses', b.dataset.seg); vueCourses(); }));
+    K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Nouvelle course pour vous ou dans votre agence : prévenu tout de suite.' });
     main.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => actionCourse(b.dataset.act, toutes.find(c => c.numeroSuivi === b.dataset.num && c.type === b.dataset.type), b)));
   }
 
@@ -1255,9 +1275,10 @@
             <div class="ligne" style="--gap:8px"><input class="saisie grandit" name="douane" type="number" inputmode="decimal" min="0" step="${deviseDouane === 'EUR' ? '0.01' : '500'}" value="${c.fraisDouaneGnf ? (deviseDouane === 'EUR' ? Math.round(c.fraisDouaneGnf / taux * 100) / 100 : c.fraisDouaneGnf) : ''}" placeholder="Montant en ${deviseDouane === 'EUR' ? '€' : 'GNF'}"><button class="btn btn-noir">Enregistrer</button></div>
           </form>` : ''}
           <button class="btn btn-plein" data-reimprimer>${ic('imprimer', 'ic-sm')} Réimprimer l'étiquette</button>
+          ${(() => { const d = [...c.historique].reverse().find(h => h.statut && !h.annule); return d?.retour && d.statut !== 'remis' ? `<button class="btn btn-plein" data-annuler-etape>Annuler la dernière étape (${esc(d.label)})</button>` : ''; })()}
           ${c.tarif && !c.tarif.estime ? `<h3>Factures</h3><div class="pile" style="--gap:8px" data-factures-fiche></div>` : ''}
           <div class="carte"><h3 style="margin-bottom:12px">Historique</h3><div class="frise">${[...c.historique].reverse().map(h => `
-            <div class="etape"><div class="rail"><div class="point"></div><div class="trait"></div></div><div class="texte"><div class="gras">${esc(h.label)}</div><div class="petit muet">${esc(date(h.le))}${h.detail ? ` · ${esc(h.detail)}` : ''}${h.agent?.prenom ? ` · par ${esc(h.agent.prenom)} ${esc((h.agent.nom || '')[0] || '')}.` : ''}</div></div></div>`).join('')}</div></div>
+            <div class="etape ${h.annule ? 'annulee' : ''}"><div class="rail"><div class="point"></div><div class="trait"></div></div><div class="texte"><div class="gras">${esc(h.label)}${h.annule ? ' (annulée)' : ''}</div><div class="petit muet">${esc(date(h.le))}${h.detail ? ` · ${esc(h.detail)}` : ''}${h.agent?.prenom ? ` · par ${esc(h.agent.prenom)} ${esc((h.agent.nom || '')[0] || '')}.` : ''}</div></div></div>`).join('')}</div></div>
         </div>`;
       zone.querySelector('[data-douane]')?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1265,6 +1286,12 @@
         catch (err) { toast(err.message, 'erreur'); }
       });
       zone.querySelector('[data-reimprimer]').addEventListener('click', () => Etiquette.imprimer(c, CONFIG));
+      zone.querySelector('[data-annuler-etape]')?.addEventListener('click', async () => {
+        const motif = prompt('Pourquoi annuler cette étape ? (noté dans l\'historique)');
+        if (motif === null) return;
+        try { const r = await api.post('/agent/annuler', { numero: c.numeroSuivi, motif }); toast(`Étape annulée : ${r.annulee}.`, 'ok'); afficherFiche(c.numeroSuivi); }
+        catch (err) { toast(err.message, 'erreur'); }
+      });
       const zf = zone.querySelector('[data-factures-fiche]');
       if (zf) {
         await blocFactures(zf, c.numeroSuivi, { tel: c.statut === 'remis' || c.payeurArrivee ? c.destinataire.telephone : c.expediteur.telephone });

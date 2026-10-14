@@ -29,6 +29,9 @@ const evenementSchema = new mongoose.Schema({
   lieu:   { type: String },
   agent:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   le:     { type: Date, default: Date.now },
+  // État du colis avant cette étape : permet de l'annuler (erreur de scan)
+  retour: { type: mongoose.Schema.Types.Mixed, select: true },
+  annule: { type: Boolean },
 }, { _id: false });
 
 // Course à domicile : ramassage chez l'expéditeur ou livraison chez le destinataire

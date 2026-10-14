@@ -141,6 +141,12 @@ router.post('/scans', ah(async (req, res) => {
   res.json({ succes: true, resultats });
 }));
 
+// ── POST /api/agent/annuler ── { numero, motif } : annuler la dernière étape (erreur de scan)
+router.post('/annuler', [body('numero').trim().notEmpty()], valider, ah(async (req, res) => {
+  const r = await svc.annulerEtape(req.user, req.body.numero, req.body.motif);
+  res.json({ succes: true, ...r });
+}));
+
 // ── POST /api/agent/remise ── remise au destinataire
 router.post('/remise', [
   body('numero').trim().notEmpty(),

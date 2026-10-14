@@ -84,6 +84,7 @@
       document.querySelectorAll('[data-nav]').forEach(a => a.dataset.nav === nav ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
       pageActuelle = nav;
       document.querySelector('[data-titre-mobile]').textContent = document.querySelector(`[data-nav="${nav}"]`)?.textContent.replace(/\d+$/, '').trim() || 'Back-office';
+      main.classList.toggle('entree', !silencieux);
       if (!silencieux) main.innerHTML = '<div class="chargement"></div>';
       try { await vue(...m.slice(1)); }
       catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
@@ -140,6 +141,8 @@
           </div>
         </section>
       </div>`;
+    main.insertAdjacentHTML('afterbegin', '<div data-notifs style="margin-bottom:16px;max-width:560px"></div>');
+    K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Nouvelle réclamation, message d\'un client : prévenu sur cet appareil.' });
     main.querySelectorAll('[data-lot]').forEach(tr => tr.addEventListener('click', () => { location.hash = `#/lots/${tr.dataset.lot}`; }));
     main.querySelector('[data-nouveau-lot]').addEventListener('click', nouveauLot);
     main.querySelector('[data-relancer]')?.addEventListener('click', async () => {
@@ -206,6 +209,7 @@
           </div>
           <div class="ligne" style="--gap:8px">
             <button class="btn btn-petit" data-imprimer-manifeste>${ic('imprimer', 'ic-sm')} Manifeste</button>
+            ${lot.statut === 'parti' ? `<button class="btn btn-petit" data-annuler-depart>Annuler le départ</button>` : ''}
             ${a ? `<button class="btn btn-principal btn-petit" data-action-lot>${esc(a.lib)}</button>` : ''}
           </div>
         </div>
@@ -240,6 +244,11 @@
     zone.querySelector('[data-tout]')?.addEventListener('change', (e) => {
       zone.querySelectorAll('[data-choix]').forEach(cb => { cb.checked = e.target.checked; e.target.checked ? choisis.add(cb.dataset.choix) : choisis.delete(cb.dataset.choix); });
       majSelection();
+    });
+    zone.querySelector('[data-annuler-depart]')?.addEventListener('click', async () => {
+      if (!confirm('Le lot a été marqué « parti » par erreur ? Ses colis redeviennent « chargés, en attente de départ ».')) return;
+      try { const r = await api.post(`/lots/${lot.code}/statut`, { statut: 'preparation' }); toast(`Départ annulé · ${r.colisMisAJour} colis remis en attente.`, 'ok'); lots(lot.code); }
+      catch (e) { toast(e.message, 'erreur'); }
     });
     zone.querySelector('[data-action-lot]')?.addEventListener('click', async () => {
       if (!confirm(a.msg)) return;
@@ -358,9 +367,12 @@
           <label class="champ">Note interne <input class="saisie" name="notes" value="${esc(c.notesAdmin || '')}"></label>
           <button class="btn btn-noir">Enregistrer</button>
         </form>` : ''}
-        <button class="btn" data-etiquette-colis>${ic('imprimer', 'ic-sm')} Imprimer l'étiquette</button>
+        <div class="ligne" style="--gap:8px;flex-wrap:wrap">
+          <button class="btn" data-etiquette-colis>${ic('imprimer', 'ic-sm')} Imprimer l'étiquette</button>
+          ${(() => { const d = [...c.historique].reverse().find(h => h.statut && !h.annule); return d?.retour ? `<button class="btn" data-annuler-etape>Annuler la dernière étape (${esc(d.label)})</button>` : ''; })()}
+        </div>
         <div class="carte"><h3 style="margin-bottom:12px">Historique</h3><div class="frise">${[...c.historique].reverse().map(h => `
-          <div class="etape"><div class="rail"><div class="point"></div><div class="trait"></div></div><div class="texte"><div class="gras">${esc(h.label)}</div><div class="petit muet">${esc(date(h.le))}${h.detail ? ` · ${esc(h.detail)}` : ''}${h.agent?.prenom ? ` · ${esc(h.agent.prenom)}` : ''}</div></div></div>`).join('')}</div></div>
+          <div class="etape ${h.annule ? 'annulee' : ''}"><div class="rail"><div class="point"></div><div class="trait"></div></div><div class="texte"><div class="gras">${esc(h.label)}${h.annule ? ' <span class="badge">annulée</span>' : ''}</div><div class="petit muet">${esc(date(h.le))}${h.detail ? ` · ${esc(h.detail)}` : ''}${h.agent?.prenom ? ` · ${esc(h.agent.prenom)}` : ''}</div></div></div>`).join('')}</div></div>
       </div>`);
     el.querySelector('[data-debloquer]')?.addEventListener('click', async () => {
       try { await api.post(`/admin/colis/${numero}/debloquer`); toast('Colis débloqué.', 'ok'); fermer(); ficheColis(numero, apres); } catch (e) { toast(e.message, 'erreur'); }
@@ -374,6 +386,12 @@
       } catch (err) { toast(err.message, 'erreur'); }
     });
     el.querySelector('[data-etiquette-colis]').addEventListener('click', () => K.etiquette.imprimer(c, CONFIG));
+    el.querySelector('[data-annuler-etape]')?.addEventListener('click', async () => {
+      const motif = prompt('Pourquoi annuler cette étape ? (noté dans l\'historique)');
+      if (motif === null) return;
+      try { const r = await api.post('/agent/annuler', { numero, motif }); toast(`Étape annulée : ${r.annulee}.`, 'ok'); fermer(); ficheColis(numero, apres); apres?.(); }
+      catch (e) { toast(e.message, 'erreur'); }
+    });
     el.querySelectorAll('[data-photo-id]').forEach(img => K.afficherPhoto(img, img.dataset.photoId));
     api.get(`/factures/colis/${numero}`).then(({ factures: fs }) => {
       const z = el.querySelector('[data-factures-colis]');

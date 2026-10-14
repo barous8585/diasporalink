@@ -98,7 +98,7 @@ async function vuePublique(colis) {
     poids: colis.poidsReel || colis.poidsEstime,
     nbCartons: colis.nbCartons,
     lotCode: colis.lotCode,
-    historique: (colis.historique || []).map(h => ({ statut: h.statut, label: h.label, detail: h.detail, le: h.le })),
+    historique: (colis.historique || []).filter(h => !h.annule && h.label !== 'Étape annulée').map(h => ({ statut: h.statut, label: h.label, detail: h.detail, le: h.le })),
     arriveGuichetLe: colis.arriveGuichetLe,
     magasinage: solde.magasinage,
     soldeGnf: solde.soldeGnf,
@@ -225,6 +225,45 @@ async function deposer(agent, data) {
   return { colis: await vueComplete(colis), ecartPoids: ecart };
 }
 
+// ── Annulation d'une étape (erreur de scan, mauvais colis…) ──
+const instantane = (c) => ({ statut: c.statut, lot: c.lot ? String(c.lot) : null, lotCode: c.lotCode || null, arriveGuichetLe: c.arriveGuichetLe || null, emplacement: c.emplacement || null });
+// Note l'état d'avant sur l'événement que l'étape vient d'ajouter
+function marquerRetour(colis, avant) {
+  const ev = colis.historique[colis.historique.length - 1];
+  if (ev && ev.statut && !ev.retour) { ev.retour = avant; colis.markModified('historique'); }
+}
+const DELAI_ANNULATION_AGENT = 2 * 3600 * 1000; // un agent peut annuler pendant 2 h, l'admin toujours
+
+async function annulerEtape(agent, numero, motif = '') {
+  const colis = await Colis.findOne({ numeroSuivi: String(numero || '').trim().toUpperCase() }).select('+codeRetrait +codeEssais');
+  if (!colis) throw new ErreurMetier('Colis introuvable.', 404);
+  const idx = colis.historique.map(e => !!e.statut && !e.annule).lastIndexOf(true);
+  const ev = colis.historique[idx];
+  if (!ev) throw new ErreurMetier('Aucune étape à annuler.', 409);
+  if (!ev.retour) throw new ErreurMetier(`L'étape « ${ev.label} » ne peut pas être annulée ici. Demandez à l'administrateur.`, 409);
+  const admin = agent.role === 'admin';
+  if (!admin) {
+    if (ev.statut === STATUTS.REMIS) throw new ErreurMetier('Seul l\'administrateur peut annuler une remise.', 403);
+    if (ev.lieu && agent.lieu && ev.lieu !== agent.lieu) throw new ErreurMetier('Cette étape a été faite dans une autre agence.', 403);
+    if (Date.now() - new Date(ev.le) > DELAI_ANNULATION_AGENT) throw new ErreurMetier('Trop tard pour annuler (plus de 2 h). Demandez à l\'administrateur.', 403);
+  }
+  const r = ev.retour;
+  colis.statut = r.statut;
+  colis.lot = r.lot || undefined;
+  colis.lotCode = r.lotCode || undefined;
+  colis.arriveGuichetLe = r.arriveGuichetLe || undefined;
+  colis.emplacement = r.emplacement || undefined;
+  if (ev.statut === STATUTS.REMIS) {
+    colis.remise = undefined;
+    if (colis.livraison?.demande && colis.livraison.statut === 'faite') { colis.livraison.statut = r.statut === STATUTS.EN_LIVRAISON ? 'en_route' : 'a_planifier'; colis.markModified('livraison'); }
+  }
+  ev.annule = true;
+  colis.historique.push({ label: 'Étape annulée', detail: `${ev.label}${motif ? ` : ${String(motif).slice(0, 200)}` : ''}`, lieu: agent.lieu, agent: agent._id, le: new Date() });
+  colis.markModified('historique');
+  await colis.save();
+  return { colis: await vueComplete(colis), annulee: ev.label, statut: colis.statut };
+}
+
 // ── Scans (dépôt, arrivée, guichet) ─────────────────────────
 const ACTIONS_SCAN = {
   // Mettre dans un lot à l'agence de départ
@@ -253,6 +292,10 @@ async function mettrePret(colis, agent, emplacement) {
   notifier(colis.destinataire.telephone, msg);
   if (colis.tiersAutorise?.telephone) notifier(colis.tiersAutorise.telephone, msg);
   if (colis.expediteur.telephone !== colis.destinataire.telephone) notifier(colis.expediteur.telephone, msg);
+  if (colis.livraison?.demande && colis.livraison.statut !== 'annulee') {
+    const push = require('../utils/push');
+    push.sansAttendre(push.aLAgence(colis.guichet, { titre: 'Livraison à faire', corps: `${colis.numeroSuivi} pour ${colis.destinataire.nom}${colis.livraison.adresse?.quartier ? ` à ${colis.livraison.adresse.quartier}` : ''}.`, chemin: '/#/courses' }, { roles: ['livreur'] }));
+  }
 }
 
 // ── Scan automatique : l'app décide de l'étape ───────────────
@@ -370,6 +413,7 @@ async function appliquerScan(agent, scan) {
 
   const agence = agent.lieu ? await Config.lieu(agent.lieu) : null;
   const paysDest = paysArriveeDe(colis.sens);
+  const etatAvant = instantane(colis);
 
   if (scan.action === 'charger') {
     const lot = await Lot.findOne({ code: String(scan.lot || '').toUpperCase() });
@@ -403,6 +447,8 @@ async function appliquerScan(agent, scan) {
     const dest = await Config.lieu(colis.guichet);
     colis.ajouterEvenement(STATUTS.ACHEMINEMENT, `Vers ${dest?.nom || colis.guichet}${dest?.ville ? ` (${dest.ville})` : ''}`, { lieu: agent.lieu, agent: agent._id });
     notifier(colis.destinataire.telephone, MESSAGES.acheminement(colis, dest?.nom || colis.guichet));
+    { const push = require('../utils/push'); push.sansAttendre(push.aLAgence(colis.guichet, { titre: 'Colis en route vers votre agence', corps: `${colis.numeroSuivi} pour ${colis.destinataire.nom}, envoyé par ${agence?.nom || 'la plateforme'}.`, chemin: '/#/jour' })); }
+    marquerRetour(colis, etatAvant);
     await colis.save();
     return { ...base, ...resume, ok: true, statut: colis.statut, versAgence: dest?.nom || colis.guichet };
   }
@@ -418,6 +464,7 @@ async function appliquerScan(agent, scan) {
     await mettrePret(colis, agent, scan.emplacement);
   }
 
+  marquerRetour(colis, etatAvant);
   await colis.save();
   return { ...base, ...resume, ok: true, statut: colis.statut, lotCode: colis.lotCode };
 }
@@ -475,6 +522,7 @@ async function remettre(agent, data) {
     opId: data.opId,
   };
   colis.ajouterEvenement(STATUTS.REMIS, `Remis à ${colis.remise.nomRetrait}${aDomicile ? ' à domicile' : ''}`, { lieu: agent.lieu, agent: agent._id });
+  marquerRetour(colis, { ...instantane(colis), statut: aDomicile ? STATUTS.EN_LIVRAISON : STATUTS.PRET });
   if (typeof data.avantSauvegarde === 'function') data.avantSauvegarde(colis);
   await colis.save();
   await require('./factureService').emettreSansBloquer(colis, { moment: 'remise', agent });
@@ -491,8 +539,11 @@ async function changerStatutMasse(numeros, statut, agent) {
     if (!colis) { resultats.push({ numero, ok: false, erreur: 'Introuvable' }); continue; }
     if (colis.statut === statut) { resultats.push({ numero, ok: true, dejaFait: true }); continue; }
     if (colis.statut === STATUTS.REMIS) { resultats.push({ numero, ok: false, erreur: 'Déjà remis' }); continue; }
+    const avant = instantane(colis);
     if (statut === STATUTS.PRET) {
       await mettrePret(colis, agent);
+    } else if (statut === STATUTS.CHARGE) {
+      colis.ajouterEvenement(statut, 'Départ du lot annulé', { agent: agent._id, label: 'De retour au dépôt (départ annulé)' });
     } else {
       colis.ajouterEvenement(statut, 'Mise à jour par l\'administration', { agent: agent._id });
       if (statut === STATUTS.EN_TRANSIT) {
@@ -502,6 +553,7 @@ async function changerStatutMasse(numeros, statut, agent) {
       }
       if (statut === STATUTS.ARRIVE) notifier(colis.destinataire.telephone, MESSAGES.arrive(colis, nomPays(paysArriveeDe(colis.sens))));
     }
+    if (statut !== STATUTS.CHARGE) marquerRetour(colis, avant);
     await colis.save();
     resultats.push({ numero, ok: true, statut });
   }
@@ -532,5 +584,5 @@ async function colisDuGuichet(guichet) {
 module.exports = {
   ErreurMetier, normTel, masquerTel, lieAuCompte, vuePublique, vueComplete, avecOperation,
   encaisser, deposer, appliquerScan, sensDepuisAgences, paysArriveeDe, nomPays, remettre, changerStatutMasse, colisDuGuichet,
-  mettrePret, calculerMagasinage, etapePrecedente,
+  mettrePret, calculerMagasinage, etapePrecedente, annulerEtape,
 };
