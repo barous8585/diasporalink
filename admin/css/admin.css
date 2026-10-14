@@ -75,3 +75,11 @@ table.tableau { border-collapse: collapse; width: 100%; font-size: 14px; }
   main { padding: 16px 14px 40px; }
   .kpi .val { font-size: 24px; }
 }
+
+/* Réclamations, factures */
+.pastille-nb { margin-left: auto; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--or); color: var(--marine-fonce); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.tableau th.n, .tableau td.n { text-align: right; }
+.ligne-facture { gap: 12px; }
+.segments { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; background: var(--creme-2); padding: 4px; border-radius: 16px; }
+.segments button { min-height: 44px; padding: 0 4px; border-radius: 12px; border: none; background: transparent; color: var(--gris); font: inherit; font-size: 13px; line-height: 1.15; font-weight: 600; cursor: pointer; }
+.segments button[aria-pressed="true"] { background: var(--marine); color: #fff; font-weight: 700; }

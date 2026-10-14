@@ -25,6 +25,9 @@
     [/^\/colis$/, colis, 'colis'],
     [/^\/caisses$/, caisses, 'caisses'],
     [/^\/courses$/, courses, 'courses'],
+    [/^\/reclamations$/, () => reclamations(), 'reclamations'],
+    [/^\/reclamations\/([\w-]+)$/, (n) => reclamation(n), 'reclamations'],
+    [/^\/factures$/, factures, 'factures'],
     [/^\/reglages$/, reglages, 'reglages'],
     [/^\/equipe$/, equipe, 'equipe'],
   ];
@@ -39,6 +42,7 @@
       return;
     }
     document.querySelector('[data-menu]').classList.remove('cache');
+    if (!router.pastille) { router.pastille = true; majPastilleRec(); }
     const chemin = location.hash.replace(/^#/, '').split('?')[0] || '/';
     for (const [re, vue, nav] of routes) {
       const m = chemin.match(re);
@@ -299,6 +303,11 @@
           ${['ramassage', 'livraison'].filter(k => c[k]?.demande).map(k => `<div class="ligne-info"><span>${k === 'ramassage' ? 'Ramassage' : 'Livraison'} à domicile</span><span>${esc(c[k].adresse?.quartier || '')}${c[k].prix ? ` · ${montant(c[k].prix, c[k].devise)}` : ' · prix à calculer'} · ${esc(LIB_COURSE[c[k].statut] || c[k].statut)}${c[k].livreurNom ? ` · ${esc(c[k].livreurNom)}` : ''}</span></div>`).join('')}
           ${c.remise?.le ? `<div class="ligne-info"><span>Remis</span><span>${esc(date(c.remise.le))} à ${esc(c.remise.nomRetrait || '')}${c.remise.aDomicile ? ' (à domicile)' : ''}</span></div>` : ''}
         </div>
+        <div class="carte pile" style="--gap:8px">
+          <div class="ligne-info"><span>Conditions</span><span>${c.cgv?.version ? `acceptées ${c.cgv.par === 'comptoir' ? 'au comptoir' : 'en ligne'} le ${esc(date(c.cgv.accepteesLe, false))} (version ${esc(c.cgv.version)})` : '<span class="rouge">non acceptées</span>'}</span></div>
+          ${c.photoDepot ? `<div><div class="petit muet" style="margin-bottom:6px">Photo au dépôt</div><img data-photo-id="${esc(c.photoDepot)}" alt="Photo du colis au dépôt" style="max-width:260px;border-radius:10px;border:1px solid var(--ligne)"></div>` : '<div class="petit muet">Pas de photo au dépôt.</div>'}
+          <div data-factures-colis class="pile" style="--gap:4px"></div>
+        </div>
         ${c.remise?.signature ? `<img src="${esc(c.remise.signature)}" alt="Signature du retrait" style="max-width:260px;border:1px solid var(--ligne);border-radius:10px;background:#fff">` : ''}
         ${c.paiements.length ? `<div class="carte"><h3 style="margin-bottom:8px">Paiements</h3>${c.paiements.map(p => `<div class="ligne-info"><span>${esc(date(p.le))} · ${esc(CONFIG.methodesPaiement.find(m => m.key === p.methode)?.label || p.methode)} · ${esc(p.lieu === 'EN_LIGNE' ? 'en ligne' : nomLieu(p.lieu))}</span><span class="gras">${montant(p.montant, p.devise)}</span></div>`).join('')}</div>` : ''}
         ${!['remis', 'annule'].includes(c.statut) ? `
@@ -329,6 +338,11 @@
       } catch (err) { toast(err.message, 'erreur'); }
     });
     el.querySelector('[data-etiquette-colis]').addEventListener('click', () => K.etiquette.imprimer(c, CONFIG));
+    el.querySelectorAll('[data-photo-id]').forEach(img => K.afficherPhoto(img, img.dataset.photoId));
+    api.get(`/factures/colis/${numero}`).then(({ factures: fs }) => {
+      const z = el.querySelector('[data-factures-colis]');
+      z.innerHTML = fs.length ? `<div class="petit muet">Factures</div>${fs.map(ligneFacture).join('')}` : '<div class="petit muet">Aucune facture.</div>';
+    }).catch(() => {});
   }
 
   // ══════════════════════════════════════════════════════════
@@ -405,6 +419,205 @@
     };
     el.querySelector('[data-annuler]').addEventListener('click', () => { if (confirm('Annuler cette course ? Son prix est retiré du colis.')) envoyer({ demande: false }); });
     el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); envoyer({ demande: true, adresse: adr.lire() }); });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  FACTURES
+  // ══════════════════════════════════════════════════════════
+  const ligneFacture = (f) => `<a class="ligne-facture" href="${esc(K.lienFacture(f))}" target="_blank" rel="noopener">
+    <span class="grandit"><span class="gras">${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${esc(f.numero)}</span> <span class="tres-petit muet">${esc(date(f.date, false))} · ${esc(f.client?.nom || '')}${f.etat ? ` · ${esc(K.ETATS_FACTURE[f.etat] || f.etat)}` : ''}</span></span>
+    <span class="gras chiffres">${montant(f.type === 'avoir' ? -Math.abs(f.totalTTC) : f.totalTTC, f.devise)}</span></a>`;
+
+  async function factures() {
+    const auj = new Date();
+    const debut = stock.lire('fact_debut') || new Date(auj.getFullYear(), auj.getMonth(), 1).toISOString().slice(0, 10);
+    const fin = stock.lire('fact_fin') || auj.toISOString().slice(0, 10);
+    const { factures: liste } = await api.get(`/factures?debut=${debut}&fin=${fin}`);
+    const total = (dev, type) => liste.filter(f => f.devise === dev && f.type === type).reduce((s, f) => s + Math.abs(f.totalTTC), 0);
+    main.innerHTML = `
+      <div class="entete-page"><h1>Factures</h1>
+        <form class="ligne" style="--gap:8px;flex-wrap:wrap" data-periode>
+          <label class="ligne" style="--gap:6px">Du <input class="saisie" type="date" name="debut" value="${debut}" style="width:auto"></label>
+          <label class="ligne" style="--gap:6px">au <input class="saisie" type="date" name="fin" value="${fin}" style="width:auto"></label>
+          <button class="btn btn-petit">Afficher</button>
+          <button class="btn btn-petit btn-noir" type="button" data-export>${ic('liste', 'ic-sm')} Export pour le comptable (CSV)</button>
+        </form></div>
+      <div class="kpis">
+        <div class="kpi vert"><div class="lib">Facturé en euros</div><div class="val" style="font-size:24px">${eur(total('EUR', 'facture'))}</div><div class="sous">avoirs : ${eur(total('EUR', 'avoir'))}</div></div>
+        <div class="kpi vert"><div class="lib">Facturé en GNF</div><div class="val" style="font-size:24px">${gnf(total('GNF', 'facture'))}</div><div class="sous">avoirs : ${gnf(total('GNF', 'avoir'))}</div></div>
+        <div class="kpi"><div class="lib">Factures</div><div class="val">${liste.filter(f => f.type === 'facture').length}</div></div>
+        <div class="kpi"><div class="lib">Avoirs</div><div class="val">${liste.filter(f => f.type === 'avoir').length}</div></div>
+      </div>
+      ${CONFIG.facturation?.capital ? '' : '<p class="bandeau bandeau-ocre">Le capital social n\'est pas renseigné : il doit figurer sur les factures d\'une SAS. Complétez-le dans Tarifs &amp; agences → Facturation.</p>'}
+      <section class="panneau"><div class="defile"><table class="tableau">
+        <thead><tr><th>Numéro</th><th>Date</th><th>Colis</th><th>Client</th><th>Agence</th><th class="n">HT</th><th class="n">TVA</th><th class="n">TTC</th><th></th></tr></thead>
+        <tbody>${liste.map(f => `<tr>
+          <td class="gras">${f.type === 'avoir' ? 'Avoir ' : ''}${esc(f.numero)}${f.factureOrigine ? `<div class="tres-petit muet">sur ${esc(f.factureOrigine)}</div>` : ''}</td>
+          <td>${esc(date(f.date, false))}</td><td>${esc(f.numeroSuivi || '')}</td>
+          <td>${esc(f.client?.nom || '')}<div class="tres-petit muet">${esc(f.client?.role || '')}</div></td><td>${esc(f.agence?.nom || '')}</td>
+          <td class="chiffres n">${montant(f.totalHT, f.devise)}</td><td class="chiffres n">${montant(f.totalTVA, f.devise)}</td><td class="chiffres n gras">${montant(f.totalTTC, f.devise)}</td>
+          <td><a class="btn btn-petit" href="${esc(K.lienFacture(f))}" target="_blank" rel="noopener">Ouvrir</a></td>
+        </tr>`).join('') || '<tr><td colspan="9" class="muet">Aucune facture sur cette période.</td></tr>'}</tbody></table></div></section>`;
+    main.querySelector('[data-periode]').addEventListener('submit', (e) => {
+      e.preventDefault();
+      stock.ecrire('fact_debut', e.target.debut.value); stock.ecrire('fact_fin', e.target.fin.value); factures();
+    });
+    main.querySelector('[data-export]').addEventListener('click', async () => {
+      try {
+        const r = await fetch(`${K.API_URL}/factures/export.csv?debut=${debut}&fin=${fin}`, { headers: { Authorization: `Bearer ${session.jeton()}` } });
+        if (!r.ok) throw new Error('Export impossible.');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(await r.blob()); a.download = `factures-TMS-${debut}-au-${fin}.csv`; a.click();
+      } catch (e) { toast(e.message, 'erreur'); }
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  RÉCLAMATIONS
+  // ══════════════════════════════════════════════════════════
+  const LIB_REC = { ouverte: 'Nouvelle', en_cours: 'En cours', acceptee: 'Acceptée', refusee: 'Refusée', close: 'Close' };
+  let MOTIFS_REC = {};
+  async function majPastilleRec() {
+    try {
+      const { reclamations: tout } = await api.get('/reclamations');
+      const l = tout.filter(x => ['ouverte', 'en_cours'].includes(x.statut));
+      const b = document.querySelector('[data-nb-rec]');
+      b.textContent = l.length; b.classList.toggle('cache', !l.length);
+    } catch {}
+  }
+
+  async function reclamations() {
+    const statut = stock.lire('filtre_rec') ?? 'actives';
+    const r = await api.get(`/reclamations${statut && statut !== 'actives' ? `?statut=${statut}` : ''}`);
+    MOTIFS_REC = Object.fromEntries((r.motifs || []).map(m => [m.key, m.label]));
+    const liste = statut === 'actives' ? r.reclamations.filter(x => ['ouverte', 'en_cours'].includes(x.statut)) : r.reclamations;
+    main.innerHTML = `
+      <div class="entete-page"><h1>Réclamations</h1>
+        <select class="saisie" data-filtre style="width:auto">
+          <option value="actives" ${statut === 'actives' ? 'selected' : ''}>À traiter</option>
+          <option value="" ${statut === '' ? 'selected' : ''}>Toutes</option>
+          ${Object.entries(LIB_REC).map(([k, v]) => `<option value="${k}" ${statut === k ? 'selected' : ''}>${v}</option>`).join('')}
+        </select></div>
+      <section class="panneau"><div class="defile"><table class="tableau">
+        <thead><tr><th>Numéro</th><th>Reçue le</th><th>Colis</th><th>Client</th><th>Problème</th><th class="n">Demandé</th><th>Statut</th></tr></thead>
+        <tbody>${liste.map(x => `<tr data-num="${esc(x.numero)}" style="cursor:pointer">
+          <td class="gras">${esc(x.numero)}</td><td>${esc(date(x.createdAt))}</td><td>${esc(x.numeroSuivi)}</td>
+          <td>${esc(x.demandeur?.nom || '')}<div class="tres-petit muet">${esc(x.demandeur?.role || '')} · ${esc(x.demandeur?.telephone || '')}</div></td>
+          <td>${esc(MOTIFS_REC[x.motif] || x.motif)}${x.horsDelai ? '<div class="tres-petit rouge">hors délai</div>' : ''}${x.photos?.length ? `<div class="tres-petit muet">${x.photos.length} photo(s)</div>` : ''}</td>
+          <td class="chiffres n">${x.montantDemande ? montant(x.montantDemande, x.deviseDemande || 'EUR') : '—'}</td>
+          <td><span class="badge b-${esc(x.statut)}">${esc(LIB_REC[x.statut])}</span></td>
+        </tr>`).join('') || '<tr><td colspan="7" class="muet">Aucune réclamation.</td></tr>'}</tbody></table></div></section>`;
+    main.querySelector('[data-filtre]').addEventListener('change', (e) => { stock.ecrire('filtre_rec', e.target.value); reclamations(); });
+    main.querySelectorAll('tr[data-num]').forEach(tr => tr.addEventListener('click', () => { location.hash = `#/reclamations/${tr.dataset.num}`; }));
+    majPastilleRec();
+  }
+
+  async function reclamation(numero) {
+    const { reclamation: r, colis: c, factures: fs, plafond } = await api.get(`/reclamations/${numero}`);
+    if (!Object.keys(MOTIFS_REC).length) MOTIFS_REC = Object.fromEntries(((await api.get('/reclamations?statut=x')).motifs || []).map(m => [m.key, m.label]));
+    const ouverte = ['ouverte', 'en_cours'].includes(r.statut);
+    const d = r.decision || {};
+    const deviseColis = c?.tarif?.devise || 'EUR';
+    main.innerHTML = `
+      <div class="entete-page"><div class="ligne" style="--gap:12px"><a class="btn btn-rond" href="#/reclamations" aria-label="Retour">${ic('retour')}</a>
+        <div><h1>Réclamation ${esc(r.numero)}</h1><div class="petit muet">Reçue le ${esc(date(r.createdAt))} · <span class="badge b-${esc(r.statut)}">${esc(LIB_REC[r.statut])}</span></div></div></div>
+        ${c ? `<button class="btn btn-petit" data-fiche>Fiche du colis ${esc(c.numeroSuivi)}</button>` : ''}</div>
+      <div class="deux-col">
+        <div class="pile" style="--gap:16px">
+          <section class="panneau"><div class="panneau-tete"><h2>${esc(MOTIFS_REC[r.motif] || r.motif)}</h2>${r.horsDelai ? '<span class="badge b-refusee">Hors délai</span>' : ''}</div>
+            <div class="panneau-corps pile" style="--gap:10px">
+              <p style="white-space:pre-wrap">${esc(r.description || '')}</p>
+              <div class="ligne-info"><span>Client</span><span>${esc(r.demandeur?.nom || '')} (${esc(r.demandeur?.role || '')}) · ${esc(r.demandeur?.telephone || '')}</span></div>
+              <div class="ligne-info"><span>Montant demandé</span><span>${r.montantDemande ? montant(r.montantDemande, r.deviseDemande || 'EUR') : '—'}</span></div>
+              ${plafond ? `<div class="ligne-info"><span>Plafond selon les CGV</span><span class="gras">${eur(plafond.montantEur)} <span class="tres-petit muet">(${esc(plafond.base || '')})</span></span></div>` : ''}
+              ${r.photos?.length ? `<div><div class="petit muet" style="margin-bottom:6px">Photos du client</div><div class="vignettes">${r.photos.map(id => `<a href="#" data-zoom><img data-photo-id="${esc(id)}" alt="Photo du client"></a>`).join('')}</div></div>` : ''}
+              ${c?.photoDepot ? `<div><div class="petit muet" style="margin-bottom:6px">Photo prise au dépôt</div><div class="vignettes"><a href="#" data-zoom><img data-photo-id="${esc(c.photoDepot)}" alt="Photo au dépôt"></a></div></div>` : '<p class="petit muet">Pas de photo au dépôt pour ce colis.</p>'}
+            </div></section>
+          ${c ? `<section class="panneau"><div class="panneau-tete"><h2>Colis</h2>${badge(c.statut)}</div><div class="panneau-corps">
+            <div class="ligne-info"><span>Trajet</span><span>${esc(nomLieu(c.depot))} → ${esc(nomLieu(c.guichet))}</span></div>
+            <div class="ligne-info"><span>Poids · cartons</span><span>${kg(c.poidsReel || c.poidsEstime)} · ${c.nbCartons}</span></div>
+            <div class="ligne-info"><span>Contenu</span><span>${esc(c.description || '—')}</span></div>
+            <div class="ligne-info"><span>Assurance</span><span>${c.assurance ? `oui, valeur ${esc(c.valeurDeclaree)}` : 'non'}</span></div>
+            <div class="ligne-info"><span>Remis</span><span>${c.remise?.le ? `${esc(date(c.remise.le))} à ${esc(c.remise.nomRetrait || '')}` : 'non'}</span></div>
+            <div class="pile" style="--gap:2px;margin-top:8px">${fs.map(ligneFacture).join('') || '<span class="petit muet">Aucune facture.</span>'}</div>
+          </div></section>` : ''}
+        </div>
+        <div class="pile" style="--gap:16px">
+          <section class="panneau"><div class="panneau-tete"><h2>Échanges</h2><span class="tres-petit muet">Les notes internes ne sont pas visibles du client</span></div>
+            <div class="panneau-corps pile" style="--gap:8px">
+              ${r.suivi.map(s => `<div class="message-rec ${s.interne ? 'interne' : s.auteur}"><div class="tres-petit muet">${s.auteur === 'tms' ? `TMS${s.nom ? ` · ${esc(s.nom)}` : ''}` : 'Client'}${s.interne ? ' · note interne' : ''} · ${esc(date(s.le))}</div><div style="white-space:pre-wrap">${esc(s.texte)}</div></div>`).join('')}
+              ${ouverte || r.statut !== 'close' ? `
+              <form class="pile" style="--gap:8px" data-message>
+                <textarea class="saisie" name="texte" rows="3" placeholder="Répondre au client, ou note interne"></textarea>
+                <div class="ligne entre"><label class="case" style="min-height:36px"><input type="checkbox" name="interne"> Note interne</label><button class="btn btn-noir btn-petit">Envoyer</button></div>
+              </form>` : ''}
+            </div></section>
+          ${ouverte ? `
+          <form class="panneau" data-decision><div class="panneau-tete"><h2>Décision</h2></div>
+            <div class="panneau-corps pile" style="--gap:10px">
+              <div class="segments" role="group" aria-label="Décision">
+                <button type="button" data-dec="avoir" aria-pressed="true">Rembourser (avoir)</button>
+                <button type="button" data-dec="indemnisation" aria-pressed="false">Indemniser</button>
+                <button type="button" data-dec="refus" aria-pressed="false">Refuser</button>
+              </div>
+              <p class="tres-petit muet" data-aide-dec></p>
+              <div class="formulaire-grille" data-montant-dec>
+                <label class="champ">Montant <input class="saisie" name="montant" type="number" inputmode="decimal" min="0" step="0.01"></label>
+                <label class="champ">Devise <select class="saisie" name="devise"><option value="EUR" ${deviseColis === 'EUR' ? 'selected' : ''}>€</option><option value="GNF" ${deviseColis === 'GNF' ? 'selected' : ''}>GNF</option></select></label>
+                <label class="champ">Versé par <select class="saisie" name="methode"><option value="">Pas encore versé</option>${CONFIG.methodesPaiement.map(m => `<option value="${m.key}">${esc(m.label)}</option>`).join('')}</select></label>
+                <label class="champ">Référence <input class="saisie" name="reference" placeholder="N° de virement, Orange Money…"></label>
+              </div>
+              <label class="champ">Explication pour le client <textarea class="saisie" name="motif" rows="2" required></textarea></label>
+              <button class="btn btn-principal">Enregistrer la décision</button>
+            </div></form>` : d.type ? `
+          <section class="panneau"><div class="panneau-tete"><h2>Décision</h2></div><div class="panneau-corps pile" style="--gap:6px">
+            <div class="gras">${d.type === 'refus' ? 'Refusée' : `${d.type === 'avoir' ? 'Remboursement par avoir' : 'Indemnisation'} : ${montant(d.montant, d.devise)}`}</div>
+            ${d.avoir ? `<div class="petit">Avoir ${esc(d.avoir)}</div>` : ''}
+            ${d.versement?.methode ? `<div class="petit muet">Versé par ${esc(CONFIG.methodesPaiement.find(m => m.key === d.versement.methode)?.label || d.versement.methode)}${d.versement.reference ? ` · ${esc(d.versement.reference)}` : ''}</div>` : ''}
+            <div class="petit">${esc(d.motif || '')}</div>
+            ${r.statut !== 'close' ? '<button class="btn btn-petit" data-clore>Clore la réclamation</button>' : ''}
+          </div></section>` : ''}
+        </div>
+      </div>`;
+    main.querySelectorAll('[data-photo-id]').forEach(img => K.afficherPhoto(img, img.dataset.photoId));
+    main.querySelectorAll('[data-zoom]').forEach(a => a.addEventListener('click', (e) => {
+      e.preventDefault(); const src = a.querySelector('img').src; if (src) modale(`<div class="pile"><div class="ligne entre"><h2>Photo</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div><img src="${src}" alt="Photo" style="max-width:100%;border-radius:10px"></div>`);
+    }));
+    main.querySelector('[data-fiche]')?.addEventListener('click', () => ficheColis(c.numeroSuivi));
+    main.querySelector('[data-message]')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const t = e.target.texte.value.trim(); if (!t) return;
+      try { await api.post(`/reclamations/${numero}/message`, { texte: t, interne: e.target.interne.checked }); reclamation(numero); } catch (err) { toast(err.message, 'erreur'); }
+    });
+    main.querySelector('[data-clore]')?.addEventListener('click', async () => {
+      try { await api.post(`/reclamations/${numero}/clore`); toast('Réclamation close.', 'ok'); reclamation(numero); } catch (err) { toast(err.message, 'erreur'); }
+    });
+    const form = main.querySelector('[data-decision]');
+    if (form) {
+      let dec = 'avoir';
+      const AIDES = {
+        avoir: 'Rembourse tout ou partie du prix payé : un avoir est émis sur la facture du colis, dans sa devise.',
+        indemnisation: 'Dédommage la marchandise perdue ou abîmée (dans la limite du plafond des CGV, sauf geste commercial).',
+        refus: 'Le client reçoit votre explication.',
+      };
+      const maj = () => {
+        form.querySelectorAll('[data-dec]').forEach(b => b.setAttribute('aria-pressed', b.dataset.dec === dec));
+        form.querySelector('[data-montant-dec]').classList.toggle('cache', dec === 'refus');
+        form.querySelector('[data-aide-dec]').textContent = AIDES[dec];
+        form.devise.disabled = dec === 'avoir';
+      };
+      form.querySelectorAll('[data-dec]').forEach(b => b.addEventListener('click', () => { dec = b.dataset.dec; maj(); }));
+      maj();
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const corps = { decision: dec, motif: form.motif.value.trim(), montant: form.montant.value, devise: form.devise.value, methode: form.methode.value || undefined, reference: form.reference.value.trim() || undefined };
+        if (corps.motif.length < 3) { toast('Expliquez la décision au client.', 'erreur'); return; }
+        if (dec !== 'refus' && !(parseFloat(corps.montant) > 0)) { toast('Indiquez le montant.', 'erreur'); return; }
+        if (!confirm(dec === 'refus' ? 'Refuser cette réclamation ?' : `Confirmer : ${dec === 'avoir' ? 'avoir' : 'indemnisation'} de ${corps.montant} ?`)) return;
+        try { await api.post(`/reclamations/${numero}/decision`, corps); toast('Décision enregistrée. Le client est prévenu.', 'ok'); reclamation(numero); majPastilleRec(); }
+        catch (err) { toast(err.message, 'erreur'); }
+      });
+    }
   }
 
   // ══════════════════════════════════════════════════════════
@@ -504,6 +717,24 @@
             <label class="champ">Ensuite, par jour en Guinée (GNF) <input class="saisie" name="fraisJourGnf" type="number" min="0" step="500" value="${c.magasinage.fraisJourGnf}"></label>
             <label class="champ">Ensuite, par jour en France (€) <input class="saisie" name="fraisJourEur" type="number" min="0" step="0.5" value="${c.magasinage.fraisJourEur ?? 0}"></label>
           </div></section>
+        <section class="panneau"><div class="panneau-tete"><div><h2>Facturation</h2><p class="petit muet" style="margin-top:4px">Ces informations s'impriment sur chaque facture. Le régime de TVA est à faire valider par votre expert-comptable.</p></div></div>
+          <div class="panneau-corps formulaire-grille">
+            <label class="champ">Capital social (obligatoire pour une SAS) <input class="saisie" name="fac_capital" value="${esc(c.facturation?.capital || '')}" placeholder="ex. 1 000 €"></label>
+            <label class="champ">E-mail de contact <input class="saisie" name="fac_email" type="email" value="${esc(c.facturation?.email || '')}"></label>
+            <label class="champ">Téléphone <input class="saisie" name="fac_telephone" value="${esc(c.facturation?.telephone || '')}"></label>
+            <label class="champ">Site web <input class="saisie" name="fac_site" value="${esc(c.facturation?.site || '')}"></label>
+            <label class="champ">Médiateur de la consommation <input class="saisie" name="fac_mediateur" value="${esc(c.facturation?.mediateur || '')}" placeholder="Nom et site du médiateur"></label>
+            <label class="champ" style="grid-column:1/-1">Conditions de paiement <input class="saisie" name="fac_conditions" value="${esc(c.facturation?.conditionsPaiement || '')}"></label>
+            ${Object.values(CONFIG.pays).map(pp => `
+              <label class="champ">TVA ${esc(pp.nom)} (encaissé en ${esc(pp.nom)}), en % <input class="saisie" name="tva_${pp.code}_taux" type="number" min="0" max="99" step="0.1" value="${Math.round((c.facturation?.tva?.[pp.code]?.taux || 0) * 1000) / 10}"></label>
+              <label class="champ">Mention si TVA à 0 (${esc(pp.nom)}) <input class="saisie" name="tva_${pp.code}_mention" value="${esc(c.facturation?.tva?.[pp.code]?.mention || '')}" placeholder="ex. TVA non applicable, art. … du CGI"></label>`).join('')}
+          </div></section>
+        <section class="panneau"><div class="panneau-tete"><div><h2>Réclamations</h2><p class="petit muet" style="margin-top:4px">Repris dans les conditions générales montrées aux clients.</p></div></div>
+          <div class="panneau-corps formulaire-grille">
+            <label class="champ">Indemnisation maximale sans assurance (€ par kg) <input class="saisie" name="lit_kg" type="number" min="0" step="1" value="${c.litiges?.indemnisationKgEur ?? ''}"></label>
+            <label class="champ">Délai pour un colis abîmé ou incomplet (jours après la remise) <input class="saisie" name="lit_abime" type="number" min="0" value="${c.litiges?.delaiAbimeJours ?? ''}"></label>
+            <label class="champ">Délai pour un colis perdu ou en retard (jours) <input class="saisie" name="lit_perdu" type="number" min="0" value="${c.litiges?.delaiPerduJours ?? ''}"></label>
+          </div></section>
         <section class="panneau"><div class="panneau-tete"><div><h2>Ramassage et livraison à domicile</h2><p class="petit muet" style="margin-top:4px">Prix = base + prix par km × distance entre l'agence et le client (vol d'oiseau + ${Math.round(((c.domicile?.majoration || 1.3) - 1) * 100)} % pour suivre les routes). L'agence doit avoir sa position GPS.</p></div></div>
           <div class="panneau-corps pile" style="--gap:14px">
             ${Object.values(CONFIG.pays).map(p => { const d = c.domicile?.[p.code] || {}; const u = p.devise === 'EUR' ? '€' : 'GNF'; return `
@@ -554,6 +785,11 @@
         surcharges: Object.fromEntries(CONFIG.typesColis.map(t => [t.key, (parseFloat(v(`sur_${t.key}`)) || 0) / 100])),
         tauxAssurance: (parseFloat(v('tauxAssurance')) || 0) / 100,
         magasinage: { joursGratuits: v('joursGratuits'), fraisJourGnf: v('fraisJourGnf'), fraisJourEur: v('fraisJourEur') },
+        facturation: {
+          capital: v('fac_capital'), email: v('fac_email'), telephone: v('fac_telephone'), site: v('fac_site'), mediateur: v('fac_mediateur'), conditionsPaiement: v('fac_conditions'),
+          tva: Object.fromEntries(Object.keys(CONFIG.pays).map(k => [k, { taux: (parseFloat(v(`tva_${k}_taux`)) || 0) / 100, mention: v(`tva_${k}_mention`) }])),
+        },
+        litiges: { indemnisationKgEur: v('lit_kg'), delaiAbimeJours: v('lit_abime'), delaiPerduJours: v('lit_perdu') },
         domicile: Object.fromEntries([...form.querySelectorAll('[data-domicile]')].map(b => [b.dataset.domicile, {
           actif: b.querySelector('[name=actif]').checked,
           ...Object.fromEntries(['base', 'parKm', 'plafond', 'rayonMaxKm'].map(k => [k, b.querySelector(`[name=${k}]`).value])),
@@ -636,6 +872,7 @@
   // ── Démarrage ──
   document.querySelector('[data-sortir]').addEventListener('click', () => { session.fermer(); router(); });
   document.querySelector('[data-mdp]')?.addEventListener('click', () => K.changerMotDePasse());
+  setInterval(() => { if (session.connecte() && session.utilisateur()?.role === 'admin') majPastilleRec(); }, 120000);
   async function demarrer() {
     try { CONFIG = await K.config({ forcer: true }); } catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">Serveur injoignable.</p>`; return; }
     document.querySelectorAll('[data-nom-app]').forEach(el => { el.textContent = CONFIG.app; });
