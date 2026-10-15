@@ -41,6 +41,9 @@ const corsOptions = {
     }
   },
   credentials: true,
+  // Le navigateur garde l'autorisation 2 h : un seul aller-retour par requête au lieu de deux
+  // (sensible en Guinée, où chaque aller-retour vers l'Europe coûte cher sur mobile)
+  maxAge: 7200,
 };
 
 // ── Socket.io ─────────────────────────────

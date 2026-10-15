@@ -448,7 +448,7 @@
           <div class="panneau-corps">${barresH(etapes.map(([s, l]) => ({ lib: l, v: p[s] || 0, couleur: s === 'pret' || s === 'en_livraison' ? '#1F7A4D' : s === 'reserve' ? '#C8982B' : '#04244F' })))}</div>
         </section>
         <section class="panneau">
-          <div class="panneau-tete teinte-or"><div><h2>Délai moyen dépôt → retrait</h2><p class="tres-petit muet">Colis arrivés en agence sur ${lib}</p></div></div>
+          <div class="panneau-tete teinte-or"><div><h2>Délai moyen du dépôt au retrait</h2><p class="tres-petit muet">Colis arrivés en agence sur ${lib}</p></div></div>
           <div class="panneau-corps delais">${['express', 'air', 'mer'].map(m => `
             <div class="delai"><span class="pastille-mode" style="background:${COULEUR_MODE[m]}">${K.icMode(m, 'ic-sm')}</span>
               <div><div class="gras">${LIB_MODE[m]}</div><div class="tres-petit muet">${t.delais[m].nb} colis · prévu ${esc((CONFIG.modes || []).find(x => x.key === m)?.delai || '')}</div></div>
@@ -555,7 +555,7 @@
     const liste = r.lots;
     if (!code && liste.length) code = (liste.find(l => l.statut !== 'cloture') || liste[0]).code;
     main.innerHTML = `
-      <div class="entete-page"><h1>Lots &amp; manifestes</h1><button class="btn btn-noir" data-nouveau-lot>${ic('plus', 'ic-sm')} Nouveau lot</button></div>
+      <div class="entete-page"><h1>Lots et manifestes</h1><button class="btn btn-noir" data-nouveau-lot>${ic('plus', 'ic-sm')} Nouveau lot</button></div>
       <div class="puces" style="margin-bottom:16px">${liste.slice(0, 12).map(l => `<a class="puce" href="#/lots/${esc(l.code)}" ${l.code === code ? 'aria-current="page"' : ''}>${esc(l.code)} · ${esc(libSens(l.sens).replace(' → ', '→'))} · ${esc(LIB_STATUT_LOT[l.statut].toLowerCase())}</a>`).join('') || '<p class="muet">Aucun lot pour l\'instant.</p>'}</div>
       <div data-detail></div>`;
     main.querySelector('[data-nouveau-lot]').addEventListener('click', nouveauLot);
@@ -902,7 +902,7 @@
         <div class="kpi"><div class="lib">Factures</div><div class="val">${liste.filter(f => f.type === 'facture').length}</div></div>
         <div class="kpi"><div class="lib">Avoirs</div><div class="val">${liste.filter(f => f.type === 'avoir').length}</div></div>
       </div>
-      ${CONFIG.facturation?.capital ? '' : '<p class="bandeau bandeau-ocre">Le capital social n\'est pas renseigné : il doit figurer sur les factures d\'une SAS. Complétez-le dans Tarifs &amp; agences → Facturation.</p>'}
+      ${CONFIG.facturation?.capital ? '' : '<p class="bandeau bandeau-ocre">Le capital social n\'est pas renseigné : il doit figurer sur les factures d\'une SAS. Complétez-le dans Tarifs et agences, rubrique Facturation.</p>'}
       <section class="panneau"><div class="defile"><table class="tableau">
         <thead><tr><th>Numéro</th><th>Date</th><th>Colis</th><th>Client</th><th>Agence</th><th class="n">HT</th><th class="n">TVA</th><th class="n">TTC</th><th></th></tr></thead>
         <tbody data-lignes>${liste.slice(0, PAGE_FACT).map(ligneFacture).join('') || '<tr><td colspan="9" class="muet">Aucune facture sur cette période.</td></tr>'}</tbody></table></div>
@@ -1192,7 +1192,7 @@
         </div>
       </div>`;
     main.innerHTML = `
-      <div class="entete-page"><h1>Tarifs &amp; agences</h1></div>
+      <div class="entete-page"><h1>Tarifs et agences</h1></div>
       <form class="pile" style="--gap:20px;max-width:1040px" data-reglages>
         <section class="panneau"><div class="panneau-tete"><h2>Taux de change</h2><span class="petit muet">Figé sur chaque colis au moment de la pesée</span></div>
           <div class="panneau-corps formulaire-grille">
@@ -1286,7 +1286,7 @@
       const n = (k) => parseFloat(b.querySelector(`[name=${k}]`).value) || 0;
       const devise = CONFIG.pays[b.dataset.domicile].devise;
       const prix = (km) => { let x = n('base') + n('parKm') * km; if (n('plafond') > 0) x = Math.min(x, n('plafond')); return montant(devise === 'GNF' ? Math.ceil(x / 1000) * 1000 : Math.ceil(x * 2) / 2, devise); };
-      b.querySelector('[data-exemples]').textContent = `Exemples : 2 km → ${prix(2)} · 5 km → ${prix(5)} · 10 km → ${prix(10)} · 20 km → ${prix(20)}`;
+      b.querySelector('[data-exemples]').textContent = `Exemples : 2 km = ${prix(2)}, 5 km = ${prix(5)}, 10 km = ${prix(10)}, 20 km = ${prix(20)}`;
     });
     form.addEventListener('input', majExemples);
     // Position d'une agence : carte ou GPS du téléphone
