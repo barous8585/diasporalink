@@ -58,9 +58,12 @@ router.get('/', auth, ah(async (req, res) => {
 // destinataire ou au tiers autorisé SI leur numéro a été vérifié (par SMS ou par l'agence).
 // Sans vérification, n'importe qui pourrait créer un compte avec le numéro d'un autre.
 function estAutorisePourCode(colis, user) {
-  if (String(colis.client) === String(user._id)) return true;
+  // L'expéditeur (compte qui a réservé, ou son numéro vérifié) voit le code dès le dépôt
+  // pour le transmettre ; destinataire et tiers vérifiés le voient quand le colis est prêt.
+  if (String(colis.client) === String(user._id)) return 'tot';
   if (!user.verifie) return false;
-  return [colis.destinataire?.telephone, colis.expediteur?.telephone, colis.tiersAutorise?.telephone].includes(user.telephone);
+  if (colis.expediteur?.telephone === user.telephone) return 'tot';
+  return [colis.destinataire?.telephone, colis.tiersAutorise?.telephone].includes(user.telephone);
 }
 
 // ── GET /api/colis/:numero

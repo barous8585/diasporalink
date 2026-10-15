@@ -150,6 +150,8 @@ const colisSchema = new mongoose.Schema({
     pieceVerifiee:Boolean,
     signature:    String, // image PNG en data URL
     opId:         String,
+    sansCode:     Boolean,                // remis sur pièce d'identité, sans le code
+    pieceNumero:  String,
   },
 
   notesAdmin: { type: String },

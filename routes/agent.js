@@ -93,9 +93,11 @@ router.get('/aujourdhui', ah(async (req, res) => {
 
 // ── GET /api/agent/colis/:numero ── fiche complète (remise, contrôle)
 router.get('/colis/:numero', ah(async (req, res) => {
-  const colis = await Colis.findOne({ numeroSuivi: req.params.numero.trim().toUpperCase() }).populate('historique.agent', 'prenom nom');
+  const colis = await Colis.findOne({ numeroSuivi: req.params.numero.trim().toUpperCase() }).select('+codeRetrait').populate('historique.agent', 'prenom nom');
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
-  res.json({ succes: true, colis: await svc.vueComplete(colis) });
+  // L'agence de dépôt peut redonner le code à l'expéditeur ; l'agence de retrait, elle, le demande.
+  const voitCode = req.user.role === 'admin' || (req.user.lieu && req.user.lieu === colis.depot && req.user.lieu !== colis.guichet);
+  res.json({ succes: true, colis: await svc.vueComplete(colis, { avecCode: voitCode ? 'tot' : false }) });
 }));
 
 // ── GET /api/agent/reservations?q= ── retrouver une réservation au comptoir
@@ -150,7 +152,7 @@ router.post('/annuler', [body('numero').trim().notEmpty()], valider, ah(async (r
 // ── POST /api/agent/remise ── remise au destinataire
 router.post('/remise', [
   body('numero').trim().notEmpty(),
-  body('code').trim().isLength({ min: 4, max: 4 }).withMessage('Code à 4 chiffres'),
+  body('code').if((v, { req }) => !req.body.sansCode).trim().isLength({ min: 4, max: 4 }).withMessage('Code à 4 chiffres'),
 ], valider, ah(async (req, res) => {
   const resultat = await svc.avecOperation(req.body.opId, req.user, 'remise', () => svc.remettre(req.user, { ...req.body, aDomicile: false }));
   res.json({ succes: true, ...resultat });

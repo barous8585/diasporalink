@@ -120,7 +120,7 @@ const CONFIG_DEFAUT = {
   // le client envoie l'argent sur le compte marchand de TMS et indique la référence ;
   // l'équipe vérifie la réception puis valide (en attendant un agrégateur automatique).
   paiements: {
-    FR: { carte: true },
+    FR: { carte: true, orange_money: true },
     GN: { orange_money: true, mtn_momo: true, carte: true },
     comptes: {
       orange_money: { numero: '', titulaire: 'Talib Multi Services' },

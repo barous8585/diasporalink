@@ -30,6 +30,11 @@
   // (expéditeur : pays de départ, € pour France → Guinée, GNF pour Guinée → France ;
   // destinataire : pays d'arrivée). L'autre monnaie suit entre parenthèses.
   const estDestinataireDe = (c) => { const u = session.utilisateur(); return !!(u && c?.destinataire?.telephone === u.telephone && c?.expediteur?.telephone !== u.telephone); };
+  // Message WhatsApp de l'expéditeur au destinataire : où retirer, avec quel code
+  const messageCode = (c) => {
+    const g = (CONFIG?.agences || []).find(a => a.code === c.guichet);
+    return `Bonjour ${c.destinataire?.nom || ''}, je vous envoie un colis avec ${CONFIG?.app || 'Talib Multi Services'}.\nN° de suivi : ${c.numeroSuivi}\nRetrait : ${g?.nom || c.guichet}${g?.adresse ? `, ${g.adresse}` : ''}\nCode de retrait : ${c.codeRetrait} (avec votre pièce d'identité, ne le partagez pas)\nSuivi : ${location.origin}/?suivi=${c.numeroSuivi}`;
+  };
   const paysVue = (c) => { const [d, a] = String(c?.sens || 'FR-GN').split('-'); return estDestinataireDe(c) ? a : d; };
   const deviseVue = (c) => deviseDe(paysVue(c));
   const tauxDe = (c) => c?.tarif?.taux || CONFIG?.tauxEurGnf || 10000;
@@ -295,10 +300,17 @@
           <section class="carte pile bloc-code">
             <div class="ligne entre"><h3>Code de retrait</h3><span class="tres-petit muet">${liv ? 'à donner au livreur' : 'avec une pièce d\'identité'}</span></div>
             <div class="code-4">${c.codeRetrait.split('').map(d => `<div>${esc(d)}</div>`).join('')}</div>
+            ${!estDestinataireDe(c) && c.destinataire?.telephone ? `<a class="btn btn-plein" href="${esc(lienWhatsApp(c.destinataire.telephone, messageCode(c)))}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} Envoyer le code au destinataire</a>` : ''}
+          </section>` : !fini && c.codeRetrait ? `
+          <section class="carte pile bloc-code">
+            <div class="ligne entre"><h3>Code de retrait</h3><span class="tres-petit muet">à transmettre au destinataire</span></div>
+            <div class="code-4">${c.codeRetrait.split('').map(d => `<div>${esc(d)}</div>`).join('')}</div>
+            <p class="tres-petit muet">Le destinataire le donne à l'agence avec sa pièce d'identité. Ne le donnez qu'à lui.</p>
+            ${c.destinataire?.telephone ? `<a class="btn btn-plein" href="${esc(lienWhatsApp(c.destinataire.telephone, messageCode(c)))}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} Envoyer au destinataire par WhatsApp</a>` : ''}
           </section>` : pret ? `
           <section class="carte pile">
             <h3>Code de retrait</h3>
-            <p class="petit muet">Il est visible dans le compte de l'expéditeur, qui peut vous le transmettre.</p>
+            <p class="petit muet">L'expéditeur a reçu le code au dépôt du colis : demandez-le-lui. Vous n'avez pas le code ? Venez quand même à l'agence avec votre <b>pièce d'identité</b> : l'agent vérifie que vous êtes bien le destinataire (nom et numéro de téléphone) et vous remet le colis.</p>
             ${session.connecte() ? '' : `<a class="btn btn-plein" href="#/connexion" data-memo-retour>Se connecter</a>`}
           </section>` : ''}
 
