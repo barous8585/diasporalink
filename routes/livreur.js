@@ -12,6 +12,14 @@ const svc = require('../services/colisService');
 const dom = require('../services/domicileService');
 
 router.use(auth, role(ROLES.LIVREUR, ROLES.AGENT, ROLES.ADMIN));
+// Un livreur n'agit que sur les courses de son agence
+router.use(ah(async (req, res, next) => {
+  const numero = String(req.body?.numero || '').trim().toUpperCase();
+  if (req.method !== 'POST' || !numero) return next();
+  const colis = await require('../models/Colis').findOne({ numeroSuivi: numero }).select('depot guichet sens');
+  if (colis && !(await require('../services/colisService').agentVoitColis(colis, req.user))) return res.status(404).json({ succes: false, message: 'Cette course ne concerne pas votre agence.' });
+  next();
+}));
 
 const typeValide = body('type').isIn(dom.COURSES).withMessage('Type de course inconnu');
 

@@ -16,6 +16,15 @@ const svc = require('../services/colisService');
 
 router.use(auth, role(ROLES.AGENT, ROLES.ADMIN));
 
+// Un agent n'agit que sur les colis de son agence (dépôt ou retrait ; plateformes : leur pays)
+const colisDeMonAgence = (lire) => ah(async (req, res, next) => {
+  const numero = String(lire(req) || '').trim().toUpperCase();
+  if (!numero) return next();
+  const colis = await Colis.findOne({ numeroSuivi: numero }).select('depot guichet sens');
+  if (colis && !(await svc.agentVoitColis(colis, req.user))) return res.status(404).json({ succes: false, message: 'Ce colis ne concerne pas votre agence.' });
+  next();
+});
+
 // ── GET /api/agent/contexte ── infos de démarrage + cache hors-ligne
 router.get('/contexte', ah(async (req, res) => {
   const config = await Config.get();
@@ -94,6 +103,7 @@ router.get('/aujourdhui', ah(async (req, res) => {
 // ── GET /api/agent/colis/:numero ── fiche complète (remise, contrôle)
 router.get('/colis/:numero', ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.trim().toUpperCase() }).select('+codeRetrait').populate('historique.agent', 'prenom nom');
+  if (colis && !(await svc.agentVoitColis(colis, req.user))) return res.status(404).json({ succes: false, message: 'Ce colis ne concerne pas votre agence.' });
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
   // L'agence de dépôt peut redonner le code à l'expéditeur ; l'agence de retrait, elle, le demande.
   const voitCode = req.user.role === 'admin' || (req.user.lieu && req.user.lieu === colis.depot && req.user.lieu !== colis.guichet);
@@ -105,9 +115,12 @@ router.get('/reservations', ah(async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 3) return res.json({ succes: true, colis: [] });
   const tel = svc.normTel(q);
+  // Par numéro de suivi (le client le montre) : toute réservation ; par téléphone : celles
+  // prévues dans l'agence de l'agent seulement
+  const parAgence = req.user.role === ROLES.ADMIN ? {} : { depot: req.user.lieu || '_' };
   const liste = await Colis.find({
     statut: STATUTS.RESERVE,
-    $or: [{ numeroSuivi: q.toUpperCase() }, { 'expediteur.telephone': tel }, { 'destinataire.telephone': tel }],
+    $or: [{ numeroSuivi: q.toUpperCase() }, { 'expediteur.telephone': tel, ...parAgence }, { 'destinataire.telephone': tel, ...parAgence }],
   }).limit(20);
   res.json({ succes: true, colis: liste.map(c => c.toJSON()) });
 }));
@@ -144,7 +157,7 @@ router.post('/scans', ah(async (req, res) => {
 }));
 
 // ── POST /api/agent/annuler ── { numero, motif } : annuler la dernière étape (erreur de scan)
-router.post('/annuler', [body('numero').trim().notEmpty()], valider, ah(async (req, res) => {
+router.post('/annuler', [body('numero').trim().notEmpty()], valider, colisDeMonAgence(r => r.body.numero), ah(async (req, res) => {
   const r = await svc.annulerEtape(req.user, req.body.numero, req.body.motif);
   res.json({ succes: true, ...r });
 }));
@@ -162,7 +175,7 @@ router.post('/remise', [
 router.post('/encaisser', [
   body('numero').trim().notEmpty(),
   body('paiement.montant').isFloat({ min: 1 }).withMessage('Montant invalide'),
-], valider, ah(async (req, res) => {
+], valider, colisDeMonAgence(r => r.body.numero), ah(async (req, res) => {
   const resultat = await svc.avecOperation(req.body.opId, req.user, 'encaisser', async () => {
     const colis = await Colis.findOne({ numeroSuivi: req.body.numero.trim().toUpperCase() });
     if (!colis) throw new svc.ErreurMetier('Colis introuvable.', 404);
@@ -180,7 +193,7 @@ router.patch('/colis/:numero/douane', [
   body('montant').optional().isFloat({ min: 0 }).withMessage('Montant invalide'),
   body('devise').optional().isIn(['EUR', 'GNF']),
   body('fraisDouaneGnf').optional().isFloat({ min: 0 }).withMessage('Montant invalide'),
-], valider, ah(async (req, res) => {
+], valider, colisDeMonAgence(r => r.params.numero), ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.toUpperCase() });
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
   if (colis.statut === STATUTS.REMIS) return res.status(409).json({ succes: false, message: 'Colis déjà remis.' });

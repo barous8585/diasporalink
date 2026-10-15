@@ -50,7 +50,7 @@ router.post('/', [
   body('photos').optional().isArray({ max: 4 }).withMessage('4 photos maximum'),
 ], valider, ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.body.numero.trim().toUpperCase() });
-  if (!colis || !svc.lieAuCompte(colis, req.user, { strict: false })) return res.status(404).json({ succes: false, message: 'Colis introuvable sur votre compte.' });
+  if (!colis || !(await svc.lieAuCompte(colis, req.user, { strict: false }))) return res.status(404).json({ succes: false, message: 'Colis introuvable sur votre compte.' });
   if (colis.statut === 'reserve' || colis.statut === 'annule') return res.status(409).json({ succes: false, message: 'Ce colis n\'a pas encore été confié à TMS.' });
   const ouverte = await Reclamation.findOne({ colis: colis._id, statut: { $in: ['ouverte', 'en_cours'] } });
   if (ouverte) return res.status(409).json({ succes: false, message: `Une réclamation est déjà en cours (${ouverte.numero}).` });

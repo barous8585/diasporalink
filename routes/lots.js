@@ -15,8 +15,10 @@ const { changerStatutMasse } = require('../services/colisService');
 router.use(auth);
 
 // Liste (agents : lecture, pour choisir le lot à charger / réceptionner)
+// Un agent ne voit que les lots qui partent de son agence ou y arrivent
+const filtreLotsAgent = (u) => (u.role === ROLES.ADMIN ? {} : { $or: [{ depot: u.lieu || '_' }, { destination: u.lieu || '_' }] });
 router.get('/', role(ROLES.AGENT, ROLES.ADMIN), ah(async (req, res) => {
-  const filtre = req.query.statut ? { statut: req.query.statut } : {};
+  const filtre = { ...(req.query.statut ? { statut: String(req.query.statut) } : {}), ...filtreLotsAgent(req.user) };
   const lots = await Lot.find(filtre).sort({ createdAt: -1 }).limit(100).lean();
   // Compte des colis par lot
   const comptes = await Colis.aggregate([
@@ -29,7 +31,7 @@ router.get('/', role(ROLES.AGENT, ROLES.ADMIN), ah(async (req, res) => {
 
 // Détail + manifeste
 router.get('/:code', role(ROLES.AGENT, ROLES.ADMIN), ah(async (req, res) => {
-  const lot = await Lot.findOne({ code: req.params.code.toUpperCase() }).lean();
+  const lot = await Lot.findOne({ code: req.params.code.toUpperCase(), ...filtreLotsAgent(req.user) }).lean();
   if (!lot) return res.status(404).json({ succes: false, message: 'Lot introuvable.' });
   const config = await Config.get();
   const colis = await Colis.find({ lotCode: lot.code }).sort({ numeroSuivi: 1 });

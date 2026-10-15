@@ -1191,3 +1191,34 @@ test('sécurité : numéro non vérifié, injections, admin, suivi public, liens
   assert.ok(csv.includes('"\'=HYPERLINK'), 'formule neutralisée');
   assert.ok(!csv.includes('";"=HYPERLINK'));
 });
+
+test('un agent ne voit que les colis de son agence', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');
+  const agentKaloum = await connexion('620000003');
+  let r = await appel('POST', '/utilisateurs/equipe', { telephone: '620000777', prenom: 'Aïcha', nom: 'Matoto', role: 'agent', lieu: 'MATOTO', motDePasse: MDP }, admin);
+  assert.strictEqual(r.status, 201, r.message);
+  const agentMatoto = await connexion('620000777');
+
+  r = await appel('POST', '/agent/depot', { poidsReel: 2, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM', cgvAcceptees: true,
+    expediteur: { nom: 'Lamine Touré', telephone: '0633334444' }, destinataire: { nom: 'Oumou Touré', telephone: '623334444' } }, agentParis);
+  assert.strictEqual(r.status, 201, r.message);
+  const numero = r.colis.numeroSuivi;
+
+  assert.strictEqual((await appel('GET', `/agent/colis/${numero}`, null, agentParis)).status, 200, 'agence de dépôt');
+  assert.strictEqual((await appel('GET', `/agent/colis/${numero}`, null, agentKaloum)).status, 200, 'agence de retrait');
+  assert.strictEqual((await appel('GET', `/agent/colis/${numero}`, null, agentMatoto)).status, 404, 'autre agence');
+  assert.strictEqual((await appel('GET', `/factures/colis/${numero}`, null, agentMatoto)).status, 404);
+  assert.strictEqual((await appel('POST', '/agent/encaisser', { numero, paiement: { montant: 5, devise: 'GNF', methode: 'especes' } }, agentMatoto)).status, 404);
+  assert.strictEqual((await appel('PATCH', `/agent/colis/${numero}/douane`, { montant: 1000, devise: 'GNF' }, agentMatoto)).status, 404);
+  // Lots : seulement ceux qui partent de son agence ou y arrivent
+  const lots = (await appel('GET', '/lots', null, agentMatoto)).lots;
+  assert.ok(lots.every(l => l.depot === 'MATOTO' || l.destination === 'MATOTO'));
+  // Réservations par téléphone : seulement celles prévues dans son agence
+  const client = await connexion('0699990000', 'Saran', 'Keita');
+  r = await appel('POST', '/colis', { cgvAcceptees: true, mode: 'air', typeColis: 'vetements', poidsEstime: 2, depot: 'PARIS', guichet: 'KALOUM', destinataire: { nom: 'Ibrahima Keita', telephone: '629990000' } }, client);
+  const resa = r.colis.numeroSuivi;
+  assert.strictEqual((await appel('GET', '/agent/reservations?q=0699990000', null, agentMatoto)).colis.length, 0);
+  assert.strictEqual((await appel('GET', `/agent/reservations?q=${resa}`, null, agentMatoto)).colis.length, 1, 'par numéro de suivi : oui');
+  assert.ok((await appel('GET', '/agent/reservations?q=0699990000', null, agentParis)).colis.length >= 1);
+});
