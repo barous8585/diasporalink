@@ -197,11 +197,38 @@
       document.querySelector('[data-titre-mobile]').textContent = document.querySelector(`[data-nav="${nav}"]`)?.textContent.replace(/\d+$/, '').trim() || 'Back-office';
       main.classList.toggle('entree', !silencieux);
       if (!silencieux) main.innerHTML = '<div class="chargement"></div>';
-      try { await vue(...m.slice(1)); }
+      try { await vue(...m.slice(1)); paginerTableaux(); }
       catch (e) { main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
       return;
     }
     location.hash = '#/';
+  }
+
+  // Longues listes : 50 lignes, puis « Afficher plus » (la page ne fait plus des kilomètres sur téléphone).
+  // Ce qui a été déplié le reste quand la page se rafraîchit toute seule.
+  const deplies = {};
+  function paginerTableaux() {
+    main.querySelectorAll('.tableau > tbody').forEach((tb, i) => {
+      if (tb.hasAttribute('data-lignes')) return; // déjà paginé par la vue (factures)
+      const lignes = [...tb.children].filter(tr => tr.tagName === 'TR');
+      const cle = `${pageActuelle}:${i}`;
+      let montrees = Math.max(50, deplies[cle] || 0);
+      if (lignes.length <= montrees + 10) return;
+      const appliquer = () => lignes.forEach((tr, k) => tr.classList.toggle('cache', k >= montrees));
+      appliquer();
+      const zone = document.createElement('div');
+      zone.className = 'plus-lignes';
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'btn';
+      const libelle = () => { btn.textContent = `Afficher plus (${lignes.length - montrees} autres)`; };
+      libelle();
+      btn.addEventListener('click', () => {
+        montrees += 50; deplies[cle] = montrees; appliquer();
+        if (montrees >= lignes.length) zone.remove(); else libelle();
+      });
+      zone.appendChild(btn);
+      (tb.closest('.defile') || tb.closest('table')).after(zone);
+    });
   }
 
   function connexion() {
