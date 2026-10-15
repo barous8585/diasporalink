@@ -428,3 +428,11 @@ form.pile:has(> .bloc-etape) { gap: 20px; }
 .separateur-ou { display: flex; align-items: center; gap: 12px; color: var(--gris); font-size: 13px; font-weight: 600; }
 .separateur-ou::before, .separateur-ou::after { content: ''; flex: 1; height: 1px; background: var(--ligne-2); }
 .zone-google { display: flex; justify-content: center; min-height: 44px; }
+
+/* Adresse : deux façons (position ou adresse écrite), repère facultatif replié */
+.bloc-adresse .segments button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.bloc-adresse .etat-position:empty { display: none; }
+.details-adresse summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--marine); list-style: none; padding: 6px 0; }
+.details-adresse summary::-webkit-details-marker { display: none; }
+.details-adresse summary::before { content: '+ '; font-weight: 800; }
+.details-adresse[open] summary::before { content: '− '; }

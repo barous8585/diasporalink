@@ -100,6 +100,7 @@ function nettoyerPoint(p) {
   const point = { lat: parseFloat(p.lat), lng: parseFloat(p.lng) };
   if (!pointValide(point)) return null;
   if (p.precision) point.precision = Math.round(parseFloat(p.precision)) || undefined;
+  if (['gps', 'carte', 'lien', 'adresse'].includes(p.source)) point.source = p.source;
   point.le = new Date();
   return point;
 }
@@ -139,8 +140,9 @@ async function demanderCourse(colis, type, data) {
     telephone: normTel(a.telephone) || (type === 'ramassage' ? colis.expediteur?.telephone : colis.destinataire?.telephone),
     ville: (a.ville || '').trim(),
     commune: (a.commune || '').trim(),
-    quartier: (a.quartier || '').trim(),
-    repere: (a.repere || '').trim(),
+    quartier: (a.quartier || '').trim().slice(0, 120),
+    rue: (a.rue || '').trim().slice(0, 200),
+    repere: (a.repere || '').trim().slice(0, 200),
     position: position || precedent?.adresse?.position || undefined,
   };
   // Quartier, repère et position aident le livreur mais ne bloquent jamais la réservation :

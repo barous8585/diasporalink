@@ -1363,7 +1363,8 @@
           ${c.prix ? `<span class="gras">${esc(montant(c.prix, c.devise))}</span>` : ''}
         </div>
         <div class="gras" style="font-size:17px">${esc(a.nom || c.contact?.nom || '')}</div>
-        <div class="adresse-course">${esc([a.quartier, a.ville].filter(Boolean).join(', '))}${a.repere ? `<br><span class="muet">${esc(a.repere)}</span>` : ''}</div>
+        <div class="adresse-course">${a.rue ? `${esc(a.rue)}<br>` : ''}${esc([a.quartier, a.ville].filter(Boolean).join(', '))}${a.repere ? `<br><span class="muet">${esc(a.repere)}</span>` : ''}</div>
+        ${p?.source === 'adresse' ? `<div class="tres-petit" style="color:var(--ocre-texte)">${ic('alerte', 'ic-sm')} Position approximative (d'après l'adresse écrite) : appelez avant de partir.</div>` : !p?.lat ? `<div class="tres-petit" style="color:var(--ocre-texte)">${ic('alerte', 'ic-sm')} Pas de position : appelez le client pour trouver l'adresse.</div>` : ''}
         <div class="petit muet">${esc([c.distanceKm && `${String(c.distanceKm).replace('.', ',')} km de l'agence`, [c.jour && date(c.jour, false), libMoment(c.moment)].filter(Boolean).join(' '), c.nbCartons && `${c.nbCartons} carton(s)`, c.poids && kg(c.poids)].filter(Boolean).join(' · '))}</div>
         ${c.type === 'livraison' && c.soldeGnf > 0 ? `<div class="bandeau bandeau-ocre petit">${ic('billet', 'ic-sm')} À encaisser : <b>&nbsp;${esc(devise === 'EUR' ? eur(c.soldeEur) : gnf(c.soldeGnf))}</b></div>` : ''}
         ${c.echecs?.length ? `<div class="tres-petit rouge">${c.echecs.length} passage(s) manqué(s) : ${esc(c.echecs.at(-1).motif)}</div>` : ''}

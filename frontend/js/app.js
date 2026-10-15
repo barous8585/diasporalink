@@ -587,7 +587,8 @@
       const a = adr.lire();
       const tel = el.querySelector('[name=telephone]').value;
       if (!tel) { toast('Indiquez votre numéro de téléphone (celui du destinataire sur le colis).', 'erreur'); return; }
-      if (!a.position && !confirm('Sans votre position, le prix de la livraison ne peut pas être calculé et le livreur devra vous appeler. Enregistrer quand même ?')) return;
+      if (!adr.complete()) { toast('Touchez « Je suis sur place », ou écrivez votre adresse.', 'erreur'); return; }
+      if (!a.position && !confirm('Adresse introuvable sur la carte : le prix de la livraison sera confirmé par le livreur, qui vous appellera. Enregistrer quand même ?')) return;
       const course = adr.course();
       if (course && !course.ok) { toast(course.message, 'erreur'); return; }
       if (course && !confirm(`Livraison : ${montant(course.prix, course.devise)} (${course.distanceKm.toLocaleString('fr-FR')} km), à payer en ligne maintenant. Une livraison payée n'est pas remboursée si vous l'annulez. Continuer ?`)) return;
@@ -1046,8 +1047,10 @@
       if (f.get('cgv') !== 'on') { toast('Acceptez les conditions générales et confirmez qu\'il n\'y a aucun objet interdit.', 'erreur'); return; }
       const ram = etat.depart === 'domicile' ? adrRam.lire() : null;
       const liv = etat.arrivee === 'domicile' ? adrLiv.lire() : null;
-      // Adresse incomplète : on réserve quand même, on prévient seulement
-      const manque = [[ram, 'ramassage'], [liv, 'livraison']].filter(([a]) => a && (!a.position || !a.quartier)).map(([, lib]) => lib);
+      // Ramassage : il faut au moins la position OU une adresse écrite (une seule des deux suffit)
+      if (ram && !adrRam.complete()) { toast('Pour le ramassage : touchez « Je suis sur place », ou écrivez votre adresse.', 'erreur'); $('[data-adresse="ram"]').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+      // Livraison : jamais bloquante (le destinataire peut envoyer sa position plus tard)
+      const manque = [[ram, 'ramassage'], [liv, 'livraison']].filter(([a]) => a && !a.position).map(([, lib]) => lib);
       for (const [c, lib] of [[ram && adrRam.course(), 'ramassage'], [liv && liv.position && adrLiv.course(), 'livraison']]) {
         if (c && !c.ok) { toast(`${lib[0].toUpperCase() + lib.slice(1)} : ${c.message}`, 'erreur'); return; }
       }
@@ -1066,7 +1069,7 @@
           livraison: liv ? { demande: true, adresse: liv } : undefined,
         });
         stock.suppr('brouillon_dest'); stock.suppr('brouillon_adresses');
-        if (manque.length) toast(`Réservé. Adresse de ${manque.join(' et ')} à compléter : le prix sera calculé dès que la position sera envoyée.`, '', { duree: 5000 });
+        if (manque.length) toast(`Réservé. Prix du ${manque.join(' et de la ')} confirmé par le livreur, qui vous appellera${manque.includes('livraison') ? ' (ou dès que le destinataire envoie sa position)' : ''}.`, '', { duree: 5000 });
         confirmation(r.colis, { payerMaintenant: etat.quand === 'enligne' });
       } catch (err) { toast(err.message, 'erreur'); btn.disabled = false; }
     });
