@@ -44,8 +44,9 @@ async function aPayer(colis, config) {
   const domicileGnf = domicileAPayerGnf(colis);
   const { soldeGnf } = calculerSolde(colis, config);
   const fini = [STATUTS.REMIS, STATUTS.ANNULE].includes(colis.statut);
-  // Avant la pesée, seules les courses à domicile se paient ; après, tout le solde
-  const soldePayable = !fini && !colis.tarif?.estime && soldeGnf > 0;
+  // Le client peut tout payer en ligne dès la réservation (prix estimé) : la différence
+  // éventuelle est réglée à la pesée (complément au comptoir, ou trop-payé rendu).
+  const soldePayable = !fini && soldeGnf > 0;
   const enAttente = (colis.declarations || []).filter(d => d.statut === 'a_verifier');
   return {
     domicile: { gnf: fini ? 0 : domicileGnf, eur: versEur(domicileGnf, taux) },
@@ -77,14 +78,17 @@ async function enregistrerEnLigne(colis, { montant, devise, methode, reference, 
   const config = await Config.get();
   const montantGnf = enGnf(montant, devise, tauxDe(colis, config));
   colis.paiements.push({ montant, devise, methode, lieu: 'EN_LIGNE', reference, objet: objet === 'domicile' ? 'domicile' : 'global', le: new Date() });
-  if (objet === 'domicile') appliquerDomicile(colis, montantGnf);
+  // Un paiement global couvre d'abord les courses à domicile : elles sont alors programmées
+  const avantCourses = (colis.ramassage?.payeGnf || 0) + (colis.livraison?.payeGnf || 0);
+  appliquerDomicile(colis, montantGnf);
+  const coursesPayees = (colis.ramassage?.payeGnf || 0) + (colis.livraison?.payeGnf || 0) > avantCourses;
   colis.historique.push({
     label: objet === 'domicile' ? 'Livraison / ramassage payés en ligne' : 'Paiement en ligne reçu',
     detail: `${devise === 'EUR' ? `${String(montant).replace('.', ',')} €` : `${montant.toLocaleString('fr-FR')} GNF`} · ${LIB[methode] || methode}`,
     le: new Date(),
   });
   await colis.save();
-  if (objet === 'domicile') await require('../services/factureService').emettreSansBloquer(colis, { moment: 'domicile' });
+  if (objet === 'domicile' || coursesPayees) await require('../services/factureService').emettreSansBloquer(colis, { moment: 'domicile' });
   return colis;
 }
 
@@ -112,7 +116,6 @@ const creerSession = async (req, res) => {
   const objet = req.body.objet === 'domicile' ? 'domicile' : 'solde';
   const dus = await aPayer(colis, config);
   const montant = objet === 'domicile' ? dus.domicile : dus.solde;
-  if (objet === 'solde' && dus.solde.estime) return res.status(409).json({ succes: false, message: 'Le prix sera fixé à la pesée au dépôt. Payez à ce moment-là.' });
   const centimes = Math.round(montant.eur * 100);
   if (centimes < 50) return res.status(400).json({ succes: false, message: 'Rien à payer.' });
 

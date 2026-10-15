@@ -906,7 +906,8 @@ test('paiement en ligne : livraison payée d\'avance (mobile money vérifié), n
   assert.strictEqual(r.colis.domicileAPayerGnf, prixGnf);
   let du = await appel('GET', `/paiements/a-payer/${numero}`);
   assert.strictEqual(du.domicile.gnf, prixGnf);
-  assert.strictEqual(du.solde.gnf, 0, 'pas de solde avant la pesée');
+  assert.ok(du.solde.gnf > prixGnf, 'prix estimé (transport + livraison) payable dès la réservation');
+  assert.strictEqual(du.solde.estime, true);
 
   // L'admin ne peut pas envoyer le livreur sans prévenir : course pas payée
   const sekou = (await appel('GET', '/admin/courses', null, admin)).livreurs.find(l => l.lieu === 'KALOUM');
@@ -1101,4 +1102,35 @@ test('comptoir : code de retrait dès le dépôt, Orange Money depuis la France,
   assert.strictEqual(r.status, 200, r.message);
   assert.strictEqual(r.colis.statut, 'remis');
   assert.ok(r.colis.historique.some(h => /sans code/.test(`${h.label} ${h.detail}`)));
+});
+
+test('le client paie tout en ligne dès la réservation : courses programmées, trop-payé signalé à la pesée', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');
+  const client = await connexion('0688888888', 'Mariama', 'Barry');
+  await appel('PATCH', '/config/admin', { paiements: { FR: { orange_money: true }, comptes: { orange_money: { numero: '622 00 00 00', titulaire: 'TMS' } } } }, admin);
+
+  // Réservation 10 kg avec livraison à domicile, payée en entier (prix estimé) par Orange Money
+  let r = await appel('POST', '/colis', { cgvAcceptees: true, mode: 'air', typeColis: 'vetements', poidsEstime: 10, depot: 'PARIS', guichet: 'KALOUM',
+    destinataire: { nom: 'Aminata Barry', telephone: '628888888' },
+    livraison: { demande: true, adresse: { ville: 'Conakry', quartier: 'Kipé', position: { lat: 9.5092 + 0.03, lng: -13.7122 } } } }, client);
+  assert.strictEqual(r.status, 201, r.message);
+  const numero = r.colis.numeroSuivi;
+  const du = await appel('GET', `/paiements/a-payer/${numero}`);
+  assert.ok(du.solde.gnf > du.domicile.gnf && du.domicile.gnf > 0);
+  r = await appel('POST', '/paiements/mobile', { numero, objet: 'global', methode: 'orange_money', reference: 'PP-TOUT-1', telephone: '0688888888' });
+  assert.strictEqual(r.status, 201, r.message);
+  const dec = (await appel('GET', '/paiements/declarations', null, admin)).declarations.find(d => d.reference === 'PP-TOUT-1');
+  assert.strictEqual(dec.montantGnf, du.solde.gnf);
+  assert.strictEqual((await appel('POST', `/paiements/declarations/${dec.id}`, { decision: 'valider' }, admin)).status, 200);
+  const apres = await appel('GET', `/paiements/a-payer/${numero}`);
+  assert.strictEqual(apres.solde.gnf, 0);
+  assert.strictEqual(apres.domicile.gnf, 0, 'la livraison est couverte, donc programmée');
+
+  // Pesé 8 kg au lieu de 10 : trop-payé signalé
+  r = await appel('POST', '/agent/depot', { numeroSuivi: numero, poidsReel: 8, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM' }, agentParis);
+  assert.strictEqual(r.status, 201, r.message);
+  assert.strictEqual(r.colis.solde.soldeGnf, 0);
+  assert.ok(r.colis.solde.tropPayeGnf > 0);
+  assert.ok(r.colis.historique.some(h => /Trop payé/.test(h.label)));
 });
