@@ -216,4 +216,6 @@ colisSchema.methods.genererCodeRetrait = function () {
 colisSchema.statics.empreinteCode = (numero, code) =>
   crypto.createHash('sha256').update(`${numero}:${code}`).digest('hex');
 
+// Prévient les apps ouvertes (rafraîchissement automatique)
+colisSchema.post('save', (doc) => require('../utils/temps-reel').colisChange(doc));
 module.exports = mongoose.model('Colis', colisSchema);

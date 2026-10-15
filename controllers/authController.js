@@ -11,7 +11,8 @@ const modeAuth = () => (process.env.AUTH_MODE === 'sms' && smsDisponible() ? 'sm
 const genererToken = (user) => jwt.sign(
   { id: user._id, v: user.jetonVersion || 0 },
   process.env.JWT_SECRET,
-  { expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+  // Session de 30 jours, prolongée automatiquement à chaque ouverture de l'app
+  { expiresIn: '30d', algorithm: 'HS256' },
 );
 
 // ── Connexion avec Google (espace client) ──
@@ -193,6 +194,10 @@ const lierGoogleCtrl = async (req, res) => {
   res.json({ succes: true, utilisateur: req.user });
 };
 
+// ── POST /api/auth/renouveler ── nouvelle session de 30 jours (l'app l'appelle à chaque ouverture) :
+// tant qu'on utilise l'app au moins une fois par mois, on n'est jamais déconnecté
+const renouvelerCtrl = (req, res) => res.json({ succes: true, token: genererToken(req.user), utilisateur: req.user });
+
 const moiCtrl = (req, res) => res.json({ succes: true, utilisateur: req.user });
 
-module.exports = { googleCtrl, lierGoogleCtrl, googleActif, connexionCtrl, inscriptionCtrl, changerMotDePasseCtrl, envoyerOtpCtrl, verifierOtpCtrl, moiCtrl, modeAuth, genererToken };
+module.exports = { renouvelerCtrl, googleCtrl, lierGoogleCtrl, googleActif, connexionCtrl, inscriptionCtrl, changerMotDePasseCtrl, envoyerOtpCtrl, verifierOtpCtrl, moiCtrl, modeAuth, genererToken };

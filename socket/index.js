@@ -19,8 +19,22 @@ const initSocket = (io) => {
     }
   });
 
-  io.on('connection', (socket) => {
-    console.log(`🔌 Socket connecté : ${socket.user.nomComplet}`);
+  require('../utils/temps-reel').brancher(io);
+
+  io.on('connection', async (socket) => {
+    // Chaque app rejoint les « salles » qui la concernent : elle sera prévenue des changements
+    const u = socket.user;
+    try {
+      if (u.role === 'admin') socket.join('admins');
+      if (['agent', 'livreur'].includes(u.role) && u.lieu) {
+        socket.join(`agence:${u.lieu}`);
+        const lieu = await require('../models/Config').lieu(u.lieu);
+        if (u.role === 'agent' && lieu?.plateforme) socket.join(`pays:${lieu.pays}`);
+      }
+      socket.join(`user:${u._id}`);
+      // Numéro vérifié, ou client : prévenu pour les colis à son numéro (les données restent filtrées par l'API)
+      if (u.role === 'client' && u.telephone) socket.join(`tel:${u.telephone}`);
+    } catch (e) { console.error('[socket]', e.message); }
 
     // Rejoindre la salle d'un colis spécifique
     // Seule l'équipe peut suivre un colis en direct (aucune donnée client n'y transite pour l'instant)
@@ -34,9 +48,7 @@ const initSocket = (io) => {
       socket.leave(`colis-${colisId}`);
     });
 
-    socket.on('disconnect', () => {
-      console.log(`🔌 Socket déconnecté : ${socket.user.nomComplet}`);
-    });
+    socket.on('disconnect', () => {});
   });
 };
 

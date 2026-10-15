@@ -54,4 +54,5 @@ factureSchema.pre('validate', async function (next) {
   } catch (e) { next(e); }
 });
 
+factureSchema.post('save', () => require('../utils/temps-reel').prevenir(['admins'], 'facture'));
 module.exports = mongoose.model('Facture', factureSchema);

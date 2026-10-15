@@ -50,6 +50,8 @@ reclamationSchema.pre('validate', async function (next) {
   } catch (e) { next(e); }
 });
 
+// Prévient les apps ouvertes (rafraîchissement automatique)
+reclamationSchema.post('save', (doc) => require('../utils/temps-reel').reclamationChange(doc));
 module.exports = mongoose.model('Reclamation', reclamationSchema);
 module.exports.MOTIFS = MOTIFS;
 module.exports.STATUTS = STATUTS;

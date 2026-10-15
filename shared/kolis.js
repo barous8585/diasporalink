@@ -62,7 +62,7 @@
     jeton: () => stock.lire('jeton'),
     utilisateur: () => stock.lire('utilisateur'),
     connecte: () => !!stock.lire('jeton'),
-    ouvrir(jeton, utilisateur) { stock.ecrire('jeton', jeton); stock.ecrire('utilisateur', utilisateur); },
+    ouvrir(jeton, utilisateur) { stock.ecrire('jeton', jeton); stock.ecrire('utilisateur', utilisateur); window.dispatchEvent(new Event('session-ouverte')); },
     fermer() { stock.suppr('jeton'); stock.suppr('utilisateur'); },
   };
 
@@ -323,6 +323,81 @@
       });
     };
     dessiner();
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  SESSION QUI DURE + DONNÉES TOUJOURS À JOUR + NOUVELLE VERSION SANS RECHARGER
+  // ══════════════════════════════════════════════════════════
+  // Prolonge la session (30 jours) à chaque ouverture puis toutes les 12 h : tant qu'on se sert
+  // de l'app au moins une fois par mois, on reste connecté.
+  async function prolongerSession() {
+    if (!session.connecte() || !navigator.onLine) return;
+    try {
+      const r = await api.post('/auth/renouveler');
+      if (r?.token) { stock.ecrire('jeton', r.token); stock.ecrire('utilisateur', r.utilisateur); }
+    } catch {}
+  }
+  let prolongationLancee = false;
+  function garderSession() {
+    if (prolongationLancee) return; prolongationLancee = true;
+    prolongerSession();
+    setInterval(prolongerSession, 12 * 3600 * 1000);
+    window.addEventListener('online', prolongerSession);
+  }
+
+  // Une saisie est-elle en cours ? (on ne redessine jamais l'écran sous les doigts de quelqu'un)
+  const saisieEnCours = () => {
+    const a = document.activeElement;
+    return !!(document.querySelector('.modale-fond') || (a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName) && !a.readOnly));
+  };
+
+  // Rafraîchit l'écran dès qu'une donnée change (prévenu par le serveur en direct), au retour
+  // sur l'app, au retour du réseau, et toutes les 30 s par sécurité. surMaj() redessine l'écran.
+  function tempsReel(surMaj, { intervalle = 30000 } = {}) {
+    let attente = null, dernier = Date.now(), enRetard = false, socket = null;
+    const declencher = () => {
+      clearTimeout(attente);
+      attente = setTimeout(async () => {
+        if (document.hidden || !session.connecte()) { enRetard = true; return; }
+        if (saisieEnCours()) { attente = setTimeout(declencher, 5000); return; }
+        dernier = Date.now(); enRetard = false;
+        try { await surMaj(); } catch {}
+      }, 700);
+    };
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && (enRetard || Date.now() - dernier > 10000)) declencher(); });
+    window.addEventListener('online', declencher);
+    setInterval(() => { if (!document.hidden && Date.now() - dernier >= intervalle - 500) declencher(); }, intervalle);
+    // Connexion en direct (Socket.io) : le serveur dit seulement « quelque chose a changé »
+    const connecter = async () => {
+      if (socket || !session.connecte()) return;
+      try {
+        if (!window.io) await new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'commun/vendor/socket.io.min.js'; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
+        socket = window.io(API_URL.startsWith('/') ? location.origin : API_URL.replace(/\/api\/?$/, ''), {
+          auth: (cb) => cb({ token: stock.lire('jeton') }), transports: ['websocket', 'polling'], reconnectionDelayMax: 30000,
+        });
+        socket.on('maj', declencher);
+        socket.on('connect', () => { if (Date.now() - dernier > 5000) declencher(); }); // reconnecté : on rattrape
+      } catch { socket = null; }
+    };
+    connecter();
+    // Juste après la connexion (changement d'écran), puis par sécurité toutes les minutes
+    window.addEventListener('hashchange', () => { if (!socket) connecter(); });
+    window.addEventListener('session-ouverte', () => { if (socket) { socket.disconnect(); socket = null; } connecter(); declencher(); });
+    setInterval(() => { if (!socket) connecter(); }, 60000);
+    return { maintenant: declencher };
+  }
+
+  // Nouvelle version publiée : l'app se met à jour seule (sans perdre une saisie en cours)
+  function miseAJourAuto() {
+    if (!('serviceWorker' in navigator)) return;
+    let dejaControle = !!navigator.serviceWorker.controller;
+    let aRecharger = false;
+    const recharger = () => { if (saisieEnCours()) { aRecharger = true; return; } location.reload(); };
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (dejaControle) recharger(); dejaControle = true; });
+    window.addEventListener('hashchange', () => { if (aRecharger) location.reload(); });
+    const verifier = () => navigator.serviceWorker.getRegistration().then(r => r?.update()).catch(() => {});
+    setInterval(verifier, 15 * 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) verifier(); });
   }
 
   // ── Connexion avec Google (espace client seulement, si GOOGLE_CLIENT_ID est réglé) ──
@@ -801,5 +876,6 @@
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
     positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse, choisirSurCarte, chargerLeaflet,
     lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto, notifications, sectionner, googleDispo, boutonGoogle,
+    garderSession, tempsReel, miseAJourAuto, saisieEnCours,
   };
 })();
