@@ -316,3 +316,32 @@ main { padding: 32px 40px 64px; }
 .tableau td a:not(.btn) { color: var(--t-fonce); }
 @media (max-width: 760px) { .tableau tbody tr { border-left: 4px solid var(--t); } }
 @media (min-width: 761px) { .tableau td.chiffres, .tableau td.n, .tableau th.n { white-space: nowrap; } }
+
+/* ══ Espacement : chaque bloc respire, sur téléphone surtout ══ */
+.plus-lignes { padding: 16px; text-align: center; }
+main > :is(.kpis, .kpis-couleur, .panneau, .bandeau, .deux-col, .grille-tdb, .puces) + :is(.kpis, .kpis-couleur, .panneau, .bandeau, .deux-col, .grille-tdb, form, section, .puces),
+main :not(.pile) > :is(.kpis, .kpis-couleur, .panneau, .bandeau, .deux-col, .grille-tdb, .puces) + :is(.kpis, .kpis-couleur, .panneau, .bandeau, .deux-col, .grille-tdb, form, section, .puces) { margin-top: 20px; }
+@media (max-width: 760px) {
+  main { padding: 20px 16px 56px; }
+  .entete-page { margin-bottom: 22px; }
+  .entete-page > form, .entete-page > .ligne { gap: 10px; width: 100%; }
+  .kpis, .kpis-couleur { gap: 12px; }
+  .deux-col, .grille-tdb { gap: 20px; }
+  /* Cartes à l'intérieur des panneaux : une marge autour et de l'air entre elles */
+  .panneau > .defile, .panneau-corps > .defile { padding: 12px; }
+  .tableau tbody tr { margin-bottom: 14px; padding: 12px 14px; }
+  .tableau tbody tr:last-child { margin-bottom: 0; }
+  .tableau td { padding: 9px 0 !important; }
+  /* Formulaires : de l'espace entre les champs et sous les libellés */
+  .formulaire-grille { gap: 16px !important; }
+  .panneau-corps { padding: 8px 16px 20px; }
+  .panneau-corps.pile, .panneau-corps .pile { --gap: 16px; }
+  /* Filtres (statut, agence…) : un par ligne, pleine largeur, rien de coupé */
+  main form.ligne > select.saisie, main form.ligne > input.saisie:not([type=date]) { flex: 1 1 100% !important; min-width: 0 !important; }
+  .bandeau { padding: 14px 16px; }
+}
+@media (max-width: 760px) {
+  .kpi .val { font-size: 22px !important; overflow-wrap: anywhere; }
+  .kpi { padding: 14px; }
+}
+main .bandeau:not([class*="bandeau-"]) { background: var(--t-doux); border-radius: 14px; }
