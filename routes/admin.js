@@ -181,6 +181,56 @@ router.get('/tableau', ah(async (req, res) => {
   });
 }));
 
+// ── Exports pour Excel ─────────────────────────────────────
+const periodeExport = (q) => {
+  const fin = q.fin ? new Date(`${q.fin}T23:59:59`) : new Date();
+  const debut = q.debut ? new Date(`${q.debut}T00:00:00`) : new Date(fin.getTime() - 30 * 86400000);
+  return { debut, fin };
+};
+// GET /api/admin/export/colis.csv?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ ── tous les colis créés sur la période
+router.get('/export/colis.csv', ah(async (req, res) => {
+  const { envoyerCsv, dateFr } = require('../utils/csv');
+  const { debut, fin } = periodeExport(req.query);
+  const config = await Config.get();
+  const liste = await Colis.find({ createdAt: { $gte: debut, $lte: fin } }).sort({ createdAt: 1 }).limit(20000).lean();
+  const nom = (code) => (config.agences || []).find(a => a.code === code)?.nom || code || '';
+  const lignes = liste.map(c => {
+    const sd = calculerSolde(c, config);
+    return [c.numeroSuivi, dateFr(c.createdAt), require('../config/constants').STATUTS_LABELS[c.statut] || c.statut, c.sens || 'FR-GN', require('../config/constants').libMode(c.mode),
+      c.expediteur?.nom, c.expediteur?.telephone, c.destinataire?.nom, c.destinataire?.telephone, nom(c.depot), nom(c.guichet),
+      c.poidsEstime ?? '', c.poidsReel ?? '', (c.articles || []).map(a => `${a.quantite} ${a.label}`).join(', '), c.typeColis,
+      c.tarif?.estime ? 'estimé' : 'définitif', c.tarif?.totalEur ?? '', c.tarif?.totalGnf ?? '', sd.payeGnf, sd.soldeGnf,
+      c.ramassage?.demande && c.ramassage.statut !== 'annulee' ? 'oui' : 'non', c.livraison?.demande && c.livraison.statut !== 'annulee' ? 'oui' : 'non', c.lotCode || '', c.payeurArrivee ? 'oui' : 'non'];
+  });
+  envoyerCsv(res, `colis-TMS-${req.query.debut || 'debut'}-au-${req.query.fin || 'aujourdhui'}.csv`,
+    ['Numéro', 'Créé le', 'Statut', 'Sens', 'Mode', 'Expéditeur', 'Tél. expéditeur', 'Destinataire', 'Tél. destinataire', 'Agence de départ', 'Agence de retrait',
+      'Poids annoncé (kg)', 'Poids pesé (kg)', 'Articles à la pièce', 'Type', 'Prix', 'Prix (€)', 'Prix (GNF)', 'Payé (GNF)', 'Reste à payer (GNF)',
+      'Ramassage', 'Livraison à domicile', 'Lot', 'Payé à l\'arrivée'], lignes);
+}));
+// GET /api/admin/export/encaissements.csv?debut&fin ── chaque paiement (comptoir, livreur, en ligne)
+router.get('/export/encaissements.csv', ah(async (req, res) => {
+  const { envoyerCsv, dateFr, heureFr } = require('../utils/csv');
+  const { debut, fin } = periodeExport(req.query);
+  const config = await Config.get();
+  const User = require('../models/User');
+  const liste = await Colis.find({ 'paiements.le': { $gte: debut, $lte: fin } }).select('numeroSuivi paiements expediteur tarif').lean();
+  const agents = Object.fromEntries((await User.find({ role: { $in: ['agent', 'livreur', 'admin'] } }).select('prenom nom').lean()).map(u => [String(u._id), `${u.prenom} ${u.nom}`]));
+  const nom = (code) => (code === 'EN_LIGNE' ? 'En ligne' : (config.agences || []).find(a => a.code === code)?.nom || code || '');
+  const LIB = Object.fromEntries(require('../config/constants').METHODES_PAIEMENT.map(m => [m.key, m.label]));
+  const lignes = [];
+  for (const c of liste) {
+    for (const p of c.paiements || []) {
+      if (!(new Date(p.le) >= debut && new Date(p.le) <= fin)) continue;
+      const taux = c.tarif?.taux || config.tauxEurGnf;
+      lignes.push([dateFr(p.le), heureFr(p.le), c.numeroSuivi, c.expediteur?.nom, nom(p.lieu), agents[String(p.agent)] || (p.lieu === 'EN_LIGNE' ? 'Client' : ''),
+        LIB[p.methode] || p.methode, p.objet === 'domicile' ? 'Ramassage / livraison' : 'Colis', p.devise, p.montant, p.devise === 'EUR' ? p.montant : p.montant / taux, p.reference || '']);
+    }
+  }
+  lignes.sort((a, b) => a[0].split('/').reverse().join('').localeCompare(b[0].split('/').reverse().join('')) || a[1].localeCompare(b[1]));
+  envoyerCsv(res, `encaissements-TMS-${req.query.debut || 'debut'}-au-${req.query.fin || 'aujourdhui'}.csv`,
+    ['Date', 'Heure', 'Colis', 'Client', 'Lieu', 'Encaissé par', 'Moyen', 'Pour', 'Devise', 'Montant', 'Équivalent €', 'Référence'], lignes);
+}));
+
 // ── GET /api/admin/stats
 router.get('/stats', ah(async (req, res) => {
   const config = await Config.get();

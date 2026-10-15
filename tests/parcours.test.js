@@ -555,6 +555,27 @@ test('conditions, factures conformes, photo au dépôt et réclamation', async (
   // Rien à refacturer
   assert.strictEqual((await appel('POST', `/factures/colis/${numero}/emettre`, null, agentParis)).status, 409);
 
+  // « Mes factures » du client : la facture du dépôt y figure, avec son lien
+  const mes = await appel('GET', '/factures/mes', null, client);
+  assert.strictEqual(mes.status, 200, mes.message);
+  assert.ok(mes.factures.some(f => f.numero === fa.numero && f.jeton && f.etat === 'payee'));
+  // Un autre client ne voit pas cette facture
+  const autre = await connexion('0655555500', 'Autre', 'Client');
+  assert.ok(!(await appel('GET', '/factures/mes', null, autre)).factures.some(f => f.numero === fa.numero));
+
+  // Exports Excel (CSV) de l'admin : colis et encaissements ; interdits aux clients
+  const jour = new Date().toLocaleDateString('sv'); // AAAA-MM-JJ à l'heure locale, comme le serveur
+  for (const nom of ['colis', 'encaissements']) {
+    const res = await fetch(`${API}/admin/export/${nom}.csv?debut=${jour}&fin=${jour}`, { headers: { Authorization: `Bearer ${admin}` } });
+    assert.strictEqual(res.status, 200);
+    assert.match(res.headers.get('content-type'), /text\/csv/);
+    const octets = Buffer.from(await res.arrayBuffer());
+    assert.deepStrictEqual([...octets.subarray(0, 3)], [0xEF, 0xBB, 0xBF], 'BOM pour Excel');
+    const txt = octets.toString('utf8');
+    assert.ok(txt.includes(numero), `${nom} : le colis du jour est dans le fichier`);
+    assert.strictEqual((await fetch(`${API}/admin/export/${nom}.csv`, { headers: { Authorization: `Bearer ${client}` } })).status, 403);
+  }
+
   // Photo : visible par le client du colis, pas par un inconnu
   const resPhoto = await fetch(`${API}/photos/${r.colis.photoDepot}`, { headers: { Authorization: `Bearer ${client}` } });
   assert.strictEqual(resPhoto.headers.get('content-type'), 'image/jpeg');

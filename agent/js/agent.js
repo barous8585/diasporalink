@@ -806,7 +806,16 @@
     try {
       let { factures } = await api.get(`/factures/colis/${numero}`);
       if (filtre) factures = factures.filter(filtre);
-      if (!factures.length) { zone.innerHTML = ''; return; }
+      if (!factures.length) {
+        // Rien d'émis : l'agent peut émettre la facture de ce qui est dû (colis pesé)
+        zone.innerHTML = `<button type="button" class="btn btn-plein" data-emettre>${ic('liste', 'ic-sm')} Émettre la facture</button>`;
+        zone.querySelector('[data-emettre]').addEventListener('click', async (e) => {
+          e.currentTarget.disabled = true;
+          try { await api.post(`/factures/colis/${numero}/emettre`); toast('Facture émise.', 'ok'); blocFactures(zone, numero, { tel, filtre }); }
+          catch (err) { toast(err.status === 409 ? 'Rien à facturer pour le moment.' : err.message, 'erreur'); zone.innerHTML = ''; }
+        });
+        return;
+      }
       const wa = String(tel || '').replace(/[^\d]/g, '');
       zone.innerHTML = factures.map(f => {
         const lien = K.lienFacture(f);
@@ -814,9 +823,10 @@
         return `
           <div class="carte pile" style="--gap:8px">
             <div class="ligne entre"><span class="gras">${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${esc(f.numero)}</span><span class="gras chiffres">${montant(f.totalTTC, f.devise)}</span></div>
-            <div class="grille-2">
-              <a class="btn" href="${esc(lien)}" target="_blank" rel="noopener">${ic('imprimer', 'ic-sm')} Ouvrir / imprimer</a>
-              <a class="btn" href="https://wa.me/${esc(wa)}?text=${encodeURIComponent(texte)}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} WhatsApp au client</a>
+            <div class="grille-3">
+              <a class="btn btn-petit" href="${esc(lien)}" target="_blank" rel="noopener">${ic('liste', 'ic-sm')} Voir</a>
+              <a class="btn btn-petit" href="${esc(lien)}&imprimer=1" target="_blank" rel="noopener">${ic('imprimer', 'ic-sm')} Imprimer</a>
+              <a class="btn btn-petit" href="https://wa.me/${esc(wa)}?text=${encodeURIComponent(texte)}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} WhatsApp</a>
             </div>
           </div>`;
       }).join('');
