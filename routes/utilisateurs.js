@@ -22,8 +22,13 @@ router.patch('/moi', auth, [
 
 // ── Équipe (admin) ─────────────────────────
 router.get('/equipe', auth, role(ROLES.ADMIN), ah(async (req, res) => {
-  const equipe = await User.find({ role: { $in: [ROLES.AGENT, ROLES.LIVREUR, ROLES.ADMIN] } }).sort({ prenom: 1 });
-  res.json({ succes: true, equipe });
+  // L'équipe fictive de la démo n'est pas mélangée à la vraie
+  const roles = { $in: [ROLES.AGENT, ROLES.LIVREUR, ROLES.ADMIN] };
+  const [equipe, demo] = await Promise.all([
+    User.find({ role: roles, demo: { $ne: true } }).sort({ prenom: 1 }),
+    User.countDocuments({ role: roles, demo: true }),
+  ]);
+  res.json({ succes: true, equipe, demo });
 }));
 
 router.post('/equipe', auth, role(ROLES.ADMIN), [

@@ -67,7 +67,9 @@ function filtrePeriode(q) {
   return { date: { $gte: debut, $lte: fin } };
 }
 router.get('/', auth, role(ROLES.ADMIN), ah(async (req, res) => {
-  const factures = await Facture.find(filtrePeriode(req.query)).sort({ date: -1 }).limit(2000).lean();
+  // Liste : seulement l'en-tête de chaque facture (le détail s'ouvre à part)
+  const factures = await Facture.find(filtrePeriode(req.query)).sort({ date: -1 }).limit(2000)
+    .select('numero type date numeroSuivi client agence devise totalHT totalTVA totalTTC totalGnf factureOrigine jeton colis demo').lean();
   res.json({ succes: true, factures });
 }));
 

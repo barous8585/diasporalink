@@ -247,6 +247,7 @@
     const visibles = ongletsVisibles();
     if (!ONGLETS[onglet] || (!visibles.includes(onglet) && !ONGLETS[onglet].cache)) onglet = visibles[0];
     document.querySelector('[data-titre]').textContent = ONGLETS[onglet].lib;
+    document.body.classList.remove('deconnecte');
     dessinerNav(onglet);
     main.classList.add('entree');
     main.innerHTML = '<div class="chargement"></div>';
@@ -258,6 +259,7 @@
   document.querySelector('[data-recherche]').addEventListener('click', () => { location.hash = '#/fiche'; });
 
   function connexion() {
+    document.body.classList.add('deconnecte');
     document.querySelector('[data-nav]').innerHTML = '';
     document.querySelector('[data-titre]').textContent = `${CONFIG?.appCourt || 'TMS'} Agent`;
     document.querySelector('[data-qui]').textContent = 'Espace équipe';

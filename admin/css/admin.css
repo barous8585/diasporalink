@@ -254,3 +254,31 @@ main { padding: 32px 40px 64px; }
 .a-faire-bandeau { margin-bottom: 24px; }
 .bloc-ca { margin-top: 24px; }
 @media (max-width: 760px) { main { padding: 20px 16px 48px; } .panneau-tete { padding: 16px; } .panneau-corps { padding: 4px 16px 18px; } }
+
+/* ── Téléphone : cartes de tableau propres, en-têtes de panneau qui passent à la ligne ── */
+@media (max-width: 760px) {
+  .tableau tbody tr, .tableau tbody tr:nth-child(even) { background: #fff; padding: 10px 14px; }
+  .tableau tbody tr td, .tableau tbody tr:nth-child(even) td, .tableau tbody tr.cliquable:hover td { background: transparent !important; }
+  /* Libellé à gauche, contenu groupé à droite (même s'il a plusieurs morceaux : nom + rôle…) */
+  .tableau td { display: block !important; text-align: right; padding: 7px 0 !important; overflow: hidden; line-height: 1.45; }
+  .tableau td::before { float: left; margin-right: 14px; line-height: 1.6; }
+  .tableau td + td { border-top: 1px solid #EEF1F6 !important; }
+  .tableau td > .ligne { justify-content: flex-end; flex-wrap: wrap; }
+  .tableau td select.saisie { width: auto; max-width: 62%; min-width: 0; }
+  .tableau td[colspan] { text-align: center; }
+  .panneau-tete { flex-wrap: wrap; gap: 12px; align-items: flex-start !important; }
+  .panneau-tete > .ligne { flex-wrap: wrap; }
+  .panneau-tete .btn, .entete-page .btn { white-space: nowrap; }
+}
+@media (max-width: 760px) { .tableau td .case { display: inline-flex; } .tableau td input[type=checkbox]:only-child { margin-left: auto; } }
+/* Téléphone : rangées de puces (lots, filtres) sur une ligne qui défile au doigt */
+@media (max-width: 760px) {
+  .puces { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 2px 16px 6px; }
+  .puces::-webkit-scrollbar { display: none; }
+  .puces .puce { white-space: nowrap; flex-shrink: 0; }
+}
+@media (max-width: 760px) {
+  .entete-page { flex-wrap: wrap; gap: 12px; }
+  .entete-page > *, .entete-page .ligne { flex-wrap: wrap; max-width: 100%; min-width: 0; }
+  .entete-page select.saisie { width: auto; max-width: 100%; min-width: 0; }
+}

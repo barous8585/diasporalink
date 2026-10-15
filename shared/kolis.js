@@ -110,6 +110,8 @@
   const TRACES = {
     colis: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5"/><path d="M12 12v9"/>',
     loupe: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    oeil: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    'oeil-barre': '<path d="M2 12s3.6-7 10-7c2 0 3.8.7 5.2 1.6M22 12s-3.6 7-10 7c-2 0-3.8-.7-5.2-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m3 3 18 18"/>',
     scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/>',
     cloche: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/>',
     bulle: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
@@ -256,7 +258,7 @@
       <label class="champ">${lib}
         <span class="ligne" style="--gap:6px">
           <input class="saisie saisie-forte grandit" name="${nom}" type="password" autocomplete="${auto}" minlength="8" required>
-          <button type="button" class="btn btn-carre" style="width:52px;height:52px" data-voir="${nom}" aria-label="Afficher le mot de passe">${ic('loupe', 'ic-sm')}</button>
+          <button type="button" class="btn btn-carre" style="width:52px;height:52px" data-voir="${nom}" aria-label="Afficher le mot de passe" aria-pressed="false">${ic('oeil', 'ic-sm')}</button>
         </span>
       </label>`;
     const dessiner = (erreur = '') => {
@@ -291,7 +293,12 @@
         </form>`;
       cible.querySelectorAll('[data-vue]').forEach(b => b.addEventListener('click', () => { vue = b.dataset.vue; dessiner(); }));
       cible.querySelectorAll('[data-voir]').forEach(b => b.addEventListener('click', () => {
-        const i = cible.querySelector(`[name="${b.dataset.voir}"]`); i.type = i.type === 'password' ? 'text' : 'password';
+        const i = cible.querySelector(`[name="${b.dataset.voir}"]`);
+        const visible = i.type === 'password';
+        i.type = visible ? 'text' : 'password';
+        b.innerHTML = ic(visible ? 'oeil-barre' : 'oeil', 'ic-sm');
+        b.setAttribute('aria-label', visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+        b.setAttribute('aria-pressed', String(visible));
       }));
       const form = cible.querySelector('form');
       if (!form) return;
