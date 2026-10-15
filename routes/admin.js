@@ -182,9 +182,12 @@ router.get('/tableau', ah(async (req, res) => {
 }));
 
 // ── Exports pour Excel ─────────────────────────────────────
+// Date mise dans un nom de fichier : chiffres et tirets seulement
+const dateFichier = (v, defaut) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : defaut);
 const periodeExport = (q) => {
-  const fin = q.fin ? new Date(`${q.fin}T23:59:59`) : new Date();
-  const debut = q.debut ? new Date(`${q.debut}T00:00:00`) : new Date(fin.getTime() - 30 * 86400000);
+  const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) && !isNaN(new Date(`${v}T00:00:00`));
+  const fin = ok(q.fin) ? new Date(`${q.fin}T23:59:59`) : new Date();
+  const debut = ok(q.debut) ? new Date(`${q.debut}T00:00:00`) : new Date(fin.getTime() - 30 * 86400000);
   return { debut, fin };
 };
 // GET /api/admin/export/colis.csv?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ ── tous les colis créés sur la période
@@ -202,7 +205,7 @@ router.get('/export/colis.csv', ah(async (req, res) => {
       c.tarif?.estime ? 'estimé' : 'définitif', c.tarif?.totalEur ?? '', c.tarif?.totalGnf ?? '', sd.payeGnf, sd.soldeGnf,
       c.ramassage?.demande && c.ramassage.statut !== 'annulee' ? 'oui' : 'non', c.livraison?.demande && c.livraison.statut !== 'annulee' ? 'oui' : 'non', c.lotCode || '', c.payeurArrivee ? 'oui' : 'non'];
   });
-  envoyerCsv(res, `colis-TMS-${req.query.debut || 'debut'}-au-${req.query.fin || 'aujourdhui'}.csv`,
+  envoyerCsv(res, `colis-TMS-${dateFichier(req.query.debut, 'debut')}-au-${dateFichier(req.query.fin, 'aujourdhui')}.csv`,
     ['Numéro', 'Créé le', 'Statut', 'Sens', 'Mode', 'Expéditeur', 'Tél. expéditeur', 'Destinataire', 'Tél. destinataire', 'Agence de départ', 'Agence de retrait',
       'Poids annoncé (kg)', 'Poids pesé (kg)', 'Articles à la pièce', 'Type', 'Prix', 'Prix (€)', 'Prix (GNF)', 'Payé (GNF)', 'Reste à payer (GNF)',
       'Ramassage', 'Livraison à domicile', 'Lot', 'Payé à l\'arrivée'], lignes);
@@ -227,7 +230,7 @@ router.get('/export/encaissements.csv', ah(async (req, res) => {
     }
   }
   lignes.sort((a, b) => a[0].split('/').reverse().join('').localeCompare(b[0].split('/').reverse().join('')) || a[1].localeCompare(b[1]));
-  envoyerCsv(res, `encaissements-TMS-${req.query.debut || 'debut'}-au-${req.query.fin || 'aujourdhui'}.csv`,
+  envoyerCsv(res, `encaissements-TMS-${dateFichier(req.query.debut, 'debut')}-au-${dateFichier(req.query.fin, 'aujourdhui')}.csv`,
     ['Date', 'Heure', 'Colis', 'Client', 'Lieu', 'Encaissé par', 'Moyen', 'Pour', 'Devise', 'Montant', 'Équivalent €', 'Référence'], lignes);
 }));
 

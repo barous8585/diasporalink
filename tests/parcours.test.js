@@ -1222,3 +1222,48 @@ test('un agent ne voit que les colis de son agence', async () => {
   assert.strictEqual((await appel('GET', `/agent/reservations?q=${resa}`, null, agentMatoto)).colis.length, 1, 'par numéro de suivi : oui');
   assert.ok((await appel('GET', '/agent/reservations?q=0699990000', null, agentParis)).colis.length >= 1);
 });
+
+test('injections : opérateurs MongoDB, types inattendus, recherche, noms de fichiers', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');
+  const client = await connexion('0655555555', 'Fanta', 'Camara');
+  const brut = async (methode, chemin, corpsTexte, token) => {
+    const res = await fetch(API + chemin, { method: methode, headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) }, body: corpsTexte });
+    return { status: res.status, data: await res.json().catch(() => ({})) };
+  };
+  // Connexion : opérateurs, tableaux, objets à la place du texte
+  for (const corps of [
+    { telephone: { $gt: '' }, motDePasse: { $gt: '' } },
+    { telephone: ['+33600000001'], motDePasse: ['x'] },
+    { telephone: ADMIN_TEL, motDePasse: { $ne: 'x' } },
+    { 'telephone.$ne': 1, motDePasse: 'x' },
+  ]) {
+    const r = await appel('POST', '/auth/connexion', corps);
+    assert.ok(!r.token, `pas de session avec ${JSON.stringify(corps)}`);
+    assert.ok(r.status >= 400 && r.status < 500, `${JSON.stringify(corps)} → ${r.status}`);
+  }
+  // Paramètres d'URL : opérateurs dans la chaîne de requête
+  let r = await appel('GET', '/agent/reservations?q[$ne]=x', null, agentParis);
+  assert.ok(r.status < 500 && !(r.colis || []).length);
+  r = await appel('GET', '/admin/colis?q[$regex]=.*&statut[$ne]=x', null, admin);
+  assert.ok(r.status < 500);
+  r = await appel('GET', '/reclamations?statut[$ne]=zz', null, admin);
+  assert.strictEqual(r.status, 200);
+  // Suivi public et facture publique : chaînes spéciales
+  assert.strictEqual((await appel('GET', `/colis/suivi/${encodeURIComponent('{"$ne":null}')}`)).status, 404);
+  assert.strictEqual((await appel('GET', `/factures/public/FA-2026-00001?t[$ne]=x`)).status, 404, 'jeton forgé refusé');
+  // Recherche admin : les caractères spéciaux sont pris à la lettre
+  r = await appel('GET', `/admin/colis?q=${encodeURIComponent('.*(a+)+$')}`, null, admin);
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.colis.length, 0);
+  // Corps de requête avec opérateurs imbriqués : ignorés, jamais exécutés
+  r = await brut('POST', '/paiements/mobile', JSON.stringify({ numero: { $gt: '' }, methode: 'orange_money', reference: 'ABCDEF' }));
+  assert.ok(r.status >= 400 && r.status < 500);
+  r = await brut('PATCH', '/utilisateurs/moi', JSON.stringify({ prenom: 'Fanta', role: 'admin', verifie: true, $set: { role: 'admin' } }), client);
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual((await appel('GET', '/auth/moi', null, client)).utilisateur.role, 'client', 'le rôle ne change pas');
+  // Nom de fichier d'export : seulement une date
+  const res = await fetch(`${API}/admin/export/colis.csv?debut=${encodeURIComponent('2026-01-01"\r\nX-Pirate: 1')}`, { headers: { Authorization: `Bearer ${admin}` } });
+  assert.ok(!res.headers.get('x-pirate'));
+  assert.match(res.headers.get('content-disposition'), /^attachment; filename="colis-TMS-debut-au-/);
+});
