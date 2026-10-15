@@ -88,9 +88,19 @@
     router({ silencieux: true }).then(() => window.scrollTo(0, y));
   }, 60000);
 
+  // Connexion obligatoire : sans compte, seules la connexion et les pages légales sont visibles
+  const PAGES_LIBRES = /^\/(connexion|cgv|interdits|confidentialite)$/;
   async function router({ silencieux = false } = {}) {
     const chemin = location.hash.replace(/^#/, '') || '/';
     bandeauReseau(null);
+    const connecte = session.connecte();
+    document.body.classList.toggle('hors-session', !connecte);
+    if (!connecte && !PAGES_LIBRES.test(chemin)) {
+      // On garde la page demandée (ex. lien de suivi reçu) pour y revenir après la connexion
+      if (chemin !== '/') stock.ecrire('retour', `#${chemin}`);
+      if (location.hash !== '#/connexion') { location.hash = '#/connexion'; return; }
+    }
+    if (connecte && chemin === '/connexion' && !silencieux) { location.hash = stock.lire('retour') || '#/'; stock.suppr('retour'); return; }
     for (const [re, vue, nav] of routes) {
       const m = chemin.match(re);
       if (m) {
@@ -1303,8 +1313,9 @@
   //  COMPTE / CONNEXION
   // ════════════════════════════════════════════════════════
   function connexion() {
-    K.vueConnexion(main, {
-      titre: 'Connexion',
+    main.innerHTML = '<div data-zone-connexion></div><nav class="liens-legaux" aria-label="Informations"><a href="#/cgv">Conditions générales</a><a href="#/confidentialite">Confidentialité</a><a href="#/interdits">Objets interdits</a></nav>';
+    K.vueConnexion(main.querySelector('[data-zone-connexion]'), {
+      titre: session.connecte() ? 'Connexion' : 'Connectez-vous pour accéder à vos colis',
       surSucces: () => {
         const retour = stock.lire('retour') || '#/';
         stock.suppr('retour');
