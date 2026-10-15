@@ -112,3 +112,9 @@ main > .pile { --gap: 22px; }
 .page-suivi .carte-ocre > .ligne.entre { flex-direction: column; align-items: stretch !important; gap: 14px; }
 .page-suivi .carte-ocre > .ligne.entre > .btn { width: 100%; min-height: 52px; }
 .page-suivi .carte-ocre { gap: 10px !important; }
+/* Sans connexion : seul l'écran de connexion (pas de menu ni d'onglets) */
+body.hors-session .barre-nav, body.hors-session .entete { display: none !important; }
+body.hors-session main { padding-top: 28px; }
+body.hors-session .coque { padding-bottom: 32px; }
+.liens-legaux { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 16px; margin-top: 18px; font-size: 13px; }
+.liens-legaux a { color: var(--gris); }
