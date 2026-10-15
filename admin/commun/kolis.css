@@ -423,3 +423,8 @@ h1 + p, h2 + p { margin-top: 2px; }
 form.pile:has(> .bloc-etape) { gap: 20px; }
 .case-cgv { padding: 4px 2px; }
 @media (max-width: 400px) { .bloc-etape { padding: 18px 14px; } }
+
+/* Connexion avec Google */
+.separateur-ou { display: flex; align-items: center; gap: 12px; color: var(--gris); font-size: 13px; font-weight: 600; }
+.separateur-ou::before, .separateur-ou::after { content: ''; flex: 1; height: 1px; background: var(--ligne-2); }
+.zone-google { display: flex; justify-content: center; min-height: 44px; }

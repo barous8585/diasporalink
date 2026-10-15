@@ -33,6 +33,8 @@ router.get('/', ah(async (req, res) => {
     moyensPaiement: require('../controllers/paiementController').moyensEnLigne(c),
     cgvVersion: CGV_VERSION,
     frontendUrl: process.env.FRONTEND_URL || '',
+    // Identifiant public de l'app Google (le bouton « Continuer avec Google » n'apparaît que s'il est réglé)
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     agences: (c.agences || []).filter(a => a.actif !== false),
     methodesPaiement: METHODES_PAIEMENT,
     statuts: STATUTS_LABELS,

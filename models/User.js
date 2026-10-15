@@ -25,6 +25,7 @@ const userSchema = new mongoose.Schema({
   bloqueJusqua: { type: Date, select: false },
   jetonVersion: { type: Number, default: 0 },             // +1 = déconnecte partout
   stripeId:    { type: String },
+  googleId:    { type: String, index: { unique: true, sparse: true } }, // compte Google relié (connexion « avec Google »)
 }, {
   timestamps: true,
   toJSON: {
@@ -36,6 +37,8 @@ const userSchema = new mongoose.Schema({
       delete obj.bloqueJusqua;
       delete obj.__v;
       delete obj.stripeId;
+      obj.google = !!obj.googleId; // on dit seulement si Google est relié
+      delete obj.googleId;
       return obj;
     },
   },

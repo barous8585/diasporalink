@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const {
-  connexionCtrl, inscriptionCtrl, changerMotDePasseCtrl, envoyerOtpCtrl, verifierOtpCtrl, moiCtrl,
+  connexionCtrl, inscriptionCtrl, changerMotDePasseCtrl, envoyerOtpCtrl, verifierOtpCtrl, moiCtrl, googleCtrl, lierGoogleCtrl,
 } = require('../controllers/authController');
 const { auth } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
@@ -20,7 +20,7 @@ router.post('/inscription', [
 ], valider, ah(inscriptionCtrl));
 
 router.patch('/mot-de-passe', auth, [
-  body('actuel').notEmpty().withMessage('Mot de passe actuel requis'),
+  body('actuel').optional().isString(),
   body('nouveau').isLength({ min: 8, max: 100 }).withMessage('Nouveau mot de passe : 8 caractères minimum'),
 ], valider, ah(changerMotDePasseCtrl));
 
@@ -35,5 +35,9 @@ router.post('/verifier-otp', [
 ], valider, ah(verifierOtpCtrl));
 
 router.get('/moi', auth, moiCtrl);
+
+// ── Connexion avec Google (espace client) ──
+router.post('/google', [body('credential').isString().isLength({ min: 20, max: 5000 }).withMessage('Connexion Google invalide')], valider, ah(googleCtrl));
+router.post('/google/lier', auth, [body('credential').isString().isLength({ min: 20, max: 5000 }).withMessage('Connexion Google invalide')], valider, ah(lierGoogleCtrl));
 
 module.exports = router;
