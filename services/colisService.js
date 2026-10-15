@@ -249,6 +249,16 @@ async function deposer(agent, data) {
   if (!colis.payeurArrivee) await require('./factureService').emettreSansBloquer(colis, { moment: 'depot', agent });
 
   notifier(colis.expediteur.telephone, MESSAGES.depose(colis));
+  // Payé en ligne plus que le prix pesé : la différence est à rendre (l'admin est prévenu)
+  const taux = colis.tarif?.taux || config.tauxEurGnf;
+  const enLigneGnf = (colis.paiements || []).filter(p => p.lieu === 'EN_LIGNE').reduce((t, p) => t + enGnf(p.montant, p.devise, taux), 0);
+  const tropPayeGnf = Math.round(enLigneGnf - calculerSolde(colis, config).duGnf);
+  if (tropPayeGnf > 0) {
+    colis.historique.push({ label: 'Trop payé en ligne, à rendre au client', detail: `${tropPayeGnf.toLocaleString('fr-FR')} GNF`, le: new Date() });
+    await colis.save();
+    const push = require('../utils/push');
+    push.sansAttendre(push.auxAdmins({ titre: 'Trop payé à rendre', corps: `${colis.numeroSuivi} : le client a payé ${tropPayeGnf.toLocaleString('fr-FR')} GNF de plus que le prix pesé.`, chemin: `/#/colis?q=${colis.numeroSuivi}` }));
+  }
   return { colis: await vueComplete(colis, { avecCode: 'tot' }), ecartPoids: ecart };
 }
 

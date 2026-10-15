@@ -192,6 +192,8 @@ function calculerSolde(colis, config, maintenant = new Date()) {
     duGnf: du,
     payeGnf: paye,
     soldeGnf,
+    // Payé en ligne sur un prix estimé plus élevé que le prix pesé : à rendre au client
+    tropPayeGnf: Math.max(0, Math.round(paye - du)),
     soldeEur: arrondi2(soldeGnf / taux),
     domicileGnf,
     magasinage,

@@ -323,9 +323,11 @@
               <div class="titre" style="font-size:24px;font-weight:800">${principal(solde.soldeGnf, solde.soldeEur)}</div>
               <div class="tres-petit">soit ${secondaire(solde.soldeGnf, solde.soldeEur)}${estime ? ' · fixé à la pesée' : ''}</div>
             </div>
-            ${!estime && solde.soldeGnf > 0 && !enVerif ? '<button class="btn btn-noir" data-payer>Payer</button>' : domicileAPayer && !enVerif ? '<button class="btn btn-noir" data-payer-domicile>Payer la livraison</button>' : ''}
+            ${solde.soldeGnf > 0 && !enVerif && (complet || !estime) ? `<button class="btn btn-noir" data-payer>${ic('carte', 'ic-sm')} Payer</button>` : domicileAPayer && !enVerif ? '<button class="btn btn-noir" data-payer-domicile>Payer la livraison</button>' : ''}
           </div>
-        </section>` : !fini && !estime ? `<p class="bandeau bandeau-vert">${ic('ok', 'ic-sm')}<span>Tout est payé.</span></p>` : ''}
+          ${solde.soldeGnf > 0 && !enVerif ? `<p class="tres-petit">${estime ? 'Payez maintenant en ligne (carte, mobile money) ou à l\'agence au dépôt. La différence éventuelle se règle à la pesée.' : 'En ligne par carte ou mobile money, ou à l\'agence.'}</p>` : ''}
+        </section>` : !fini && (solde.payeGnf > 0 || !estime) ? `<p class="bandeau bandeau-vert">${ic('ok', 'ic-sm')}<span>${estime ? 'Payé en ligne. Le prix final est fixé à la pesée.' : 'Tout est payé.'}</span></p>` : ''}
+        ${complet && solde.tropPayeGnf > 0 && !fini ? `<p class="bandeau bandeau-ocre">${ic('billet', 'ic-sm')}<span>Vous avez payé ${esc(principal(solde.tropPayeGnf, solde.tropPayeGnf / (c.tarif?.taux || CONFIG.tauxEurGnf)))} de plus que le prix pesé : l'agence vous le rend.</span></p>` : ''}
         ${pret && joursRestants !== null ? `<p class="petit ${joursRestants > 0 ? 'muet' : ''}" style="${joursRestants > 0 ? '' : 'color:var(--rouge);font-weight:600'}">${joursRestants > 0 ? `Retrait gratuit encore ${joursRestants} jour(s), ensuite ${fraisJour} par jour.` : `Frais de garde : ${principal(mag.fraisGnf, mag.fraisGnf / (c.tarif?.taux || CONFIG.tauxEurGnf))} (${mag.joursFactures} jour(s)).`}</p>` : ''}
 
         ${carteCourses(c, ram, liv)}
@@ -642,8 +644,9 @@
       toast(enAttente.length ? 'Votre paiement est en cours de vérification.' : 'Rien à payer pour le moment.', enAttente.length ? '' : 'ok');
       return;
     }
+    const dejaVus = new Set(); // un même moyen (ex. Orange Money) n'est montré qu'une fois
     const groupe = (p) => {
-      const liste = r.moyens[p] || [];
+      const liste = (r.moyens[p] || []).filter(m => !dejaVus.has(m.key) && dejaVus.add(m.key));
       if (!liste.length) return '';
       return `<div class="pile" style="--gap:8px">
         <div class="tres-petit gras muet">Je paie depuis ${p === 'FR' ? 'la France' : 'la Guinée'}</div>
@@ -661,7 +664,7 @@
       <div class="pile" style="--gap:16px" data-etape-paiement>
         <div class="ligne entre"><h2>${choix === 'domicile' ? 'Payer la livraison' : 'Payer le colis'}</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
         <div class="carte-noire pile" style="--gap:2px">
-          <div class="petit" style="color:var(--gris)">${choix === 'domicile' ? 'Ramassage / livraison à domicile' : 'Reste à payer'} · ${esc(numero)}</div>
+          <div class="petit" style="color:var(--gris)">${choix === 'domicile' ? 'Ramassage / livraison à domicile' : r.solde.estime ? 'Prix estimé, ajusté à la pesée' : 'Reste à payer'} · ${esc(numero)}</div>
           <div class="prix-gnf">${enGnfD ? gnf(du.gnf) : eur(du.eur)}</div>
           <div class="petit">soit ${enGnfD ? eur(du.eur) : gnf(du.gnf)}</div>
         </div>
@@ -839,7 +842,14 @@
           <label class="champ">Nom du destinataire <input class="saisie" name="nom" required autocomplete="off"></label>
           <label class="champ"><span data-lib-tel>Son téléphone</span> <input class="saisie" name="telephone" type="tel" inputmode="tel" required></label>
           <label class="champ">Contenu (facultatif) <input class="saisie" name="description" placeholder="Ex. vêtements, pagnes, épices"></label>
-          <label class="case"><input type="checkbox" name="payeurArrivee"> Le destinataire paiera à l'arrivée</label>
+          <h3>8. Paiement</h3>
+          <div class="pile quand-payer" style="--gap:8px" role="group" aria-label="Quand payer">
+            <button type="button" class="choix choix-noir" data-quand="enligne"><span class="nom">${ic('carte', 'ic-sm')} Payer maintenant en ligne</span><span class="sous" data-sous-enligne>Carte bancaire ou mobile money</span></button>
+            <button type="button" class="choix choix-noir" data-quand="agence"><span class="nom">${ic('maison', 'ic-sm')} Payer à l'agence, au dépôt</span><span class="sous">Espèces, carte ou mobile money</span></button>
+            <button type="button" class="choix choix-noir" data-quand="arrivee"><span class="nom">${ic('ajoutPers', 'ic-sm')} Le destinataire paie à l'arrivée</span><span class="sous">Dans sa monnaie, au retrait</span></button>
+          </div>
+          <input type="checkbox" name="payeurArrivee" hidden>
+          <p class="tres-petit muet" data-note-quand></p>
           <label class="case" style="align-items:flex-start"><input type="checkbox" name="cgv" style="margin-top:2px"> <span>J'accepte les <a href="#/cgv" target="_blank">conditions générales</a> et je confirme que mon colis ne contient aucun <a href="#/interdits" target="_blank">objet interdit</a>.</span></label>
           <button class="btn btn-principal btn-grand btn-plein" type="submit">Réserver mon envoi</button>
           <p class="tres-petit muet centre">Vous recevrez un numéro de suivi à présenter en agence.</p>
@@ -994,6 +1004,23 @@
     main.querySelectorAll('[data-arrivee]').forEach(b => b.addEventListener('click', () => { etat.arrivee = b.dataset.arrivee; maj(); }));
     $('[name=depot]').addEventListener('change', maj);
     $('[name=payeurArrivee]').addEventListener('change', majMoyens);
+    // Quand payer : en ligne tout de suite (prix estimé, ajusté à la pesée), à l'agence, ou à l'arrivée
+    const majQuand = () => {
+      const [pd] = etat.sens.split('-');
+      const enLigne = (CONFIG.moyensPaiement?.[pd] || []);
+      const bEnLigne = $('[data-quand="enligne"]');
+      bEnLigne.disabled = !enLigne.length;
+      $('[data-sous-enligne]').textContent = enLigne.length ? enLigne.map(m => m.label).join(', ') : 'Pas encore disponible';
+      if (!etat.quand || (etat.quand === 'enligne' && !enLigne.length)) etat.quand = enLigne.length ? 'enligne' : 'agence';
+      main.querySelectorAll('[data-quand]').forEach(b => b.setAttribute('aria-pressed', b.dataset.quand === etat.quand));
+      $('[name=payeurArrivee]').checked = etat.quand === 'arrivee';
+      $('[data-note-quand]').textContent = etat.quand === 'enligne'
+        ? 'Vous payez le prix estimé juste après la réservation. À la pesée, s\'il y a une différence : vous payez le complément à l\'agence, ou on vous rend le trop-payé.'
+        : etat.quand === 'agence' ? 'Vous payez le prix final au dépôt du colis, après la pesée.' : 'Le destinataire paie au retrait du colis.';
+      majMoyens();
+    };
+    main.querySelectorAll('[data-quand]').forEach(b => b.addEventListener('click', () => { etat.quand = b.dataset.quand; majQuand(); }));
+    majQuand();
     $('[name=guichet]').addEventListener('change', maj);
     maj();
 
@@ -1028,7 +1055,7 @@
         });
         stock.suppr('brouillon_dest'); stock.suppr('brouillon_adresses');
         if (manque.length) toast(`Réservé. Adresse de ${manque.join(' et ')} à compléter : le prix sera calculé dès que la position sera envoyée.`, '', { duree: 5000 });
-        confirmation(r.colis);
+        confirmation(r.colis, { payerMaintenant: etat.quand === 'enligne' });
       } catch (err) { toast(err.message, 'erreur'); btn.disabled = false; }
     });
     // Formulaire restauré après la connexion
@@ -1036,9 +1063,20 @@
     if (brouillon) Object.entries(brouillon).forEach(([k, v]) => { const i = $(`[name="${k}"]`); if (i) i.type === 'checkbox' ? (i.checked = v === 'on') : (i.value = v); });
   }
 
-  function confirmation(c) {
+  function confirmation(c, { payerMaintenant = false } = {}) {
     const d = agence(c.depot) || {};
     const r = agence(c.guichet) || {};
+    const paysDep = String(c.sens || 'FR-GN').split('-')[0];
+    const enLigneDispo = (CONFIG.moyensPaiement?.[paysDep] || []).length > 0;
+    const totalGnf = c.solde?.soldeGnf || 0;
+    const blocPaiement = !c.payeurArrivee && enLigneDispo && totalGnf > 0 ? `
+        <div class="carte-ocre pile" style="--gap:8px">
+          <h3>Payer maintenant</h3>
+          <div class="titre" style="font-size:26px;font-weight:800">${esc(montantVue(c, totalGnf, c.solde.soldeEur))}</div>
+          <p class="petit">Prix estimé${c.domicileAPayerGnf > 0 ? ', livraison / ramassage compris' : ''}. À la pesée, la différence éventuelle se règle à l'agence (complément, ou trop-payé rendu).</p>
+          <button class="btn btn-noir btn-grand btn-plein" data-payer-tout>${ic('carte', 'ic-sm')} Payer ${esc(montantVue(c, totalGnf, c.solde.soldeEur))}</button>
+          ${c.domicileAPayerGnf > 0 ? `<button class="btn btn-plein" data-payer-domicile>Payer seulement ${c.ramassage?.demande ? 'le ramassage' : 'la livraison'} (${esc(montantVue(c, c.domicileAPayerGnf))})</button>` : `<p class="tres-petit muet">Ou payez à l'agence au dépôt du colis.</p>`}
+        </div>` : '';
     main.innerHTML = `
       <div class="pile">
         <div class="carte-vert pile" style="--gap:10px">
@@ -1047,7 +1085,8 @@
           <div class="titre" style="font-size:34px;font-weight:800;letter-spacing:1px">${esc(c.numeroSuivi)}</div>
           <p>Prix estimé : <b>${prixColis(c.tarif)}</b></p>
         </div>
-        ${c.domicileAPayerGnf > 0 ? `
+        ${blocPaiement}
+        ${!blocPaiement && c.domicileAPayerGnf > 0 ? `
         <div class="carte-ocre pile" style="--gap:8px">
           <h3>${c.ramassage?.demande && c.livraison?.demande && c.livraison?.prix ? 'Payez le ramassage et la livraison' : c.ramassage?.demande ? 'Payez le ramassage' : 'Payez la livraison'}</h3>
           <div class="titre" style="font-size:26px;font-weight:800">${esc(montantVue(c, c.domicileAPayerGnf))}</div>
@@ -1073,10 +1112,12 @@
       </div>`;
     K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Soyez prévenu à chaque étape de ce colis : départ, arrivée, code de retrait.' });
     const payerDom = main.querySelector('[data-payer-domicile]');
-    if (payerDom) {
-      payerDom.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c }));
-      ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c });
-    }
+    const payerTout = main.querySelector('[data-payer-tout]');
+    payerDom?.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c }));
+    payerTout?.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'solde', c }));
+    // Ouvre directement le paiement : tout si le client a choisi « payer maintenant », sinon la course à domicile
+    if (payerTout && payerMaintenant) ouvrirPaiement(c.numeroSuivi, { objet: 'solde', c });
+    else if (payerDom) ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c });
   }
 
   // ════════════════════════════════════════════════════════
@@ -1098,7 +1139,7 @@
       if (c.codeRetrait) return { ton: 'pret', texte: `${livDem ? 'Livraison en cours' : `À retirer à ${g.nom || 'l\'agence'}`} · code ${c.codeRetrait}` };
       return { ton: 'pret', texte: livDem ? 'Bientôt livré à domicile' : `À retirer à ${g.nom || 'l\'agence'}` };
     }
-    if (c.solde?.soldeGnf > 0 && !c.tarif?.estime) return { ton: 'action', texte: `Reste ${deviseArr === 'EUR' ? eur(c.solde.soldeEur) : gnf(c.solde.soldeGnf)}`, bouton: 'Payer', objet: 'solde' };
+    if (c.solde?.soldeGnf > 0 && (!c.tarif?.estime || (c.statut === 'reserve' && !c.payeurArrivee && !recu))) return { ton: 'action', texte: `${c.statut === 'reserve' ? 'À payer (estimé)' : 'Reste'} ${deviseArr === 'EUR' ? eur(c.solde.soldeEur) : gnf(c.solde.soldeGnf)}`, bouton: 'Payer', objet: 'solde' };
     if (livDem && !c.livraison.adresse?.position?.lat) return { ton: 'action', texte: recu ? 'Envoyez votre position pour la livraison' : 'Position du destinataire manquante' };
     if (c.statut === 'reserve') {
       if (recu) return { ton: 'info', texte: 'Pas encore déposé par l\'expéditeur' };

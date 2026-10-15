@@ -817,6 +817,8 @@
       }
       if (!form.montant.dataset.touche) form.montant.value = aPayer();
       const recu = parseFloat(form.montant.value) || 0;
+      const trop = Math.round(dejaPayeGnf() - tarif.totalGnf - domicileGnf());
+      if (trop > 0) { $('[data-rendu]').innerHTML = `<b style="color:var(--rouge)">Le client a payé ${devisePaie() === 'EUR' ? eur(trop / tarif.taux) : gnf(trop)} de trop en ligne : à lui rendre.</b>`; return; }
       $('[data-rendu]').innerHTML = etat.methode === 'especes' && recu > aPayer() ? `Monnaie à rendre : <b>${dev(recu - aPayer())}</b>` : recu < aPayer() && recu > 0 ? `<span style="color:var(--rouge)">Paiement partiel : reste ${dev(aPayer() - recu)}</span>` : '';
     };
     form.addEventListener('input', (e) => { if (e.target.name === 'montant') e.target.dataset.touche = '1'; calc(); });
@@ -944,6 +946,7 @@
           <div>${esc(c.destinataire.nom)} · ${esc(c.guichetInfo?.nom || c.guichet)}</div>
           <div data-reste-depot>${kg(c.poidsReel)} · ${c.tarif.devise === 'GNF' ? gnf(c.tarif.totalGnf) : eur(c.tarif.totalEur)} · ${resteTxt}</div>
         </div>
+        ${c.solde.tropPayeGnf > 0 ? `<p class="bandeau bandeau-rouge">${ic('billet', 'ic-sm')}<span>Payé en ligne en trop : <b>${deviseAgent() === 'EUR' ? eur(c.solde.tropPayeGnf / (c.tarif.taux || CONFIG.tauxEurGnf)) : gnf(c.solde.tropPayeGnf)}</b>. Rendez-le au client (l'administrateur est prévenu).</span></p>` : ''}
         ${carte && c.solde.soldeGnf > 0 ? '<div data-paiement-carte></div>' : ''}
         ${blocCode(c)}
         <div class="carte centre qr-apercu" data-qr><div class="chargement"></div></div>
