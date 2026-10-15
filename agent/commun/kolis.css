@@ -388,3 +388,11 @@ main.entree > * { animation: pgIn .28s var(--ease) both; }
 .resume-colis div:nth-child(3) b { color: var(--ocre-texte); }
 .segments { background: #DFE6F1; }
 .saisie { background: #fff; }
+
+/* ── Paiement au comptoir : QR carte, aide mobile money, code de retrait ── */
+.bandeau-bleu { background: var(--bleu-vif-doux, #E4EDFB); color: #12407F; }
+.qr-paiement { display: flex; justify-content: center; }
+.qr-paiement svg { width: 190px; height: 190px; display: block; background: #fff; padding: 8px; border-radius: 12px; }
+.carte-qr-paiement { border: 2px solid var(--bleu-vif, #1F5FBF); }
+.carte-code { background: var(--ocre-doux); }
+.carte-code .code-4 > div { background: #fff; }

@@ -125,7 +125,7 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
   }
   if (b.paiements && typeof b.paiements === 'object') {
     const pa = JSON.parse(JSON.stringify(actuel.paiements || {}));
-    for (const [pays, cles] of [['FR', ['carte']], ['GN', ['orange_money', 'mtn_momo', 'carte']]]) {
+    for (const [pays, cles] of [['FR', ['carte', 'orange_money', 'mtn_momo']], ['GN', ['orange_money', 'mtn_momo', 'carte']]]) {
       if (!b.paiements[pays]) continue;
       pa[pays] = pa[pays] || {};
       for (const k of cles) if (typeof b.paiements[pays][k] === 'boolean') pa[pays][k] = b.paiements[pays][k];

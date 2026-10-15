@@ -118,7 +118,10 @@ async function vueComplete(colis, { avecCode = false } = {}) {
   obj.solde = solde;
   obj.domicileAPayerGnf = require('../utils/tarif').domicileAPayerGnf(colis);
   obj.guichetInfo = await Config.lieu(colis.guichet);
-  if (avecCode && colis.codeRetrait && [STATUTS.PRET, STATUTS.EN_LIVRAISON].includes(colis.statut)) obj.codeRetrait = colis.codeRetrait;
+  // avecCode : true → seulement quand le colis attend son destinataire ; 'tot' → dès le dépôt
+  // (l'expéditeur transmet lui-même le code au destinataire)
+  const visible = avecCode === 'tot' ? ![STATUTS.REMIS, STATUTS.ANNULE].includes(colis.statut) : [STATUTS.PRET, STATUTS.EN_LIVRAISON].includes(colis.statut);
+  if (avecCode && colis.codeRetrait && visible) obj.codeRetrait = colis.codeRetrait;
   return obj;
 }
 
@@ -236,13 +239,17 @@ async function deposer(agent, data) {
     colis.photoDepot = photo._id;
   }
 
+  // Le code de retrait est créé dès le dépôt : l'agent le donne à l'expéditeur, qui le transmet
+  // au destinataire (même sans SMS). Il reste le même jusqu'à la remise.
+  if (!colis.codeRetrait) colis.genererCodeRetrait();
+
   await colis.validate();
   await encaisser(colis, agent, data.paiement);
   await colis.save();
   if (!colis.payeurArrivee) await require('./factureService').emettreSansBloquer(colis, { moment: 'depot', agent });
 
   notifier(colis.expediteur.telephone, MESSAGES.depose(colis));
-  return { colis: await vueComplete(colis), ecartPoids: ecart };
+  return { colis: await vueComplete(colis, { avecCode: 'tot' }), ecartPoids: ecart };
 }
 
 // ── Annulation d'une étape (erreur de scan, mauvais colis…) ──
@@ -297,7 +304,8 @@ const ACTIONS_SCAN = {
 };
 
 async function mettrePret(colis, agent, emplacement) {
-  const code = colis.genererCodeRetrait();
+  // Même code qu'au dépôt (déjà donné à l'expéditeur) ; créé ici pour les anciens colis
+  const code = colis.codeRetrait || colis.genererCodeRetrait();
   colis.arriveGuichetLe = new Date();
   if (emplacement) colis.emplacement = emplacement;
   const nomGuichet = await nomLieu(colis.guichet);
@@ -505,10 +513,20 @@ async function remettre(agent, data) {
   }
   if (agent.lieu && colis.guichet !== agent.lieu) throw new ErreurMetier('Ce colis est attendu dans une autre agence.', 409);
 
-  if ((colis.codeEssais || 0) >= CODE_RETRAIT_ESSAIS_MAX) {
+  // Sans code (SMS jamais reçu, code perdu) : seulement au guichet, avec la pièce d'identité,
+  // son numéro, et le téléphone du destinataire (ou de la personne autorisée) donné par la personne.
+  const sansCode = !!data.sansCode && !aDomicile;
+  if (sansCode) {
+    const piece = String(data.pieceNumero || '').trim();
+    if (!data.pieceVerifiee) throw new ErreurMetier('Vérifiez la pièce d\'identité.');
+    if (piece.length < 4) throw new ErreurMetier('Notez le numéro de la pièce d\'identité.');
+    const tel = normTel(data.telephoneConfirme || '');
+    const attendus = [colis.destinataire?.telephone, colis.tiersAutorise?.telephone].filter(Boolean);
+    if (!tel || !attendus.includes(tel)) throw new ErreurMetier('Le numéro de téléphone donné ne correspond pas au destinataire.', 403, 'tel_faux');
+  } else if ((colis.codeEssais || 0) >= CODE_RETRAIT_ESSAIS_MAX) {
     throw new ErreurMetier('Trop de codes faux : colis bloqué. Appelez l\'administrateur.', 423, 'code_bloque');
   }
-  if (String(data.code || '') !== colis.codeRetrait) {
+  if (!sansCode && String(data.code || '') !== colis.codeRetrait) {
     colis.codeEssais = (colis.codeEssais || 0) + 1;
     await colis.save();
     throw new ErreurMetier(`Code incorrect (${CODE_RETRAIT_ESSAIS_MAX - colis.codeEssais} essai(s) restant(s)).`, 401, 'code_faux');
@@ -540,8 +558,14 @@ async function remettre(agent, data) {
     aDomicile,
     signature: typeof data.signature === 'string' && data.signature.startsWith('data:image/') && data.signature.length < 300000 ? data.signature : undefined,
     opId: data.opId,
+    sansCode: sansCode || undefined,
+    pieceNumero: sansCode ? String(data.pieceNumero).trim().slice(0, 40) : undefined,
   };
-  colis.ajouterEvenement(STATUTS.REMIS, `Remis à ${colis.remise.nomRetrait}${aDomicile ? ' à domicile' : ''}`, { lieu: agent.lieu, agent: agent._id });
+  colis.ajouterEvenement(STATUTS.REMIS, `Remis à ${colis.remise.nomRetrait}${aDomicile ? ' à domicile' : ''}${sansCode ? ' sans code (pièce d\'identité vérifiée)' : ''}`, { lieu: agent.lieu, agent: agent._id });
+  if (sansCode) {
+    const push = require('../utils/push');
+    push.sansAttendre(push.auxAdmins({ titre: 'Remise sans code', corps: `${colis.numeroSuivi} remis à ${colis.remise.nomRetrait} sur pièce d'identité (n° ${colis.remise.pieceNumero}).`, chemin: `/#/colis?q=${colis.numeroSuivi}` }));
+  }
   marquerRetour(colis, { ...instantane(colis), statut: aDomicile ? STATUTS.EN_LIVRAISON : STATUTS.PRET });
   if (typeof data.avantSauvegarde === 'function') data.avantSauvegarde(colis);
   await colis.save();

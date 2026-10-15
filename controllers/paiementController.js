@@ -146,7 +146,7 @@ const declarerMobile = async (req, res) => {
   const colis = await trouver(req.body.numero);
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
   const config = await Config.get();
-  if (!moyensEnLigne(config).GN.some(m => m.key === methode)) return res.status(400).json({ succes: false, message: `${LIB[methode]} n'est pas proposé pour le moment.` });
+  if (!Object.values(moyensEnLigne(config)).flat().some(m => m.key === methode)) return res.status(400).json({ succes: false, message: `${LIB[methode]} n'est pas proposé pour le moment.` });
   const dus = await aPayer(colis, config);
   const obj = objet === 'domicile' ? 'domicile' : 'global';
   const montantGnf = obj === 'domicile' ? dus.domicile.gnf : dus.solde.gnf;

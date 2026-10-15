@@ -1059,3 +1059,46 @@ test('toutes les formules d\'envoi : 2 sens × express/avion/bateau × agence/do
   assert.ok(tdb.ca.creancesEur > 0, 'reste à encaisser (paiement à l\'arrivée)');
   assert.strictEqual((await appel('GET', '/admin/tableau', null, client)).status, 403);
 });
+
+test('comptoir : code de retrait dès le dépôt, Orange Money depuis la France, retrait sans code sur pièce d\'identité', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');
+  const agentKaloum = await connexion('620000003');
+
+  // Orange Money proposé aussi depuis la France (compte marchand guinéen)
+  let r = await appel('PATCH', '/config/admin', { paiements: { FR: { carte: true, orange_money: true }, comptes: { orange_money: { numero: '622 00 00 00', titulaire: 'TMS' } } } }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  const pub = await appel('GET', '/config');
+  assert.ok(pub.moyensPaiement.FR.some(m => m.key === 'orange_money'));
+
+  // Dépôt sans réservation à Paris, payé par Orange Money (en GNF, avec la référence)
+  r = await appel('POST', '/agent/depot', {
+    poidsReel: 4, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM', cgvAcceptees: true,
+    expediteur: { nom: 'Sékou Bah', telephone: '0677777777' }, destinataire: { nom: 'Hawa Bah', telephone: '627777777' },
+    paiement: { montant: 480000, devise: 'GNF', methode: 'orange_money', reference: 'PP2610.OM.1', objet: 'global' },
+  }, agentParis);
+  assert.strictEqual(r.status, 201, r.message);
+  const numero = r.colis.numeroSuivi;
+  const code = r.colis.codeRetrait;
+  assert.match(code, /^\d{4}$/, 'code donné à l\'agent dès le dépôt');
+  assert.strictEqual(r.colis.solde.soldeGnf, 0, 'payé en GNF depuis la France');
+  // L'agence de dépôt peut redonner le code ; l'agence de retrait non
+  assert.strictEqual((await appel('GET', `/agent/colis/${numero}`, null, agentParis)).colis.codeRetrait, code);
+  assert.strictEqual((await appel('GET', `/agent/colis/${numero}`, null, agentKaloum)).colis.codeRetrait, undefined);
+
+  // Arrivé à l'agence : le code ne change pas (l'expéditeur l'a déjà transmis)
+  r = await appel('POST', '/admin/colis/statut', { numeros: [numero], statut: 'pret' }, admin);
+  assert.strictEqual(r.nbOk, 1, JSON.stringify(r));
+  assert.strictEqual((await appel('GET', `/admin/colis/${numero}`, null, admin)).colis.codeRetrait, code);
+
+  // Retrait sans code : le numéro donné doit être celui du destinataire
+  const base = { numero, sansCode: true, pieceVerifiee: true, pieceNumero: 'GN123456', signature: 'data:image/png;base64,iVBORw0KGgo=' };
+  r = await appel('POST', '/agent/remise', { ...base, telephoneConfirme: '620000000' }, agentKaloum);
+  assert.strictEqual(r.status, 403);
+  r = await appel('POST', '/agent/remise', { ...base, pieceNumero: '' , telephoneConfirme: '627777777' }, agentKaloum);
+  assert.strictEqual(r.status, 400);
+  r = await appel('POST', '/agent/remise', { ...base, telephoneConfirme: '627 77 77 77' }, agentKaloum);
+  assert.strictEqual(r.status, 200, r.message);
+  assert.strictEqual(r.colis.statut, 'remis');
+  assert.ok(r.colis.historique.some(h => /sans code/.test(`${h.label} ${h.detail}`)));
+});

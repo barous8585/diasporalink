@@ -156,9 +156,63 @@
   // Pays et devise de l'agence de l'agent (admin sans agence : France / €)
   const paysAgent = () => CTX?.pays || null;
   const deviseAgent = () => CONFIG?.pays?.[paysAgent()]?.devise || 'EUR';
-  const methodesDe = (devise) => devise === 'GNF'
-    ? [['especes', 'Espèces'], ['orange_money', 'Orange Money'], ['mtn_momo', 'MTN MoMo']]
-    : [['especes', 'Espèces'], ['carte', 'Carte'], ['virement', 'Virement']];
+  // Moyens de paiement au comptoir, dans les deux sens (France → Guinée et Guinée → France) :
+  // espèces, carte par QR code (Stripe, si activé), Orange Money ; MTN MoMo en Guinée ;
+  // terminal de carte et virement en France.
+  const moyensEnLigne = () => Object.values(CONFIG?.moyensPaiement || {}).flat();
+  const stripeActif = () => moyensEnLigne().some(m => m.key === 'carte');
+  const compteMobile = (k) => moyensEnLigne().find(m => m.key === k && m.numero) || null;
+  const MOBILES = ['orange_money', 'mtn_momo'];
+  const methodesDe = (devise, { qr = true } = {}) => [
+    ['especes', 'Espèces'],
+    ...(qr && stripeActif() ? [['stripe', 'Carte (QR)']] : []),
+    ['orange_money', 'Orange Money'],
+    ...(devise === 'GNF' ? [['mtn_momo', 'MTN MoMo']] : [['carte', 'Carte (terminal)'], ['virement', 'Virement']]),
+  ];
+  const nomMethode = (k) => (methodesDe('GNF').concat(methodesDe('EUR')).find(([x]) => x === k) || [k, k])[1];
+  // Rappel du compte marchand quand le client paie par mobile money
+  const aideMobile = (k, gnfDu) => {
+    const c = compteMobile(k);
+    return `${ic('billet', 'ic-sm')}<span>Le client envoie <b>${gnf(gnfDu)}</b> par ${esc(nomMethode(k))}${c ? ` au <b class="chiffres">${esc(c.numero)}</b>${c.titulaire ? ` (${esc(c.titulaire)})` : ''}` : ' sur le compte marchand de l\'agence'}, puis vous montre le SMS : notez la référence.</span>`;
+  };
+
+  // Paiement par carte au comptoir : QR code Stripe que le client scanne avec son téléphone.
+  // L'écran se met à jour tout seul quand le paiement arrive.
+  async function panneauCarte(zone, numero, { surPaye, tel } = {}) {
+    zone.innerHTML = '<div class="chargement"></div>';
+    let s2;
+    try { s2 = await api.post('/paiements/creer-session', { numero, objet: 'solde' }); }
+    catch (err) { zone.innerHTML = `<p class="bandeau bandeau-rouge">${esc(err.message)}</p>`; return; }
+    let svg = '';
+    try { svg = await Etiquette.qr(s2.url); } catch {}
+    const wa = String(tel || '').replace(/\D/g, '');
+    zone.innerHTML = `
+      <div class="carte pile centre carte-qr-paiement" style="--gap:10px">
+        <div class="gras">${ic('carte', 'ic-sm')} Paiement par carte</div>
+        <p class="petit muet">Le client scanne ce QR code avec l'appareil photo de son téléphone et paie par carte (paiement sécurisé).</p>
+        <div class="qr-apercu qr-paiement">${svg || '<p class="petit">QR indisponible : envoyez le lien.</p>'}</div>
+        <div class="grille-2">
+          <a class="btn btn-petit" href="${esc(s2.url)}" target="_blank" rel="noopener">${ic('carte', 'ic-sm')} Payer sur cet appareil</a>
+          <a class="btn btn-petit" href="https://wa.me/${esc(wa)}?text=${encodeURIComponent(`${CONFIG.appCourt || 'TMS'} : lien de paiement de votre colis ${numero} : ${s2.url}`)}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} Lien par WhatsApp</a>
+        </div>
+        <p class="petit gras" data-etat-carte aria-live="polite">${ic('horloge', 'ic-sm')} En attente du paiement…</p>
+      </div>`;
+    const debut = Date.now();
+    const verifier = async () => {
+      if (!zone.isConnected) return;
+      try {
+        const r = await api.get(`/paiements/a-payer/${encodeURIComponent(numero)}`);
+        if (!(r.solde.gnf > 0)) {
+          zone.querySelector('[data-etat-carte]').innerHTML = `<span style="color:var(--vert)">${ic('ok', 'ic-sm')} Paiement par carte reçu</span>`;
+          try { Scanner.bip(true); } catch {}
+          surPaye?.();
+          return;
+        }
+      } catch {}
+      if (Date.now() - debut < 30 * 60000) setTimeout(verifier, 4000);
+    };
+    setTimeout(verifier, 4000);
+  }
   const agenceDe = (code) => CONFIG?.agences?.find(a => a.code === code) || null;
 
   function dessinerNav(actif) {
@@ -523,7 +577,7 @@
         zone.innerHTML = r.colis.length ? r.colis.map((c, i) => `
           <button class="choix" data-i="${i}" style="width:100%">
             <span class="nom">${esc(c.numeroSuivi)} · ${esc(c.expediteur.nom)}</span>
-            <span class="sous">Pour ${esc(c.destinataire.nom)} · ${K.libMode(c.mode)} · ${kg(c.poidsEstime)} annoncés${c.ramassage?.statut === 'faite' ? ` · ramassé par ${esc(c.ramassage.livreurNom || 'un livreur')}` : ''}</span>
+            <span class="sous">Pour ${esc(c.destinataire.nom)} · ${K.libMode(c.mode)} · ${kg(c.poidsEstime)} annoncés${c.ramassage?.statut === 'faite' ? ` · ramassé par ${esc(c.ramassage.livreurNom || 'un livreur')}` : ''}${(c.paiements || []).length ? ` · <b style="color:var(--vert)">déjà payé en ligne : ${c.paiements.map(p => esc(montant(p.montant, p.devise))).join(' + ')}</b>` : ''}</span>
           </button>`).join('') : '<p class="vide petit">Aucune réservation trouvée.</p>';
         zone.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', () => formulaireDepot(r.colis[b.dataset.i])));
       } catch (err) { zone.innerHTML = `<p class="bandeau bandeau-rouge">${esc(err.message)}</p>`; }
@@ -607,6 +661,7 @@
         <label class="champ ${etat.assurance ? '' : 'cache'}" data-valeur><span data-lib-valeur>Valeur déclarée</span> <input class="saisie" name="valeurDeclaree" type="number" inputmode="decimal" min="0" value="${r.valeurDeclaree || ''}"></label>
 
         <div class="carte-noire pile" style="--gap:6px" aria-live="polite">
+          <div class="recap-prix cache" data-ligne-deja><span style="color: var(--gris)">Déjà payé en ligne</span><span class="gras" data-deja>0</span></div>
           <div class="recap-prix"><span style="color: var(--gris)">Prix à payer</span><span class="valeur" data-prix>0</span></div>
           <div class="recap-prix"><span style="color: var(--gris)">soit</span><span class="gras" data-prix-autre>0</span></div>
           <div class="tres-petit" style="color: var(--gris)" data-detail></div>
@@ -616,8 +671,9 @@
         <label class="case"><input type="checkbox" name="payeurArrivee" ${etat.payeurArrivee ? 'checked' : ''}> Le destinataire paie à l'arrivée</label>
         <div class="pile" style="--gap:8px" data-paiement>
           <div class="grille-3" data-methodes></div>
-          <label class="champ"><span data-lib-montant>Montant reçu</span> <input class="saisie saisie-forte" name="montant" type="number" inputmode="decimal" step="0.01" min="0"></label>
-          <label class="champ cache" data-champ-ref>Référence de la transaction <input class="saisie" name="reference" autocomplete="off"></label>
+          <p class="bandeau bandeau-bleu petit cache" data-aide-methode></p>
+          <label class="champ" data-champ-montant><span data-lib-montant>Montant reçu</span> <input class="saisie saisie-forte" name="montant" type="number" inputmode="decimal" step="0.01" min="0"></label>
+          <label class="champ cache" data-champ-ref>Référence de la transaction <input class="saisie" name="reference" autocomplete="off" autocapitalize="characters"></label>
           <p class="petit" data-rendu></p>
         </div>
 
@@ -663,10 +719,20 @@
       let t = ramasse?.prix ? KolisTarif.enGnf(ramasse.prix, ramasse.devise, tarif.taux) : 0;
       const c = form.livraisonDom.checked ? adrLiv.course() : null;
       if (c?.ok) t += c.prixGnf;
+      else if (form.livraisonDom.checked && livPrevue?.prixGnf) t += livPrevue.prixGnf; // prix déjà fixé à la réservation
       return t;
     };
-    const aPayer = () => (devisePaie() === 'EUR' ? Math.round((tarif.totalEur + domicileGnf() / tarif.taux) * 100) / 100 : tarif.totalGnf + domicileGnf());
-    const dev = (n) => montant(n, devisePaie());
+    // Ce que le client a déjà payé en ligne sur sa réservation (livraison, ramassage, acompte)
+    const dejaPayeGnf = () => (tarif ? (r.paiements || []).reduce((t, p) => t + KolisTarif.enGnf(p.montant, p.devise, tarif.taux), 0) : 0);
+    const mobile = () => MOBILES.includes(etat.methode);
+    // Orange Money / MTN : le client paie en GNF sur le compte marchand, même depuis la France
+    const deviseSaisie = () => (mobile() ? 'GNF' : devisePaie());
+    const aPayerEn = (dv) => {
+      const resteGnf = tarif.totalGnf + domicileGnf() - dejaPayeGnf();
+      return Math.max(0, dv === 'EUR' ? Math.round((tarif.totalEur + (domicileGnf() - dejaPayeGnf()) / tarif.taux) * 100) / 100 : Math.round(resteGnf));
+    };
+    const aPayer = () => aPayerEn(deviseSaisie());
+    const dev = (n) => montant(n, deviseSaisie());
     const majPays = () => {
       if (paysAffiche === paysDepart()) return;
       paysAffiche = paysDepart();
@@ -678,9 +744,12 @@
       const methodes = methodesDe(devisePaie());
       if (!methodes.some(([k]) => k === etat.methode)) etat.methode = 'especes';
       $('[data-methodes]').innerHTML = methodes.map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${etat.methode === k}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('');
-      form.querySelectorAll('[data-methode]').forEach(b => b.addEventListener('click', () => { etat.methode = b.dataset.methode; calc(); }));
-      $('[data-lib-montant]').textContent = `Montant reçu (${devisePaie() === 'EUR' ? '€' : 'GNF'})`;
-      form.montant.step = devisePaie() === 'EUR' ? '0.01' : '500';
+      form.querySelectorAll('[data-methode]').forEach(b => b.addEventListener('click', () => {
+        const avant = deviseSaisie();
+        etat.methode = b.dataset.methode;
+        if (deviseSaisie() !== avant) delete form.montant.dataset.touche; // € ↔ GNF : on repart du montant dû
+        calc();
+      }));
       delete form.montant.dataset.touche;
     };
     const calc = () => {
@@ -692,7 +761,10 @@
       $('[data-valeur]').classList.toggle('cache', !form.assurance.checked);
       $('[data-paiement]').classList.toggle('cache', form.payeurArrivee.checked);
       $('[data-zone-liv]').classList.toggle('cache', !form.livraisonDom.checked);
-      $('[data-champ-ref]').classList.toggle('cache', ['especes'].includes(etat.methode));
+      $('[data-champ-ref]').classList.toggle('cache', ['especes', 'stripe'].includes(etat.methode));
+      $('[data-champ-montant]').classList.toggle('cache', etat.methode === 'stripe');
+      $('[data-lib-montant]').textContent = `Montant reçu (${deviseSaisie() === 'EUR' ? '€' : 'GNF'})`;
+      form.montant.step = deviseSaisie() === 'EUR' ? '0.01' : '500';
       form.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === etat.mode));
       form.querySelectorAll('[data-methode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.methode === etat.methode));
       const deviseTarif = CONFIG.tarifs[sens()]?.devise || 'EUR';
@@ -727,8 +799,15 @@
       tarif = KolisTarif.calculerTarif(CONFIG.regles, { sens: sens(), mode: etat.mode, poidsKg: poids, typeColis: etat.typeColis, valeurDeclaree: form.valeurDeclaree.value, assurance: form.assurance.checked, articles: articlesChoisis() });
       $('[data-repartition]').innerHTML = tarif.articles.length
         ? `${kg(tarif.poidsFacture)} au kilo · ${kg(tarif.poidsArticles)} comptés dans les articles${poids < tarif.poidsArticles ? ' <b style="color:var(--rouge)">(la balance indique moins que les articles : vérifiez)</b>' : ''}` : '';
-      $('[data-prix]').textContent = dev(aPayer());
-      $('[data-prix-autre]').textContent = devisePaie() === 'EUR' ? gnf(tarif.totalGnf) : eur(tarif.totalEur);
+      const deja = dejaPayeGnf();
+      $('[data-ligne-deja]').classList.toggle('cache', !(deja > 0));
+      if (deja > 0) $('[data-deja]').textContent = devisePaie() === 'EUR' ? eur(deja / tarif.taux) : gnf(deja);
+      $('[data-prix]').textContent = montant(aPayerEn(devisePaie()), devisePaie());
+      $('[data-prix-autre]').textContent = devisePaie() === 'EUR' ? gnf(aPayerEn('GNF')) : eur(aPayerEn('EUR'));
+      const aide = $('[data-aide-methode]');
+      aide.classList.toggle('cache', !(mobile() || etat.methode === 'stripe') || form.payeurArrivee.checked);
+      if (mobile()) aide.innerHTML = aideMobile(etat.methode, aPayerEn('GNF'));
+      else if (etat.methode === 'stripe') aide.innerHTML = `${ic('carte', 'ic-sm')}<span>Après l'enregistrement, un <b>QR code de paiement</b> s'affiche : le client le scanne et paie par carte sur son téléphone.</span>`;
       const md = (n) => montant(n, tarif.devise);
       const cLiv = form.livraisonDom.checked ? adrLiv.course() : null;
       $('[data-detail]').textContent = `${tarif.transport || !tarif.articles.length ? `${kg(tarif.poidsFacture)} × ${md(tarif.prixKg)}` : ''}${tarif.articles.map(l => `${tarif.transport ? ' + ' : ''}${l.quantite} × ${l.label.toLowerCase()} (${md(l.montant)})`).join(tarif.transport ? '' : ' + ')}${tarif.surcharge ? ` + ${md(tarif.surcharge)} supplément` : ''}${tarif.assurance ? ` + ${md(tarif.assurance)} assurance` : ''}${ramasse?.prix ? ` + ${montant(ramasse.prix, ramasse.devise)} ramassage` : ''}${cLiv?.ok ? ` + ${montant(cLiv.prix, cLiv.devise)} livraison` : form.livraisonDom.checked ? ' + livraison (prix quand la position sera connue)' : ''}`;
@@ -772,8 +851,10 @@
         livraison = { demande: true, adresse: a };
       } else if (livPrevue) livraison = { demande: false };
       const recu = parseFloat(form.montant.value) || 0;
-      const paiement = !form.payeurArrivee.checked && recu > 0
-        ? { montant: Math.min(recu, aPayer()), devise: devisePaie(), methode: etat.methode, objet: 'global', reference: form.reference.value.trim() || undefined } : undefined;
+      const parCarteQr = !form.payeurArrivee.checked && etat.methode === 'stripe' && aPayer() > 0;
+      const paiement = !form.payeurArrivee.checked && !parCarteQr && recu > 0
+        ? { montant: Math.min(recu, aPayer()), devise: deviseSaisie(), methode: etat.methode, objet: 'global', reference: form.reference.value.trim() || undefined } : undefined;
+      if (paiement && mobile() && !paiement.reference) { toast('Notez la référence de la transaction (SMS de confirmation du client).', 'erreur'); form.reference.focus(); return; }
       const btn = form.querySelector('[type=submit]'); btn.disabled = true;
       try {
         const res = await api.post('/agent/depot', {
@@ -792,7 +873,7 @@
           cgvAcceptees: form.cgvAcceptees ? form.cgvAcceptees.checked : undefined,
           photo: photoColis || undefined,
         }, { delai: 45000 });
-        depotTermine(res.colis);
+        depotTermine(res.colis, { carte: parCarteQr });
       } catch (err) {
         toast(err.reseau ? 'Pas de réseau : le dépôt a besoin de la connexion pour créer le numéro. Réessayez.' : err.message, 'erreur');
         btn.disabled = false;
@@ -833,23 +914,54 @@
     } catch { zone.innerHTML = '<p class="petit muet centre">Facture consultable plus tard dans la fiche du colis.</p>'; }
   }
 
-  function depotTermine(c) {
+  // Message pour le destinataire : numéro de suivi, agence, code de retrait (sans SMS, c'est
+  // l'expéditeur ou l'agent qui le lui transmet par WhatsApp)
+  const messageDestinataire = (c) => {
+    const base = (CONFIG.frontendUrl || 'https://tms-colis.netlify.app').replace(/\/$/, '');
+    return `Bonjour ${c.destinataire.nom}, ${c.expediteur.nom} vous envoie un colis avec ${CONFIG.app || 'Talib Multi Services'}.\n`
+      + `N° de suivi : ${c.numeroSuivi}\nRetrait : ${c.guichetInfo?.nom || c.guichet}${c.guichetInfo?.adresse ? `, ${c.guichetInfo.adresse}` : ''}\n`
+      + (c.codeRetrait ? `Code de retrait : ${c.codeRetrait} (à donner à l'agence avec votre pièce d'identité, ne le partagez pas)\n` : '')
+      + `Suivi : ${base}/?suivi=${c.numeroSuivi}`;
+  };
+  const blocCode = (c) => !c.codeRetrait ? '' : `
+    <div class="carte pile centre carte-code" style="--gap:6px">
+      <div class="petit gras">Code de retrait du destinataire</div>
+      <div class="code-4">${c.codeRetrait.split('').map(d => `<div>${esc(d)}</div>`).join('')}</div>
+      <p class="tres-petit muet">Donnez-le à l'expéditeur. Le destinataire le présente à l'agence avec sa pièce d'identité.</p>
+      <div class="grille-2">
+        <a class="btn btn-petit btn-plein" href="https://wa.me/${esc(String(c.destinataire.telephone || '').replace(/\D/g, ''))}?text=${encodeURIComponent(messageDestinataire(c))}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} Au destinataire</a>
+        <a class="btn btn-petit btn-plein" href="https://wa.me/${esc(String(c.expediteur.telephone || '').replace(/\D/g, ''))}?text=${encodeURIComponent(messageDestinataire(c))}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} À l'expéditeur</a>
+      </div>
+    </div>`;
+
+  function depotTermine(c, { carte = false } = {}) {
+    const resteTxt = c.solde.soldeGnf > 0 ? `reste ${deviseAgent() === 'EUR' ? eur(c.solde.soldeEur) : gnf(c.solde.soldeGnf)}` : 'payé';
     main.innerHTML = `
       <div class="pile">
         <div class="carte-vert pile centre" style="--gap:8px">
           <span class="badge" style="align-self:center;background:var(--ocre);color:var(--encre)">${ic('ok', 'ic-sm')} Enregistré</span>
           <div class="num-grand">${esc(c.numeroSuivi)}</div>
           <div>${esc(c.destinataire.nom)} · ${esc(c.guichetInfo?.nom || c.guichet)}</div>
-          <div>${kg(c.poidsReel)} · ${c.tarif.devise === 'GNF' ? gnf(c.tarif.totalGnf) : eur(c.tarif.totalEur)} · ${c.solde.soldeGnf > 0 ? `reste ${deviseAgent() === 'EUR' ? eur(c.solde.soldeEur) : gnf(c.solde.soldeGnf)}` : 'payé'}</div>
+          <div data-reste-depot>${kg(c.poidsReel)} · ${c.tarif.devise === 'GNF' ? gnf(c.tarif.totalGnf) : eur(c.tarif.totalEur)} · ${resteTxt}</div>
         </div>
+        ${carte && c.solde.soldeGnf > 0 ? '<div data-paiement-carte></div>' : ''}
+        ${blocCode(c)}
         <div class="carte centre qr-apercu" data-qr><div class="chargement"></div></div>
         <button class="btn btn-noir btn-grand btn-plein" data-imprimer>${ic('imprimer')} Imprimer ${c.nbCartons > 1 ? `${c.nbCartons} étiquettes` : 'l\'étiquette'}</button>
         <div class="pile" style="--gap:8px" data-factures-depot></div>
-        <p class="petit muet centre">Le client a reçu un SMS avec le numéro de suivi.</p>
+        <p class="petit muet centre">Le numéro de suivi est aussi envoyé à l'expéditeur (SMS ou notification).</p>
         <button class="btn btn-principal btn-grand btn-plein" data-suivant>${ic('plus')} Colis suivant</button>
       </div>`;
     Etiquette.apercu(main.querySelector('[data-qr]'), c.numeroSuivi);
     blocFactures(main.querySelector('[data-factures-depot]'), c.numeroSuivi, { tel: c.expediteur?.telephone });
+    const zCarte = main.querySelector('[data-paiement-carte]');
+    if (zCarte) panneauCarte(zCarte, c.numeroSuivi, {
+      tel: c.expediteur?.telephone,
+      surPaye: () => {
+        main.querySelector('[data-reste-depot]').innerHTML = `${kg(c.poidsReel)} · ${c.tarif.devise === 'GNF' ? gnf(c.tarif.totalGnf) : eur(c.tarif.totalEur)} · <b>payé par carte</b>`;
+        blocFactures(main.querySelector('[data-factures-depot]'), c.numeroSuivi, { tel: c.expediteur?.telephone });
+      },
+    });
     main.querySelector('[data-imprimer]').addEventListener('click', () => Etiquette.imprimer(c, CONFIG));
     main.querySelector('[data-suivant]').addEventListener('click', vueDepot);
   }
@@ -904,11 +1016,15 @@
     if (!c) { toast('Colis introuvable dans ce guichet (hors-ligne : liste du dernier chargement).', 'erreur'); return; }
 
     const opId = uid();
-    const etat = { code: '', codeOk: null, retirePar: 'destinataire', methode: 'especes' };
-    // On encaisse dans la devise du pays de l'agence (€ en France, GNF en Guinée)
+    const etat = { code: '', codeOk: null, retirePar: 'destinataire', methode: 'especes', sansCode: false, cartePayee: false };
+    // On encaisse dans la devise du pays de l'agence (€ en France, GNF en Guinée) ;
+    // Orange Money / MTN se paient en GNF sur le compte marchand.
     const devise = deviseAgent();
-    const solde = c.soldeGnf > 0 ? (devise === 'EUR' ? (c.soldeEur || 0) : c.soldeGnf) : 0;
-    const dev = (n) => montant(n, devise);
+    const mobile = () => MOBILES.includes(etat.methode);
+    const deviseSaisie = () => (mobile() ? 'GNF' : devise);
+    const soldeEn = (dv) => (c.soldeGnf > 0 ? (dv === 'EUR' ? (c.soldeEur || 0) : c.soldeGnf) : 0);
+    const solde = soldeEn(devise);
+    const dev = (n) => montant(n, deviseSaisie());
     main.innerHTML = `
       <form class="pile" data-remise novalidate>
         <div class="ligne"><button type="button" class="btn btn-rond" data-retour aria-label="Retour">${ic('retour')}</button><h2 class="grandit">Remise du colis</h2></div>
@@ -923,8 +1039,17 @@
 
         <div class="carte pile">
           <div class="ligne"><span class="etape-num" style="width:26px;height:26px;border-radius:13px;background: var(--marine);color: #fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700">1</span><h3>Code de retrait</h3></div>
-          <div class="code-4" data-code>${[0, 1, 2, 3].map(i => `<input inputmode="numeric" maxlength="1" aria-label="Chiffre ${i + 1}" autocomplete="off">`).join('')}</div>
-          <p class="petit gras" data-verdict aria-live="polite"></p>
+          <div class="pile" style="--gap:8px" data-avec-code>
+            <div class="code-4" data-code>${[0, 1, 2, 3].map(i => `<input inputmode="numeric" maxlength="1" aria-label="Chiffre ${i + 1}" autocomplete="off">`).join('')}</div>
+            <p class="petit gras" data-verdict aria-live="polite"></p>
+            <button type="button" class="btn btn-petit" data-sans-code>${ic('alerte', 'ic-sm')} La personne n'a pas le code</button>
+          </div>
+          <div class="pile cache" style="--gap:8px" data-zone-sans-code>
+            <p class="bandeau bandeau-ocre petit">${ic('alerte', 'ic-sm')}<span>Retrait sans code : demandez le <b>numéro de téléphone du destinataire</b> (sans le lui montrer), vérifiez la pièce d'identité et notez son numéro. L'administrateur est prévenu.</span></p>
+            <label class="champ">Téléphone du destinataire, donné par la personne <input class="saisie" name="telConfirme" type="tel" inputmode="tel" autocomplete="off" placeholder="${paysAgent() === 'GN' ? '6XX XX XX XX' : '06 XX XX XX XX'}"></label>
+            <label class="champ">N° de la pièce d'identité <input class="saisie" name="pieceNumero" autocomplete="off" autocapitalize="characters"></label>
+            <button type="button" class="btn btn-petit" data-avec-code-retour>J'ai le code finalement</button>
+          </div>
           <div style="height:1px;background:var(--creme-2)"></div>
           <h3>Qui retire ?</h3>
           <div class="grille-2">
@@ -943,7 +1068,9 @@
           <div class="ligne"><span style="width:26px;height:26px;border-radius:13px;background: var(--marine);color: #fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700">2</span><h3 class="grandit">Encaisser</h3><span class="titre" style="font-size:20px">${dev(solde)}</span></div>
           ${c.magasinage?.fraisGnf ? `<p class="tres-petit muet">Dont frais de garde : ${gnf(c.magasinage.fraisGnf)} (${c.magasinage.joursFactures} j)</p>` : ''}
           <div class="grille-3">${methodesDe(devise).map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${k === 'especes'}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('')}</div>
-          <label class="champ" data-champ-recu>Montant reçu (${devise === 'EUR' ? '€' : 'GNF'}) <input class="saisie saisie-forte" name="recu" type="number" inputmode="decimal" min="0" step="${devise === 'EUR' ? '0.01' : '500'}" value="${solde}"></label>
+          <p class="bandeau bandeau-bleu petit cache" data-aide-methode></p>
+          <div data-zone-carte></div>
+          <label class="champ" data-champ-recu><span data-lib-recu>Montant reçu (${devise === 'EUR' ? '€' : 'GNF'})</span> <input class="saisie saisie-forte" name="recu" type="number" inputmode="decimal" min="0" step="${devise === 'EUR' ? '0.01' : '500'}" value="${solde}"></label>
           <label class="champ cache" data-champ-ref>Référence de la transaction <input class="saisie" name="reference" autocomplete="off"></label>
           <div class="bandeau bandeau-ocre cache" data-monnaie></div>
         </div>` : '<p class="bandeau bandeau-vert">' + ic('ok', 'ic-sm') + ' Tout est payé.</p>'}
@@ -988,18 +1115,43 @@
       $('[data-tiers]').classList.toggle('cache', etat.retirePar !== 'tiers');
     }));
 
+    // Retrait sans code (SMS jamais reçu) : téléphone du destinataire + pièce d'identité
+    const basculerSansCode = (oui) => {
+      etat.sansCode = oui;
+      $('[data-avec-code]').classList.toggle('cache', oui);
+      $('[data-zone-sans-code]').classList.toggle('cache', !oui);
+      if (oui) form.telConfirme.focus(); else cases[0].focus();
+    };
+    $('[data-sans-code]').addEventListener('click', () => basculerSansCode(true));
+    $('[data-avec-code-retour]').addEventListener('click', () => basculerSansCode(false));
+
     const majMonnaie = () => {
       if (!solde) return;
+      const du = soldeEn(deviseSaisie());
       const recu = parseFloat(form.recu.value) || 0;
       const m = $('[data-monnaie]');
-      $('[data-champ-ref]').classList.toggle('cache', etat.methode === 'especes');
-      if (etat.methode === 'especes' && recu > solde) { m.classList.remove('cache'); m.innerHTML = `Monnaie à rendre : <b>&nbsp;${dev(Math.round((recu - solde) * 100) / 100)}</b>`; }
-      else if (recu < solde) { m.classList.remove('cache'); m.innerHTML = `<span style="color:var(--rouge)">Il manque ${dev(Math.round((solde - recu) * 100) / 100)}</span>`; }
+      $('[data-champ-ref]').classList.toggle('cache', ['especes', 'stripe'].includes(etat.methode));
+      $('[data-champ-recu]').classList.toggle('cache', etat.methode === 'stripe');
+      const aide = $('[data-aide-methode]');
+      aide.classList.toggle('cache', !mobile());
+      if (mobile()) aide.innerHTML = aideMobile(etat.methode, c.soldeGnf);
+      if (etat.methode === 'stripe') { m.classList.add('cache'); return; }
+      if (etat.methode === 'especes' && recu > du) { m.classList.remove('cache'); m.innerHTML = `Monnaie à rendre : <b>&nbsp;${dev(Math.round((recu - du) * 100) / 100)}</b>`; }
+      else if (recu < du) { m.classList.remove('cache'); m.innerHTML = `<span style="color:var(--rouge)">Il manque ${dev(Math.round((du - recu) * 100) / 100)}</span>`; }
       else m.classList.add('cache');
     };
     form.querySelectorAll('[data-methode]').forEach(b => b.addEventListener('click', () => {
+      const avant = deviseSaisie();
       etat.methode = b.dataset.methode;
       form.querySelectorAll('[data-methode]').forEach(x => x.setAttribute('aria-pressed', x === b));
+      if (deviseSaisie() !== avant) {
+        form.recu.value = soldeEn(deviseSaisie());
+        form.recu.step = deviseSaisie() === 'EUR' ? '0.01' : '500';
+        $('[data-lib-recu]').textContent = `Montant reçu (${deviseSaisie() === 'EUR' ? '€' : 'GNF'})`;
+      }
+      const zc = $('[data-zone-carte]');
+      if (etat.methode === 'stripe' && !etat.cartePayee) panneauCarte(zc, c.numeroSuivi, { tel: c.destinataire?.telephone, surPaye: () => { etat.cartePayee = true; } });
+      else if (etat.methode !== 'stripe') zc.innerHTML = '';
       majMonnaie();
     }));
     form.recu?.addEventListener('input', majMonnaie);
@@ -1009,16 +1161,27 @@
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (etat.code.length !== 4) { toast('Tapez le code de retrait.', 'erreur'); cases[0].focus(); return; }
-      if (etat.codeOk === false) { toast('Code incorrect. Demandez le SMS au destinataire.', 'erreur'); return; }
+      if (etat.sansCode) {
+        if (!navigator.onLine) { toast('Le retrait sans code a besoin du réseau.', 'erreur'); return; }
+        if (!form.telConfirme.value.trim()) { toast('Demandez le numéro de téléphone du destinataire.', 'erreur'); form.telConfirme.focus(); return; }
+        if (form.pieceNumero.value.trim().length < 4) { toast('Notez le numéro de la pièce d\'identité.', 'erreur'); form.pieceNumero.focus(); return; }
+      } else {
+        if (etat.code.length !== 4) { toast('Tapez le code de retrait.', 'erreur'); cases[0].focus(); return; }
+        if (etat.codeOk === false) { toast('Code incorrect. Demandez le code au destinataire, ou passez par « La personne n\'a pas le code ».', 'erreur'); return; }
+      }
       if (!form.piece.checked) { toast('Vérifiez la pièce d\'identité.', 'erreur'); return; }
       if (etat.retirePar === 'tiers' && !form.nomRetrait.value.trim()) { toast('Nom de la personne présente requis.', 'erreur'); return; }
-      if (solde > 0 && (parseFloat(form.recu.value) || 0) < solde) { toast(`Il faut encaisser ${dev(solde)}.`, 'erreur'); return; }
+      const parCarte = solde > 0 && etat.methode === 'stripe';
+      if (parCarte && !etat.cartePayee) { toast('Attendez la confirmation du paiement par carte (QR code).', 'erreur'); return; }
+      const duSaisie = soldeEn(deviseSaisie());
+      if (solde > 0 && !parCarte && (parseFloat(form.recu.value) || 0) < duSaisie) { toast(`Il faut encaisser ${dev(duSaisie)}.`, 'erreur'); return; }
+      if (solde > 0 && mobile() && !form.reference.value.trim()) { toast('Notez la référence de la transaction (SMS de confirmation).', 'erreur'); form.reference.focus(); return; }
       if (sig.vide()) { toast('Faites signer la personne.', 'erreur'); return; }
       const payload = {
-        opId, numero: c.numeroSuivi, code: etat.code, pieceVerifiee: true,
+        opId, numero: c.numeroSuivi, pieceVerifiee: true,
+        ...(etat.sansCode ? { sansCode: true, telephoneConfirme: normTel(form.telConfirme.value), pieceNumero: form.pieceNumero.value.trim() } : { code: etat.code }),
         retirePar: etat.retirePar, nomRetrait: etat.retirePar === 'tiers' ? form.nomRetrait.value.trim() : undefined,
-        paiement: solde > 0 ? { montant: solde, devise, methode: etat.methode, objet: 'global', reference: form.reference?.value || undefined } : undefined,
+        paiement: solde > 0 && !parCarte ? { montant: duSaisie, devise: deviseSaisie(), methode: etat.methode, objet: 'global', reference: form.reference?.value || undefined } : undefined,
         signature: sig.image(),
       };
       const btn = form.querySelector('[type=submit]'); btn.disabled = true;
@@ -1026,7 +1189,7 @@
         await api.post('/agent/remise', payload);
         remiseTerminee(c, false);
       } catch (err) {
-        if (err.reseau && etat.codeOk) {
+        if (err.reseau && etat.codeOk && !etat.sansCode) {
           // Hors-ligne : le code a été vérifié sur le téléphone → on garde la remise pour plus tard
           file.ajouter({ opId, type: 'remise', payload, le: Date.now() });
           journal.ajouter({ opId, numero: c.numeroSuivi, action: 'remise', etat: 'attente', message: 'Remise en attente d\'envoi', le: Date.now() });
@@ -1255,7 +1418,7 @@
         ${solde > 0 ? `
         <div class="carte pile">
           <div class="ligne entre"><h3>2. Encaisser</h3><span class="titre" style="font-size:20px">${montant(solde, devise)}</span></div>
-          <div class="grille-3">${methodesDe(devise).map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${k === 'especes'}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('')}</div>
+          <div class="grille-3">${methodesDe(devise, { qr: false }).filter(([k]) => devise === 'GNF' || !MOBILES.includes(k)).map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${k === 'especes'}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('')}</div>
           <label class="champ cache" data-champ-ref>Référence de la transaction <input class="saisie" name="reference" autocomplete="off"></label>
           <label class="case"><input type="checkbox" name="encaisse"> J'ai reçu ${montant(solde, devise)}</label>
         </div>` : `<p class="bandeau bandeau-vert">${ic('ok', 'ic-sm')} Tout est payé.</p>`}
@@ -1368,6 +1531,8 @@
             <div class="ligne-info"><span>Douane</span><span>${deviseDouane === 'EUR' ? eur((c.fraisDouaneGnf || 0) / taux) : gnf(c.fraisDouaneGnf)}</span></div>
             <div class="ligne-info"><span>Reste à payer</span><span class="gras">${deviseDouane === 'EUR' ? eur(c.solde.soldeEur) : gnf(c.solde.soldeGnf)}</span></div>
           </div>
+          ${blocCode(c)}
+          ${c.solde.soldeGnf > 0 && stripeActif() && c.tarif && !c.tarif.estime && !['remis', 'annule'].includes(c.statut) ? `<button class="btn btn-plein" data-qr-carte>${ic('carte', 'ic-sm')} Faire payer le reste par carte (QR code)</button><div data-zone-qr-fiche></div>` : ''}
           ${peutDouane && !['remis', 'annule'].includes(c.statut) ? `
           <form class="carte pile" data-douane>
             <h3>Droits de douane</h3>
@@ -1385,6 +1550,10 @@
         catch (err) { toast(err.message, 'erreur'); }
       });
       zone.querySelector('[data-reimprimer]').addEventListener('click', () => Etiquette.imprimer(c, CONFIG));
+      zone.querySelector('[data-qr-carte]')?.addEventListener('click', (e) => {
+        e.currentTarget.remove();
+        panneauCarte(zone.querySelector('[data-zone-qr-fiche]'), c.numeroSuivi, { tel: c.payeurArrivee ? c.destinataire.telephone : c.expediteur.telephone, surPaye: () => setTimeout(() => afficherFiche(c.numeroSuivi), 1500) });
+      });
       zone.querySelector('[data-annuler-etape]')?.addEventListener('click', async () => {
         const motif = prompt('Pourquoi annuler cette étape ? (noté dans l\'historique)');
         if (motif === null) return;

@@ -1186,6 +1186,8 @@
             <div class="ligne" style="--gap:18px;flex-wrap:wrap">
               <span class="gras">Depuis la France :</span>
               <label class="case"><input type="checkbox" name="pay_FR_carte" ${c.paiements?.FR?.carte ? 'checked' : ''}> Carte bancaire</label>
+              <label class="case"><input type="checkbox" name="pay_FR_orange_money" ${c.paiements?.FR?.orange_money ? 'checked' : ''}> Orange Money</label>
+              <label class="case"><input type="checkbox" name="pay_FR_mtn_momo" ${c.paiements?.FR?.mtn_momo ? 'checked' : ''}> MTN MoMo</label>
             </div>
             <div class="ligne" style="--gap:18px;flex-wrap:wrap">
               <span class="gras">Depuis la Guinée :</span>
@@ -1304,7 +1306,7 @@
           tva: Object.fromEntries(Object.keys(CONFIG.pays).map(k => [k, { taux: (parseFloat(v(`tva_${k}_taux`)) || 0) / 100, mention: v(`tva_${k}_mention`) }])),
         },
         paiements: {
-          FR: { carte: form.querySelector('[name=pay_FR_carte]').checked },
+          FR: { carte: form.querySelector('[name=pay_FR_carte]').checked, orange_money: form.querySelector('[name=pay_FR_orange_money]').checked, mtn_momo: form.querySelector('[name=pay_FR_mtn_momo]').checked },
           GN: { orange_money: form.querySelector('[name=pay_GN_orange_money]').checked, mtn_momo: form.querySelector('[name=pay_GN_mtn_momo]').checked, carte: form.querySelector('[name=pay_GN_carte]').checked },
           comptes: { orange_money: { numero: v('pay_om_numero'), titulaire: v('pay_om_titulaire') }, mtn_momo: { numero: v('pay_mtn_numero'), titulaire: v('pay_mtn_titulaire') } },
         },
