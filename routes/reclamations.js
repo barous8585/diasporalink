@@ -176,6 +176,7 @@ router.post('/:numero/decision', role(ROLES.ADMIN), [
 // ── POST /api/reclamations/:numero/clore (admin)
 router.post('/:numero/clore', role(ROLES.ADMIN), ah(async (req, res) => {
   const r = await Reclamation.findOneAndUpdate({ numero: req.params.numero.toUpperCase() }, { statut: 'close' }, { new: true });
+  require('../utils/temps-reel').reclamationChange(r);
   if (!r) return res.status(404).json({ succes: false, message: 'Réclamation introuvable.' });
   res.json({ succes: true, reclamation: r });
 }));

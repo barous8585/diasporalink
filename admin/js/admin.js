@@ -157,18 +157,24 @@
     });
   }
 
-  // ── Rafraîchissement automatique des pages « vivantes » ──
-  // Toutes les 45 s si la page est visible et que personne n'est en train de saisir.
-  const VIVANTES = new Set(['bord', 'lots', 'courses', 'reclamations']);
+  // ── Rafraîchissement automatique ──
+  // En direct dès qu'un colis, un lot, une caisse ou une réclamation change, au retour sur la page,
+  // et toutes les 30 s. Jamais pendant une saisie, ni sur les réglages et l'équipe (formulaires).
+  const VIVANTES = new Set(['bord', 'lots', 'courses', 'reclamations', 'colis', 'caisses', 'factures']);
   let pageActuelle = null;
-  setInterval(() => {
-    if (document.hidden || !VIVANTES.has(pageActuelle) || document.querySelector('.modale-fond')) return;
-    const actif = document.activeElement;
-    if (actif && main.contains(actif) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
+  K.tempsReel(async () => {
+    if (!session.connecte() || session.utilisateur()?.role !== 'admin') return;
+    majPastilleRec();
+    if (!VIVANTES.has(pageActuelle)) return;
     if (/^#\/(lots|reclamations)\/./.test(location.hash)) return; // fiche ouverte : on ne bouge pas
+    // Recherche ou jour choisi à la main : on ne remet pas l'écran à zéro
+    if (pageActuelle === 'colis' && [...main.querySelectorAll('[data-filtres] input, [data-filtres] select')].some(i => i.value)) return;
+    if (pageActuelle === 'caisses' && main.querySelector('[data-jour]')?.value !== new Date().toISOString().slice(0, 10)) return;
     const y = window.scrollY;
-    router({ silencieux: true }).then(() => window.scrollTo(0, y));
-  }, 45000);
+    await router({ silencieux: true });
+    window.scrollTo(0, y);
+  });
+  K.garderSession();
 
   async function router({ silencieux = false } = {}) {
     if (!session.connecte()) return connexion();
@@ -1401,6 +1407,9 @@
     majEncartTaux();
     window.addEventListener('hashchange', router);
     router();
+    // Nouvelle version du back-office : rechargée seule (le service worker change à chaque mise à jour)
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    K.miseAJourAuto();
   }
   demarrer();
 })();

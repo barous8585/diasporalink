@@ -27,6 +27,10 @@ const clotureSchema = new mongoose.Schema({
   commentaire: String,
 }, { timestamps: true, minimize: false });
 
+// Prévient les apps ouvertes (rafraîchissement automatique)
+mouvementSchema.post('save', (doc) => require('../utils/temps-reel').mouvementChange(doc));
+clotureSchema.post('save', (doc) => require('../utils/temps-reel').mouvementChange(doc));
+
 module.exports = {
   Mouvement: mongoose.model('Mouvement', mouvementSchema),
   Cloture:   mongoose.model('Cloture', clotureSchema),

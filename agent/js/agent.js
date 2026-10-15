@@ -125,16 +125,22 @@
   }
   setInterval(() => { if (navigator.onLine) rafraichirContexte().catch(() => {}); }, 120000);
   // Écrans « liste » redessinés seuls toutes les 60 s (courses du livreur, colis prêts au guichet)
-  setInterval(async () => {
+  // Écrans « liste » redessinés seuls : en direct quand un colis de l'agence change, au retour
+  // sur l'app et toutes les 30 s (jamais pendant une saisie, un scan ou un formulaire rempli)
+  async function rafraichirEcran() {
     if (document.hidden || !navigator.onLine || document.querySelector('.modale-fond') || arreterCamera) return;
+    await rafraichirContexte().catch(() => {});
+    majPastille();
     main.classList.remove('entree'); // rafraîchissement silencieux : pas d'animation
     const onglet = location.hash.replace(/^#\/?/, '').split('/')[0];
     const actif = document.activeElement;
     if (actif && main.contains(actif) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
+    if (onglet === 'caisse' && main.querySelector('[data-caisse]') && ![...main.querySelectorAll('input')].some(i => i.value)) { const y = window.scrollY; await vueCaisse(); window.scrollTo(0, y); }
     if ((onglet === 'jour' || onglet === '') && !estLivreur() && main.querySelector('.guide') && !main.querySelector('.guide[open]')) { const y = window.scrollY; await vueAujourdhui(); window.scrollTo(0, y); }
     if (onglet === 'courses' && main.querySelector('[data-seg]')) { const y = window.scrollY; await vueCourses(); window.scrollTo(0, y); }
-    if (onglet === 'remise' && main.querySelector('[data-liste]')) { await rafraichirContexte().catch(() => {}); main.querySelector('[data-filtre]')?.dispatchEvent(new Event('input')); }
-  }, 60000);
+    if (onglet === 'remise' && main.querySelector('[data-liste]')) { main.querySelector('[data-filtre]')?.dispatchEvent(new Event('input')); }
+  }
+  K.tempsReel(rafraichirEcran);
 
   // ══════════════════════════════════════════════════════════
   //  NAVIGATION
@@ -1259,7 +1265,7 @@
     const methodes = Object.fromEntries(CONFIG.methodesPaiement.map(m => [m.key, m.label]));
     const devises = Object.keys(r.totaux);
     main.innerHTML = `
-      <div class="pile">
+      <div class="pile" data-caisse>
         <div class="carte-vert pile" style="--gap:6px">
           <div class="petit" style="opacity:.9">Ma caisse ${r.depuis ? `depuis le ${esc(date(r.depuis))}` : ''}</div>
           ${devises.length ? devises.map(d => `<div class="titre" style="font-size:28px;font-weight:800">${montant(Object.values(r.totaux[d]).reduce((a, b) => a + b, 0), d)}</div>`).join('') : '<div class="titre" style="font-size:24px">Aucun encaissement</div>'}
@@ -1593,5 +1599,7 @@
     synchroniser();
   }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  K.miseAJourAuto();
+  K.garderSession();
   demarrer();
 })();

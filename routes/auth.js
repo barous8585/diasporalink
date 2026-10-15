@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const {
-  connexionCtrl, inscriptionCtrl, changerMotDePasseCtrl, envoyerOtpCtrl, verifierOtpCtrl, moiCtrl, googleCtrl, lierGoogleCtrl,
+  connexionCtrl, inscriptionCtrl, changerMotDePasseCtrl, envoyerOtpCtrl, verifierOtpCtrl, moiCtrl, googleCtrl, lierGoogleCtrl, renouvelerCtrl,
 } = require('../controllers/authController');
 const { auth } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
@@ -35,6 +35,7 @@ router.post('/verifier-otp', [
 ], valider, ah(verifierOtpCtrl));
 
 router.get('/moi', auth, moiCtrl);
+router.post('/renouveler', auth, renouvelerCtrl);
 
 // ── Connexion avec Google (espace client) ──
 router.post('/google', [body('credential').isString().isLength({ min: 20, max: 5000 }).withMessage('Connexion Google invalide')], valider, ah(googleCtrl));

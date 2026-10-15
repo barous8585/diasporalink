@@ -32,4 +32,6 @@ lotSchema.pre('validate', async function (next) {
   } catch (e) { next(e); }
 });
 
+// Prévient les apps ouvertes (rafraîchissement automatique)
+lotSchema.post('save', (doc) => require('../utils/temps-reel').lotChange(doc));
 module.exports = mongoose.model('Lot', lotSchema);

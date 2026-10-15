@@ -78,15 +78,15 @@
     [/^\/reclamation\/([\w-]+)$/, reclamation, null],
   ];
 
-  // Suivi et « Mes colis » se mettent à jour seuls (toutes les 60 s, page visible, rien en cours de saisie)
-  setInterval(() => {
-    if (document.hidden || document.querySelector('.modale-fond')) return;
-    if (!/^#\/(suivi\/|mes-colis$)/.test(location.hash) && !(session.connecte() && /^#?\/?$/.test(location.hash))) return;
-    const actif = document.activeElement;
-    if (actif && ['INPUT', 'TEXTAREA', 'SELECT'].includes(actif.tagName)) return;
+  // Les écrans de consultation se mettent à jour seuls : en direct quand un colis change,
+  // au retour sur l'app, et toutes les 30 s (jamais pendant une saisie ni sur « Envoyer »)
+  const PAGES_VIVANTES = /^#?\/?$|^#\/(suivi\/|mes-colis$|factures$|reclamation\/)/;
+  K.tempsReel(async () => {
+    if (!PAGES_VIVANTES.test(location.hash)) return;
     const y = window.scrollY;
-    router({ silencieux: true }).then(() => window.scrollTo(0, y));
-  }, 60000);
+    await router({ silencieux: true });
+    window.scrollTo(0, y);
+  });
 
   // Connexion obligatoire : sans compte, seules la connexion et les pages légales sont visibles
   const PAGES_LIBRES = /^\/(connexion|cgv|interdits|confidentialite)$/;
@@ -1408,5 +1408,7 @@
   }
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  K.miseAJourAuto();
+  K.garderSession();
   demarrer();
 })();
