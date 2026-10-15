@@ -155,6 +155,8 @@ const declarerMobile = async (req, res) => {
   const montantGnf = obj === 'domicile' ? dus.domicile.gnf : dus.solde.gnf;
   if (!(montantGnf > 0)) return res.status(400).json({ succes: false, message: 'Rien à payer.' });
   if ((colis.declarations || []).some(d => d.reference.toUpperCase() === reference.toUpperCase())) return res.status(409).json({ succes: false, message: 'Cette référence a déjà été envoyée. Elle est en cours de vérification.' });
+  // Anti-abus : pas plus de 3 paiements en attente de vérification sur un même colis
+  if ((colis.declarations || []).filter(d => d.statut === 'a_verifier').length >= 3) return res.status(429).json({ succes: false, message: 'Des paiements sont déjà en vérification pour ce colis. Patientez ou contactez l\'agence.' });
   colis.declarations = colis.declarations || [];
   colis.declarations.push({ methode, objet: obj, montantGnf, reference, telephone: String(req.body.telephone || '').trim().slice(0, 30) });
   colis.historique.push({ label: 'Paiement mobile money envoyé, en vérification', detail: `${montantGnf.toLocaleString('fr-FR')} GNF · ${LIB[methode]}`, le: new Date() });
@@ -216,7 +218,9 @@ const webhookStripe = async (req, res) => {
 // ── GET /api/paiements/verifier/:sessionId
 const verifierSession = async (req, res) => {
   if (!getStripe()) return res.status(503).json({ succes: false, message: 'Paiement par carte non configuré.' });
-  const session = await getStripe().checkout.sessions.retrieve(req.params.sessionId);
+  if (!/^cs_[A-Za-z0-9_]{10,200}$/.test(String(req.params.sessionId))) return res.status(404).json({ succes: false, message: 'Paiement introuvable.' });
+  const session = await getStripe().checkout.sessions.retrieve(req.params.sessionId).catch(() => null);
+  if (!session || !session.metadata?.colisId) return res.status(404).json({ succes: false, message: 'Paiement introuvable.' });
   if (session.payment_status !== 'paid') return res.json({ succes: true, paye: false });
   const colis = await enregistrerPaiementStripe(session);
   res.json({ succes: true, paye: true, numeroSuivi: colis?.numeroSuivi });

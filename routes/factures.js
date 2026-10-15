@@ -29,16 +29,21 @@ router.get('/public/:numero', lienLimiter, ah(async (req, res) => {
 // ── GET /api/factures/mes ── toutes les factures des colis du client (envoyés et reçus)
 router.get('/mes', auth, ah(async (req, res) => {
   const u = req.user;
-  const ids = (await Colis.find({ $or: [{ client: u._id }, { 'expediteur.telephone': u.telephone }, { 'destinataire.telephone': u.telephone }, { 'tiersAutorise.telephone': u.telephone }] }).select('_id').limit(1000).lean()).map(c => c._id);
-  const factures = await Facture.find({ colis: { $in: ids } }).sort({ date: -1 }).limit(500).lean();
+  const liste = await Colis.find({ $or: [{ client: u._id }, { 'expediteur.telephone': u.telephone }, { 'destinataire.telephone': u.telephone }, { 'tiersAutorise.telephone': u.telephone }] }).select('_id client expediteur destinataire tiersAutorise').limit(1000);
+  const complets = liste.filter(c => svc.niveauAcces(c, u) === 'complet').map(c => c._id);
+  const restreints = liste.filter(c => svc.niveauAcces(c, u) === 'restreint').map(c => c._id);
+  // Numéro non vérifié : seulement les factures établies à son nom
+  const factures = await Facture.find({ $or: [{ colis: { $in: complets } }, { colis: { $in: restreints }, 'client.telephone': u.telephone }] }).sort({ date: -1 }).limit(500).lean();
   res.json({ succes: true, factures: await Promise.all(factures.map(avecEtat)) });
 }));
 
 // ── GET /api/factures/colis/:numero ── factures d'un colis (client lié, équipe)
 router.get('/colis/:numero', auth, ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.toUpperCase() });
-  if (!colis || !svc.lieAuCompte(colis, req.user)) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
-  res.json({ succes: true, factures: await fact.facturesDuColis(colis) });
+  const niveau = svc.niveauAcces(colis, req.user);
+  if (!niveau) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
+  const toutes = await fact.facturesDuColis(colis);
+  res.json({ succes: true, factures: niveau === 'complet' ? toutes : toutes.filter(f => f.client?.telephone === req.user.telephone) });
 }));
 
 // ── POST /api/factures/colis/:numero/emettre ── équipe : facturer ce qui ne l'est pas encore
@@ -68,7 +73,7 @@ router.get('/', auth, role(ROLES.ADMIN), ah(async (req, res) => {
 router.get('/export.csv', auth, role(ROLES.ADMIN), ah(async (req, res) => {
   const factures = await Facture.find(filtrePeriode(req.query)).sort({ date: 1 }).lean();
   const n = (x) => (x === undefined || x === null ? '' : String(x).replace('.', ','));
-  const cell = (s) => `"${String(s ?? '').replace(/"/g, '""')}"`;
+  const cell = (s) => { let t = String(s ?? ''); if (/^[=+\-@\t\r]/.test(t) && !/^-?\d+([.,]\d+)?$/.test(t)) t = `'${t}`; return `"${t.replace(/"/g, '""')}"`; };
   const lignes = [['Numéro', 'Type', 'Date', 'Colis', 'Client', 'Téléphone', 'Agence', 'Devise', 'Total HT', 'TVA', 'Total TTC', 'Taux de TVA', 'Facture d\'origine'].map(cell).join(';')];
   for (const f of factures) {
     const signe = f.type === 'avoir' ? -1 : 1;

@@ -11,7 +11,7 @@ const { ROLES } = require('../config/constants');
 const limite = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: { succes: false, message: 'Trop d\'essais, patientez un peu.' } });
 router.get('/a-payer/:numero', limite, ah(c.resumeAPayer));
 router.post('/creer-session', limite, ah(c.creerSession));
-router.get('/verifier/:sessionId', ah(c.verifierSession));
+router.get('/verifier/:sessionId', limite, ah(c.verifierSession));
 
 // Orange Money / MTN MoMo : le client déclare son envoi, l'équipe le vérifie
 router.post('/mobile', limite, ah(c.declarerMobile));

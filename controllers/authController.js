@@ -55,7 +55,6 @@ const connexionCtrl = async (req, res) => {
   if (verdict === 'bloque') return res.status(423).json({ succes: false, message: 'Trop d\'essais. Réessayez dans 15 minutes.' });
   if (verdict !== 'ok') return res.status(401).json({ succes: false, message: MSG_IDENTIFIANTS });
 
-  if (telephonesAdmin().includes(telephone) && user.role !== ROLES.ADMIN) { user.role = ROLES.ADMIN; await user.save(); }
   res.json({ succes: true, token: genererToken(user), utilisateur: user });
 };
 
@@ -64,6 +63,8 @@ const inscriptionCtrl = async (req, res) => {
   const telephone = normTel(req.body.telephone);
   const { prenom, nom, motDePasse } = req.body;
   if (!User.mdpValide(motDePasse)) return res.status(400).json({ succes: false, message: 'Mot de passe : 8 caractères minimum.' });
+  // Un numéro administrateur ne s'inscrit jamais comme client (il deviendrait admin)
+  if (telephonesAdmin().includes(telephone)) return res.status(403).json({ succes: false, message: 'Ce numéro ne peut pas créer de compte client.' });
   const existant = await User.findOne({ telephone });
   if (existant) {
     return res.status(409).json({ succes: false, message: 'Un compte existe déjà avec ce numéro. Connectez-vous, ou demandez à l\'agence de réinitialiser votre mot de passe.' });

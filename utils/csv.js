@@ -1,5 +1,7 @@
 // CSV lisible par Excel en français : séparateur « ; », virgule décimale, BOM UTF-8
-const cell = (s) => `"${String(s ?? '').replace(/"/g, '""')}"`;
+// Une cellule qui commence par = + - @ serait exécutée comme formule par Excel : on la neutralise
+const neutraliser = (t) => (/^[=+\-@\t\r]/.test(t) && !/^-?\d+([.,]\d+)?$/.test(t) ? `'${t}` : t);
+const cell = (s) => `"${neutraliser(String(s ?? '')).replace(/"/g, '""')}"`;
 const nombre = (x) => (x === undefined || x === null || x === '' ? '' : String(Math.round(Number(x) * 100) / 100).replace('.', ','));
 const dateFr = (d) => (d ? new Date(d).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) : '');
 const heureFr = (d) => (d ? new Date(d).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }) : '');

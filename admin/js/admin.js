@@ -59,7 +59,7 @@
   const aujourdhui = () => new Date().toLocaleDateString('sv'); // AAAA-MM-JJ, heure locale
   const nomFichier = (txt) => String(txt || 'export').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
   // CSV lisible par Excel en français : BOM, séparateur « ; »
-  const celluleCsv = (v) => { const t = String(v ?? '').replace(/\s+/g, ' ').trim(); return /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const celluleCsv = (v) => { let t = String(v ?? '').replace(/\s+/g, ' ').trim(); if (/^[=+\-@]/.test(t) && !/^-?[\d\s]+([.,]\d+)?( ?[€A-Z]+)?$/.test(t)) t = `'${t}`; return /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
   const versCsv = (lignes) => '\ufeff' + lignes.map(l => l.map(celluleCsv).join(';')).join('\r\n');
   const nombreCsv = (n) => (n === null || n === undefined || n === '') ? '' : String(Math.round(Number(n) * 100) / 100).replace('.', ',');
   function telechargerTexte(texte, nom) {

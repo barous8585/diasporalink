@@ -11,7 +11,12 @@ const { ah, valider } = require('../utils/http');
 const { calculerTarif } = require('../utils/tarif');
 const { notifier, MESSAGES } = require('../utils/sms');
 const { STATUTS, MODES, TYPES_COLIS, ROLES, SENS, CGV_VERSION, libMode } = require('../config/constants');
-const { normTel, vuePublique, vueComplete, sensDepuisAgences, nettoyerArticles } = require('../services/colisService');
+const { normTel, vuePublique, vueComplete, sensDepuisAgences, nettoyerArticles, niveauAcces, restreindre } = require('../services/colisService');
+// Vue d'un colis pour un client : complète, ou restreinte si son numéro n'est pas vérifié
+const vueClient = async (colis, user) => {
+  const obj = await vueComplete(colis, { avecCode: estAutorisePourCode(colis, user) });
+  return niveauAcces(colis, user) === 'restreint' ? restreindre(obj, user) : obj;
+};
 const dom = require('../services/domicileService');
 
 // Limite le « balayage » des numéros de suivi
@@ -50,7 +55,7 @@ const filtreUtilisateur = (user) => ({
 // ── GET /api/colis ── mes colis (envoyés et reçus)
 router.get('/', auth, ah(async (req, res) => {
   const liste = await Colis.find(filtreUtilisateur(req.user)).select('+codeRetrait').sort({ updatedAt: -1 }).limit(100);
-  const colis = await Promise.all(liste.map(c => vueComplete(c, { avecCode: estAutorisePourCode(c, req.user) })));
+  const colis = await Promise.all(liste.map(c => vueClient(c, req.user)));
   res.json({ succes: true, colis });
 }));
 
@@ -70,7 +75,7 @@ function estAutorisePourCode(colis, user) {
 router.get('/:numero', auth, ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.toUpperCase(), ...filtreUtilisateur(req.user) }).select('+codeRetrait');
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
-  res.json({ succes: true, colis: await vueComplete(colis, { avecCode: estAutorisePourCode(colis, req.user) }) });
+  res.json({ succes: true, colis: await vueClient(colis, req.user) });
 }));
 
 // ── POST /api/colis ── réservation en ligne (le prix définitif est fixé à la pesée)
@@ -81,14 +86,19 @@ router.post('/', auth, [
   body('articles').optional().isArray({ max: 40 }),
   body('depot').trim().notEmpty().withMessage('Choisissez l\'agence où vous déposez le colis'),
   body('guichet').trim().notEmpty().withMessage('Choisissez l\'agence de retrait'),
-  body('destinataire.nom').trim().notEmpty().withMessage('Nom du destinataire requis'),
-  body('destinataire.telephone').trim().notEmpty().withMessage('Téléphone du destinataire requis'),
+  body('destinataire.nom').trim().isLength({ min: 1, max: 120 }).withMessage('Nom du destinataire requis'),
+  body('destinataire.telephone').trim().isLength({ min: 6, max: 25 }).withMessage('Téléphone du destinataire requis'),
+  body('description').optional().isString().isLength({ max: 500 }).withMessage('Description trop longue'),
   body('nbCartons').optional().isInt({ min: 1, max: 50 }),
   body('valeurDeclaree').optional().isFloat({ min: 0 }),
   body('cgvAcceptees').equals('true').withMessage('Acceptez les conditions générales et confirmez qu\'aucun objet interdit n\'est dans le colis'),
 ], valider, ah(async (req, res) => {
   const config = await Config.get();
   const b = req.body;
+  // Anti-abus : pas plus de 40 réservations en attente de dépôt par compte
+  if (await Colis.countDocuments({ client: req.user._id, statut: STATUTS.RESERVE }) >= 40) {
+    return res.status(429).json({ succes: false, message: 'Vous avez déjà 40 réservations en attente de dépôt. Déposez ou annulez-en avant d\'en créer d\'autres.' });
+  }
   const sens = await sensDepuisAgences(b.depot, b.guichet);
   const articles = nettoyerArticles(config, b.articles);
 
