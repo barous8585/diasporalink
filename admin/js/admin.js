@@ -766,7 +766,7 @@
         <td><span class="badge">${c.type === 'ramassage' ? 'Ramassage' : 'Livraison'}</span></td>
         <td><a href="#" data-fiche class="gras">${esc(c.numeroSuivi)}</a><div class="tres-petit muet">${esc(CONFIG.statuts[c.statutColis] || c.statutColis)}</div></td>
         <td>${esc(c.adresse?.nom || c.contact?.nom || '')}<div class="tres-petit muet">${esc(c.adresse?.telephone || c.contact?.telephone || '')}</div></td>
-        <td>${esc([c.adresse?.quartier, c.adresse?.ville].filter(Boolean).join(', '))}<div class="tres-petit muet">${esc(c.adresse?.repere || '')}</div>
+        <td>${c.adresse?.rue ? `${esc(c.adresse.rue)}<br>` : ''}${esc([c.adresse?.quartier, c.adresse?.ville].filter(Boolean).join(', '))}<div class="tres-petit muet">${esc(c.adresse?.repere || '')}</div>
           ${c.adresse?.position?.lat ? `<a class="tres-petit" href="${esc(K.lienCarte(c.adresse.position))}" target="_blank" rel="noopener">carte</a>` : '<span class="tres-petit rouge">position manquante</span>'}</td>
         <td>${esc(nomLieu(c.agence))}<div class="tres-petit muet">${c.distanceKm ? `${esc(String(c.distanceKm).replace('.', ','))} km` : ''}</div></td>
         <td class="chiffres">${c.prix ? montant(c.prix, c.devise) : '<span class="muet">sans position</span>'}<div class="tres-petit ${c.payee ? 'vert' : 'rouge'}">${c.prix ? (c.payee ? 'payée' : 'pas encore payée') : ''}</div></td>

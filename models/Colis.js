@@ -35,7 +35,8 @@ const evenementSchema = new mongoose.Schema({
 }, { _id: false });
 
 // Course à domicile : ramassage chez l'expéditeur ou livraison chez le destinataire
-const pointSchema = new mongoose.Schema({ lat: Number, lng: Number, precision: Number, le: Date }, { _id: false });
+// source : gps (téléphone sur place), carte (épingle), lien (WhatsApp / Maps), adresse (trouvée d'après l'adresse écrite, approximative)
+const pointSchema = new mongoose.Schema({ lat: Number, lng: Number, precision: Number, source: String, le: Date }, { _id: false });
 const courseSchema = new mongoose.Schema({
   demande:  { type: Boolean, default: false },
   statut:   { type: String, enum: Object.values(STATUTS_COURSE), default: STATUTS_COURSE.A_PLANIFIER },
@@ -46,7 +47,8 @@ const courseSchema = new mongoose.Schema({
     ville:     String,
     commune:   String,
     quartier:  String,
-    repere:    String,                        // « derrière la mosquée de… », étage, portail bleu
+    rue:       String,                        // adresse écrite : n°, rue, immeuble…
+    repere:    String,                        // facultatif : « derrière la mosquée de… », étage, portail bleu
     position:  pointSchema,
   },
   jour:     { type: Date },                   // jour souhaité

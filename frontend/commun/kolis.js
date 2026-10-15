@@ -665,54 +665,99 @@
   const lienCarte = (p) => p?.lat ? `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}` : '';
 
   /**
-   * Bloc d'adresse. valeur = { quartier, ville, repere, telephone, position }.
-   * options : { maPosition: bouton « Je suis sur place », positionFacultative, aide }
+   * Bloc d'adresse, deux façons au choix (une seule suffit) :
+   *  - « Ma position » : GPS du téléphone, épingle sur la carte, ou lien WhatsApp / Maps ;
+   *  - « J'écris mon adresse » : rue, quartier, ville ; l'adresse est placée sur la carte
+   *    automatiquement pour calculer le prix (le livreur appelle au besoin).
+   * Le point de repère et le téléphone sur place sont facultatifs.
+   * valeur = { rue, quartier, ville, repere, telephone, position }
+   * options : { maPosition: proposer le GPS (on est sur place), positionFacultative, aide }
    */
   function champsAdresse(prefixe, valeur = {}, { maPosition = true, positionFacultative = false, aide = '' } = {}) {
     const n = (k) => `${prefixe}_${k}`;
+    const parDefaut = valeur.position?.lat && valeur.position.source !== 'adresse' ? 'position' : (valeur.rue || valeur.quartier || !maPosition ? 'ecrire' : 'position');
     return `
-      <div class="pile bloc-adresse" style="--gap:10px" data-adresse="${prefixe}">
-        <div class="grille-2">
-          <label class="champ">Quartier / commune <input class="saisie" name="${n('quartier')}" value="${esc(valeur.quartier || valeur.commune || '')}" autocomplete="address-level3" required></label>
-          <label class="champ">Ville <input class="saisie" name="${n('ville')}" value="${esc(valeur.ville || '')}" autocomplete="address-level2"></label>
+      <div class="pile bloc-adresse" style="--gap:12px" data-adresse="${prefixe}" data-saisie="${parDefaut}">
+        <div class="segments" role="group" aria-label="Comment indiquer l'adresse">
+          <button type="button" data-mode-adresse="position" aria-pressed="${parDefaut === 'position'}">${ic('gps', 'ic-sm')} ${maPosition ? 'Ma position' : 'Sa position'}</button>
+          <button type="button" data-mode-adresse="ecrire" aria-pressed="${parDefaut === 'ecrire'}">${ic('liste', 'ic-sm')} Écrire l'adresse</button>
         </div>
-        <label class="champ">Point de repère <input class="saisie" name="${n('repere')}" value="${esc(valeur.repere || '')}" placeholder="Ex. derrière la mosquée, portail bleu, 3e étage" required></label>
-        <label class="champ">Téléphone sur place <span class="tres-petit muet">(si différent)</span><input class="saisie" name="${n('telephone')}" type="tel" inputmode="tel" value="${esc(valeur.telephone || '')}"></label>
-        <div class="carte pile position-gps" style="--gap:8px;padding:12px">
-          <div class="gras petit">${ic('gps', 'ic-sm')} Position exacte${positionFacultative ? ' <span class="muet">(peut être envoyée plus tard)</span>' : ''}</div>
+
+        <div class="pile" style="--gap:8px" data-zone-position>
           <div class="grille-2" style="--gap:8px">
-            ${maPosition ? `<button type="button" class="btn btn-plein" data-ma-position>${ic('gps', 'ic-sm')} Je suis sur place</button>` : ''}
+            ${maPosition ? `<button type="button" class="btn btn-plein btn-principal" data-ma-position>${ic('gps', 'ic-sm')} Je suis sur place</button>` : ''}
             <button type="button" class="btn btn-plein" data-sur-carte>${ic('lieu', 'ic-sm')} Choisir sur la carte</button>
           </div>
-          <label class="champ tres-petit">${maPosition ? 'ou c' : 'C'}ollez le lien de localisation (WhatsApp, Google Maps)
+          <label class="champ tres-petit">${maPosition ? 'Ou c' : 'C'}ollez un lien de localisation (WhatsApp, Google Maps)
             <input class="saisie" data-lien-position placeholder="https://maps.app.goo.gl/… ou 9.5412, -13.6773" inputmode="url">
           </label>
-          ${aide ? `<p class="tres-petit muet">${aide}</p>` : ''}
-          <div class="petit" data-etat-position aria-live="polite"></div>
         </div>
+
+        <div class="pile" style="--gap:8px" data-zone-ecrire>
+          <label class="champ">Adresse<input class="saisie" name="${n('rue')}" value="${esc(valeur.rue || '')}" autocomplete="street-address" placeholder="N°, rue, immeuble… (ex. 12 rue KA-020)"></label>
+          <div class="grille-2">
+            <label class="champ">Quartier / commune <input class="saisie" name="${n('quartier')}" value="${esc(valeur.quartier || valeur.commune || '')}" autocomplete="address-level3" placeholder="Ex. Kipé"></label>
+            <label class="champ">Ville <input class="saisie" name="${n('ville')}" value="${esc(valeur.ville || '')}" autocomplete="address-level2" placeholder="Ex. Conakry"></label>
+          </div>
+        </div>
+
+        <div class="petit etat-position" data-etat-position aria-live="polite"></div>
+
+        <details class="details-adresse" ${valeur.repere || valeur.telephone ? 'open' : ''}>
+          <summary>Ajouter un repère ou un autre téléphone <span class="muet">(facultatif)</span></summary>
+          <div class="pile" style="--gap:8px;margin-top:10px">
+            <label class="champ">Point de repère<input class="saisie" name="${n('repere')}" value="${esc(valeur.repere || '')}" placeholder="Ex. derrière la mosquée, portail bleu, 3e étage"></label>
+            <label class="champ">Téléphone sur place, si différent<input class="saisie" name="${n('telephone')}" type="tel" inputmode="tel" value="${esc(valeur.telephone || '')}"></label>
+          </div>
+        </details>
+        ${aide ? `<p class="tres-petit muet">${aide}</p>` : ''}
+        ${positionFacultative ? '<p class="tres-petit muet">Vous pouvez aussi laisser vide : la position pourra être envoyée plus tard depuis le suivi.</p>' : ''}
       </div>`;
   }
 
-  /** Branche le bloc : calcule la course à chaque changement de position. */
+  // Place une adresse écrite sur la carte (OpenStreetMap) : position approximative
+  async function adresseVersPosition({ rue, quartier, ville }, pays) {
+    const q = [rue, quartier, ville || (pays === 'FR' ? '' : 'Conakry'), pays === 'FR' ? 'France' : 'Guinée'].filter(Boolean).join(', ');
+    const essai = async (texte) => {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=fr&countrycodes=${pays === 'FR' ? 'fr' : 'gn'}&q=${encodeURIComponent(texte)}`);
+      const [lieu] = await r.json();
+      return lieu ? { lat: Math.round(parseFloat(lieu.lat) * 1e6) / 1e6, lng: Math.round(parseFloat(lieu.lon) * 1e6) / 1e6, precision: 300, source: 'adresse' } : null;
+    };
+    // Rue introuvable (fréquent à Conakry) : on se rabat sur le quartier
+    return (await essai(q)) || (rue && quartier ? await essai([quartier, ville || (pays === 'FR' ? '' : 'Conakry'), pays === 'FR' ? 'France' : 'Guinée'].filter(Boolean).join(', ')) : null);
+  }
+
+  /** Branche le bloc : calcule la course à chaque changement de position ou d'adresse. */
   function brancherAdresse(racine, prefixe, { valeur = {}, agence, config, surChange } = {}) {
     const bloc = racine.querySelector(`[data-adresse="${prefixe}"]`);
     let position = valeur.position?.lat ? valeur.position : null;
     let course = null;
     const etat = bloc.querySelector('[data-etat-position]');
+    const champ = (k) => bloc.querySelector(`[name="${prefixe}_${k}"]`)?.value.trim() || '';
+    const mode = () => bloc.dataset.saisie;
+    const choisirMode = (m) => {
+      bloc.dataset.saisie = m;
+      bloc.querySelectorAll('[data-mode-adresse]').forEach(b => b.setAttribute('aria-pressed', b.dataset.modeAdresse === m));
+      bloc.querySelector('[data-zone-position]').classList.toggle('cache', m !== 'position');
+      bloc.querySelector('[data-zone-ecrire]').classList.toggle('cache', m !== 'ecrire');
+    };
     const majEtat = (message, type, { silencieux = false } = {}) => {
       const ag = agence?.();
       course = position && ag ? KolisTarif.calculerCourse(config.regles || config, ag, position) : null;
+      const approx = position?.source === 'adresse';
       if (message) etat.innerHTML = `<span class="${type === 'erreur' ? 'rouge' : 'muet'}">${esc(message)}</span>`;
       else if (!position) etat.innerHTML = '';
       else if (course && !course.ok) etat.innerHTML = `<span class="rouge">${esc(course.message)}</span>`;
-      else etat.innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} Position reçue</span>${course ? ` · ${esc(course.distanceKm.toLocaleString('fr-FR'))} km de ${esc(ag.nom)} · <b>${esc(montant(course.prix, course.devise))}</b>` : ''} · <button type="button" class="btn-lien" data-ajuster>voir / ajuster</button>`;
+      else etat.innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} ${approx ? 'Adresse trouvée sur la carte' : 'Position reçue'}</span>${course ? ` · ${esc(course.distanceKm.toLocaleString('fr-FR'))} km de ${esc(ag.nom)} · <b>${esc(montant(course.prix, course.devise))}</b>` : ''} · <button type="button" class="btn-lien" data-ajuster>${approx ? 'vérifier sur la carte' : 'voir / ajuster'}</button>`;
       if (!silencieux) surChange?.();
     };
+    bloc.querySelectorAll('[data-mode-adresse]').forEach(b => b.addEventListener('click', () => choisirMode(b.dataset.modeAdresse)));
+    choisirMode(mode());
     bloc.querySelector('[data-ma-position]')?.addEventListener('click', async (e) => {
       const b = e.currentTarget; b.disabled = true;
       majEtat('Recherche de votre position…');
       try {
-        position = await gpsActuel(); majEtat();
+        position = { ...(await gpsActuel()), source: 'gps' }; majEtat();
         // GPS imprécis (intérieur, vieux téléphone) : on propose d'ajuster sur la carte
         if (position.precision > 100) etat.insertAdjacentHTML('beforeend', `<br><span class="rouge">Position approximative (± ${position.precision} m).</span> <button type="button" class="btn-lien" data-ajuster>Ajuster sur la carte</button>`);
       } catch (err) { majEtat(err.message, 'erreur'); }
@@ -722,7 +767,7 @@
       try {
         const ag = agence?.();
         const p = await choisirSurCarte({ position, centre: ag?.position, pays: ag?.pays, titre: 'Où exactement ?' });
-        if (p) { position = p; majEtat(); }
+        if (p) { position = { ...p, source: 'carte' }; majEtat(); }
       } catch (err) { majEtat(err.message, 'erreur'); }
     };
     bloc.querySelector('[data-sur-carte]').addEventListener('click', ouvrirCarte);
@@ -737,14 +782,35 @@
         majEtat('Lecture du lien…');
         try {
           const p = await positionDuLien(t);
-          if (p) { position = p; majEtat(); } else majEtat('Lien non reconnu. Dans WhatsApp : trombone → Localisation → copiez le lien Google Maps.', 'erreur');
+          if (p) { position = { ...p, source: 'lien' }; majEtat(); } else majEtat('Lien non reconnu. Dans WhatsApp : trombone → Localisation → copiez le lien Google Maps.', 'erreur');
         } catch (err) { majEtat(err.message, 'erreur'); }
       }, 400);
     });
+    // Adresse écrite : placée sur la carte automatiquement (sauf si une position exacte a été donnée)
+    let minuteurAdr, demande = 0;
+    const chercherAdresse = () => {
+      clearTimeout(minuteurAdr);
+      minuteurAdr = setTimeout(async () => {
+        if (position && position.source !== 'adresse') return; // GPS / carte / lien : plus précis, on garde
+        const a = { rue: champ('rue'), quartier: champ('quartier'), ville: champ('ville') };
+        if (!a.rue && !a.quartier) { if (position?.source === 'adresse') { position = null; majEtat(); } return; }
+        const n = ++demande;
+        majEtat('Recherche de l\'adresse sur la carte…', null, { silencieux: true });
+        try {
+          const p = await adresseVersPosition(a, agence?.()?.pays);
+          if (n !== demande) return;
+          if (p) { position = p; majEtat(); }
+          else { position = null; majEtat('Adresse enregistrée. Le livreur vous appellera pour la trouver ; le prix sera confirmé à ce moment-là.', null); }
+        } catch { if (n === demande) majEtat('Adresse enregistrée (carte indisponible sans réseau).', null); }
+      }, 900);
+    };
+    ['rue', 'quartier', 'ville'].forEach(k => bloc.querySelector(`[name="${prefixe}_${k}"]`)?.addEventListener('input', chercherAdresse));
     majEtat(null, null, { silencieux: true }); // premier affichage : l'appelant n'est pas encore prêt
-    const champ = (k) => bloc.querySelector(`[name="${prefixe}_${k}"]`)?.value.trim() || '';
+    if (!position && (champ('rue') || champ('quartier'))) chercherAdresse();
     return {
-      lire: () => ({ quartier: champ('quartier'), ville: champ('ville'), repere: champ('repere'), telephone: champ('telephone') ? normTel(champ('telephone')) : '', position: position || undefined }),
+      lire: () => ({ rue: champ('rue'), quartier: champ('quartier'), ville: champ('ville'), repere: champ('repere'), telephone: champ('telephone') ? normTel(champ('telephone')) : '', position: position || undefined }),
+      // Une adresse suffit : position, ou au moins une rue ou un quartier écrits
+      complete: () => !!(position || champ('rue') || champ('quartier')),
       course: () => course,
       position: () => position,
       recalculer: () => majEtat(),
