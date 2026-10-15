@@ -8,9 +8,9 @@ const initSocket = (io) => {
       const token = socket.handshake.auth?.token;
       if (!token) return next(new Error('Token manquant'));
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
       const user = await User.findById(decoded.id).select('-otp');
-      if (!user) return next(new Error('Utilisateur introuvable'));
+      if (!user || !user.actif || (decoded.v || 0) !== (user.jetonVersion || 0)) return next(new Error('Session invalide'));
 
       socket.user = user;
       next();
@@ -23,8 +23,10 @@ const initSocket = (io) => {
     console.log(`🔌 Socket connecté : ${socket.user.nomComplet}`);
 
     // Rejoindre la salle d'un colis spécifique
+    // Seule l'équipe peut suivre un colis en direct (aucune donnée client n'y transite pour l'instant)
     socket.on('rejoindre-colis', (colisId) => {
-      socket.join(`colis-${colisId}`);
+      if (!['agent', 'admin', 'livreur'].includes(socket.user.role)) return;
+      socket.join(`colis-${String(colisId).slice(0, 40)}`);
     });
 
     // Quitter la salle

@@ -43,7 +43,9 @@ function positionDepuisTexte(texte) {
 // Liens courts (maps.app.goo.gl, goo.gl/maps) : on suit les redirections côté serveur.
 // En Europe, Google peut renvoyer vers sa page de consentement (consent.google.com) :
 // on lit alors l'adresse d'origine dans « continue », et on envoie un cookie de consentement.
-const HOTES_GOOGLE = /^(maps\.app\.goo\.gl|goo\.gl|g\.co|consent\.google\.[a-z.]+|maps\.google\.[a-z.]+|www\.google\.[a-z.]+|google\.[a-z.]+)$/i;
+// Domaines Google uniquement (google.com, google.fr, google.com.gn, google.co.uk…) : un domaine
+// comme « google.exemple.com » est refusé, sinon le serveur pourrait être envoyé vers n'importe où.
+const HOTES_GOOGLE = /^(maps\.app\.goo\.gl|goo\.gl|g\.co|(?:(?:consent|maps|www)\.)?google\.(?:com|[a-z]{2}|com?\.[a-z]{2}))$/i;
 const ENTETES_GOOGLE = {
   'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36',
   'Accept-Language': 'fr-FR,fr;q=0.9',

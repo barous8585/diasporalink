@@ -294,6 +294,7 @@
           <a href="${esc(lienWhatsApp(cible.telephone, `Bonjour, je vous contacte pour le colis ${c.numeroSuivi}.`))}" target="_blank" rel="noopener">${ic('bulle')}<span>WhatsApp</span></a>` : ''}
           <button type="button" data-partager2>${ic('partager')}<span>Partager</span></button>
         </nav>
+        ${c.restreint ? `<p class="bandeau bandeau-bleu petit">${ic('cadenas', 'ic-sm')}<span>Pour protéger les personnes concernées, certaines informations (téléphones, adresse précise, photos) sont masquées : votre numéro n'a pas encore été vérifié. Faites-le vérifier à l'agence avec votre pièce d'identité.</span></p>` : ''}
         ${cible ? `<p class="tres-petit muet" style="margin-top:-6px">${c.statut === 'reserve' && !ram ? 'Déposer à' : 'Retrait à'} <b>${esc(cible.nom || '')}</b>${cible.adresse ? ` · ${esc(cible.adresse)}` : ''}${cible.horaires ? ` · ${esc(cible.horaires)}` : ''}</p>` : ''}
 
         ${pret && c.codeRetrait ? `

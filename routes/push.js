@@ -20,6 +20,12 @@ router.post('/abonner', auth, [
   if (app === 'admin' && u.role !== 'admin') return res.status(403).json({ succes: false, message: 'Accès refusé.' });
   if (app === 'agent' && !['agent', 'livreur', 'admin'].includes(u.role)) return res.status(403).json({ succes: false, message: 'Accès refusé.' });
   const a = req.body.abonnement;
+  // Seulement les services de notification des navigateurs (sinon le serveur enverrait des
+  // requêtes vers une adresse choisie par n'importe qui)
+  let hote = '';
+  try { const u = new URL(a.endpoint); hote = u.protocol === 'https:' ? u.hostname : ''; } catch {}
+  const SERVICES_PUSH = /(^|\.)(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com|push\.api\.chrome\.google\.com)$/i;
+  if (!SERVICES_PUSH.test(hote) && process.env.NODE_ENV === 'production') return res.status(400).json({ succes: false, message: 'Abonnement invalide.' });
   await PushAbonnement.findOneAndUpdate({ endpoint: a.endpoint }, {
     endpoint: a.endpoint, cles: { p256dh: a.keys.p256dh, auth: a.keys.auth }, app,
     user: u._id, telephone: u.telephone, role: u.role, lieu: u.lieu, appareil: String(req.headers['user-agent'] || '').slice(0, 160), echecs: 0,

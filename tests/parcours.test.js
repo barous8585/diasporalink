@@ -518,7 +518,7 @@ test('conditions, factures conformes, photo au dépôt et réclamation', async (
   const admin = await connexion(ADMIN_TEL);
   const agentParis = await connexion('+33600000002');
   const agentKaloum = await connexion('620000003');
-  const client = await connexion('0644444444', 'Kadiatou', 'Bah');
+  let client = await connexion('0644444444', 'Kadiatou', 'Bah');
   const PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQ==';
 
   // Conditions obligatoires, en ligne et au comptoir
@@ -576,8 +576,14 @@ test('conditions, factures conformes, photo au dépôt et réclamation', async (
     assert.strictEqual((await fetch(`${API}/admin/export/${nom}.csv`, { headers: { Authorization: `Bearer ${client}` } })).status, 403);
   }
 
-  // Photo : visible par le client du colis, pas par un inconnu
-  const resPhoto = await fetch(`${API}/photos/${r.colis.photoDepot}`, { headers: { Authorization: `Bearer ${client}` } });
+  // Photo : pas visible tant que le numéro du client n'est pas vérifié (déposé au comptoir,
+  // son compte n'est lié au colis que par le numéro) ; visible une fois vérifié à l'agence
+  assert.strictEqual((await fetch(`${API}/photos/${r.colis.photoDepot}`, { headers: { Authorization: `Bearer ${client}` } })).status, 403);
+  assert.strictEqual((await appel('POST', '/utilisateurs/client-mot-de-passe', { telephone: '0644444444', motDePasse: MDP }, admin)).status, 200);
+  delete jetons['0644444444'];
+  const clientVerifie = await connexion('0644444444');
+  client = clientVerifie; // l'ancienne session est fermée par le nouveau mot de passe
+  const resPhoto = await fetch(`${API}/photos/${r.colis.photoDepot}`, { headers: { Authorization: `Bearer ${clientVerifie}` } });
   assert.strictEqual(resPhoto.headers.get('content-type'), 'image/jpeg');
   const intrus = await connexion('+33600000098', 'Intrus', 'Y');
   assert.strictEqual((await fetch(`${API}/photos/${r.colis.photoDepot}`, { headers: { Authorization: `Bearer ${intrus}` } })).status, 403);
@@ -1133,4 +1139,55 @@ test('le client paie tout en ligne dès la réservation : courses programmées, 
   assert.strictEqual(r.colis.solde.soldeGnf, 0);
   assert.ok(r.colis.solde.tropPayeGnf > 0);
   assert.ok(r.colis.historique.some(h => /Trop payé/.test(h.label)));
+});
+
+test('sécurité : numéro non vérifié, injections, admin, suivi public, liens externes', async () => {
+  const agentParis = await connexion('+33600000002');
+  // Dépôt au comptoir pour un destinataire qui n'a pas encore de compte
+  let r = await appel('POST', '/agent/depot', {
+    poidsReel: 3, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM', cgvAcceptees: true,
+    expediteur: { nom: '=HYPERLINK("http://x")', telephone: '0611112222' }, destinataire: { nom: 'Kadi Sylla', telephone: '621112222' },
+    livraison: { demande: true, adresse: { ville: 'Conakry', quartier: 'Kipé', repere: 'Maison bleue derrière la mosquée', position: { lat: 9.5392, lng: -13.7122 } } },
+    paiement: { montant: 36, devise: 'EUR', methode: 'especes' },
+  }, agentParis);
+  assert.strictEqual(r.status, 201, r.message);
+  const numero = r.colis.numeroSuivi;
+
+  // Quelqu'un crée un compte avec le numéro du destinataire (aucun SMS pour le vérifier)
+  const intrus = await connexion('621112222', 'Faux', 'Compte');
+  const liste = (await appel('GET', '/colis', null, intrus)).colis;
+  const vu = liste.find(c => c.numeroSuivi === numero);
+  assert.ok(vu && vu.restreint, 'vue restreinte');
+  assert.notStrictEqual(vu.expediteur.telephone, '+33611112222', 'téléphone de l\'expéditeur masqué');
+  assert.strictEqual(vu.livraison.adresse.repere, undefined, 'repère masqué');
+  assert.strictEqual(vu.codeRetrait, undefined);
+  assert.strictEqual(vu.photoDepot, undefined);
+  const fs = (await appel('GET', `/factures/colis/${numero}`, null, intrus)).factures;
+  assert.strictEqual(fs.length, 0, 'pas les factures établies au nom d\'un autre');
+
+  // Suivi public : pas de nom complet, pas de paiements ni d'adresses dans l'historique
+  const pub = (await appel('GET', `/colis/suivi/${numero}`)).colis;
+  assert.ok(pub.historique.every(h => h.statut));
+  assert.ok(!JSON.stringify(pub).includes('Maison bleue'));
+  assert.ok(!JSON.stringify(pub).includes('Sylla'));
+
+  // Injection MongoDB dans la connexion
+  r = await appel('POST', '/auth/connexion', { telephone: { $ne: null }, motDePasse: { $ne: null } });
+  assert.notStrictEqual(r.status, 200);
+  assert.ok(!r.token);
+
+  // Un numéro administrateur ne peut pas s'inscrire comme client
+  r = await appel('POST', '/auth/inscription', { telephone: ADMIN_TEL, prenom: 'X', nom: 'Y', motDePasse: 'motdepasse123' });
+  assert.strictEqual(r.status, 403);
+
+  // Lien de position : seuls les vrais domaines Google sont suivis
+  r = await appel('GET', `/config/position?lien=${encodeURIComponent('https://google.evil-site.com/maps?q=1')}`);
+  assert.strictEqual(r.status, 422);
+
+  // Export Excel : une cellule « formule » est neutralisée
+  const admin = await connexion(ADMIN_TEL);
+  const jour = new Date().toLocaleDateString('sv');
+  const csv = await (await fetch(`${API}/admin/export/colis.csv?debut=${jour}&fin=${jour}`, { headers: { Authorization: `Bearer ${admin}` } })).text();
+  assert.ok(csv.includes('"\'=HYPERLINK'), 'formule neutralisée');
+  assert.ok(!csv.includes('";"=HYPERLINK'));
 });

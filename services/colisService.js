@@ -62,11 +62,41 @@ async function nomLieu(code) {
 }
 
 // Le colis concerne-t-il ce compte ? (réservé par lui, ou son numéro sur le colis)
-function lieAuCompte(colis, user) {
+// Sans SMS, n'importe qui peut créer un compte avec le numéro d'un autre : un numéro non
+// vérifié ne donne donc accès qu'aux informations non sensibles (strict = vérifié exigé).
+function lieAuCompte(colis, user, { strict = true } = {}) {
   if (!colis || !user) return false;
   if (['agent', 'admin', 'livreur'].includes(user.role)) return true;
   if (String(colis.client) === String(user._id)) return true;
+  if (strict && !user.verifie) return false;
   return [colis.expediteur?.telephone, colis.destinataire?.telephone, colis.tiersAutorise?.telephone].includes(user.telephone);
+}
+
+// Niveau d'accès d'un client à un colis : 'complet' (il l'a réservé, ou numéro vérifié),
+// 'restreint' (son numéro est sur le colis mais n'a pas été vérifié), ou null.
+function niveauAcces(colis, user) {
+  if (!colis || !user) return null;
+  if (['agent', 'admin', 'livreur'].includes(user.role) || String(colis.client) === String(user._id)) return 'complet';
+  if (![colis.expediteur?.telephone, colis.destinataire?.telephone, colis.tiersAutorise?.telephone].includes(user.telephone)) return null;
+  return user.verifie ? 'complet' : 'restreint';
+}
+
+// Vue restreinte : pas le téléphone des autres, pas d'adresse précise, pas de photo,
+// pas de signature ni de référence de paiement.
+function restreindre(obj, user) {
+  const masque = (p) => (p && p.telephone && p.telephone !== user.telephone ? { ...p, telephone: masquerTel(p.telephone) } : p);
+  obj.expediteur = masque(obj.expediteur);
+  obj.destinataire = masque(obj.destinataire);
+  if (obj.tiersAutorise) obj.tiersAutorise = masque(obj.tiersAutorise);
+  for (const k of ['ramassage', 'livraison']) {
+    const a = obj[k]?.adresse;
+    if (a) obj[k] = { ...obj[k], adresse: { quartier: a.quartier, commune: a.commune, ville: a.ville, position: a.position?.lat ? { lat: Math.round(a.position.lat * 100) / 100, lng: Math.round(a.position.lng * 100) / 100 } : undefined } };
+  }
+  delete obj.photoDepot; delete obj.declarations; delete obj.notesAdmin; delete obj.client;
+  if (obj.remise) obj.remise = { le: obj.remise.le, retirePar: obj.remise.retirePar, aDomicile: obj.remise.aDomicile };
+  obj.paiements = (obj.paiements || []).map(p => ({ montant: p.montant, devise: p.devise, methode: p.methode, objet: p.objet, le: p.le }));
+  obj.restreint = true;
+  return obj;
 }
 
 // ── Vues ────────────────────────────────────────────────────
@@ -99,7 +129,11 @@ async function vuePublique(colis) {
     poids: colis.poidsReel || colis.poidsEstime,
     nbCartons: colis.nbCartons,
     lotCode: colis.lotCode,
-    historique: (colis.historique || []).filter(h => !h.annule && h.label !== 'Étape annulée').map(h => ({ statut: h.statut, label: h.label, detail: h.detail, le: h.le })),
+    // Suivi public (numéro seul) : seulement les étapes, sans noms, montants ni adresses
+    historique: (colis.historique || []).filter(h => h.statut && !h.annule && h.label !== 'Étape annulée').map(h => ({
+      statut: h.statut, label: h.statut === STATUTS.REMIS ? STATUTS_LABELS.remis : h.label,
+      detail: [STATUTS.PRET, STATUTS.ACHEMINEMENT, STATUTS.EN_TRANSIT, STATUTS.ARRIVE].includes(h.statut) ? h.detail : undefined, le: h.le,
+    })),
     arriveGuichetLe: colis.arriveGuichetLe,
     magasinage: solde.magasinage,
     soldeGnf: solde.soldeGnf,
@@ -636,7 +670,7 @@ async function colisDuGuichet(guichet) {
 }
 
 module.exports = {
-  ErreurMetier, normTel, masquerTel, lieAuCompte, vuePublique, vueComplete, avecOperation,
+  ErreurMetier, normTel, masquerTel, lieAuCompte, niveauAcces, restreindre, vuePublique, vueComplete, avecOperation,
   encaisser, deposer, appliquerScan, sensDepuisAgences, paysArriveeDe, nomPays, remettre, changerStatutMasse, colisDuGuichet,
   mettrePret, calculerMagasinage, etapePrecedente, annulerEtape, nettoyerArticles, articlesTexte,
 };

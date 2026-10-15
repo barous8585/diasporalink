@@ -11,7 +11,14 @@ const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 const initSocket = require('./socket');
 
+// Secret des sessions : obligatoire et long en production
+if (!process.env.JWT_SECRET) { console.error('JWT_SECRET manquant. Arrêt.'); process.exit(1); }
+if (process.env.NODE_ENV === 'production' && process.env.JWT_SECRET.length < 32) {
+  console.error('⚠️ JWT_SECRET trop court (32 caractères minimum recommandés) : à changer dans Render.');
+}
+
 const app = express();
+app.disable('x-powered-by');
 const server = http.createServer(app);
 
 // ── Trust proxy ────────────────────────────
@@ -24,10 +31,8 @@ const corsOptions = {
       process.env.FRONTEND_URL,
       process.env.ADMIN_URL,
       process.env.AGENT_URL,
-      'http://localhost:5000',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002',
+      // Adresses locales : seulement hors production
+      ...(process.env.NODE_ENV === 'production' ? [] : ['http://localhost:5000', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002']),
     ].filter(Boolean);
     if (!origin || allowed.includes(origin)) {
       callback(null, true);
@@ -60,7 +65,25 @@ app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: false, limit: '100kb' }));
+
+// Anti-injection MongoDB : retire les clés « $… » et « a.b » envoyées par un client
+// (ex. { "telephone": { "$ne": null } } dans un formulaire)
+function nettoyerCles(v, prof = 0) {
+  if (!v || typeof v !== 'object' || prof > 20) return v;
+  for (const k of Object.keys(v)) {
+    if (k.startsWith('$') || k.includes('.')) delete v[k];
+    else nettoyerCles(v[k], prof + 1);
+  }
+  return v;
+}
+app.use((req, res, next) => {
+  nettoyerCles(req.body);
+  nettoyerCles(req.params);
+  // req.query est en lecture seule dans certaines versions : on nettoie son contenu
+  if (req.query && typeof req.query === 'object') nettoyerCles(req.query);
+  next();
+});
 
 // ── Rate limiting ─────────────────────────
 const limiter = rateLimit({
