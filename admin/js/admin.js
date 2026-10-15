@@ -193,6 +193,7 @@
       if (!m) continue;
       document.querySelectorAll('[data-nav]').forEach(a => a.dataset.nav === nav ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
       pageActuelle = nav;
+      document.body.dataset.section = nav; // couleur de la rubrique
       document.querySelector('[data-titre-mobile]').textContent = document.querySelector(`[data-nav="${nav}"]`)?.textContent.replace(/\d+$/, '').trim() || 'Back-office';
       main.classList.toggle('entree', !silencieux);
       if (!silencieux) main.innerHTML = '<div class="chargement"></div>';
