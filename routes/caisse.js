@@ -47,7 +47,7 @@ router.post('/cloturer', ah(async (req, res) => {
 
 // ── GET /api/caisse/jour ── admin : caisses ouvertes + clôtures du jour, par agent
 router.get('/jour', role(ROLES.ADMIN), ah(async (req, res) => {
-  const debut = req.query.date ? new Date(req.query.date) : new Date();
+  const debut = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) && !isNaN(new Date(req.query.date)) ? new Date(req.query.date) : new Date();
   debut.setHours(0, 0, 0, 0);
   const fin = new Date(debut.getTime() + 86400000);
 

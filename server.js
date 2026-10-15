@@ -81,14 +81,21 @@ app.use((req, res, next) => {
   nettoyerCles(req.body);
   nettoyerCles(req.params);
   // req.query est en lecture seule dans certaines versions : on nettoie son contenu
-  if (req.query && typeof req.query === 'object') nettoyerCles(req.query);
+  // Les paramètres d'URL ne sont que du texte : pas d'objets ni de tableaux (?q[$ne]=…)
+  if (req.query && typeof req.query === 'object') {
+    for (const k of Object.keys(req.query)) {
+      const v = req.query[k];
+      if (Array.isArray(v)) req.query[k] = typeof v[0] === 'string' ? v[0] : '';
+      else if (v && typeof v === 'object') delete req.query[k];
+    }
+  }
   next();
 });
 
 // ── Rate limiting ─────────────────────────
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 600, // les agents scannent beaucoup
+  max: Number(process.env.LIMITE_REQUETES) || 600, // les agents scannent beaucoup
   message: { succes: false, message: 'Trop de requêtes. Réessayez dans 15 minutes.' },
 });
 const authLimiter = rateLimit({
@@ -143,6 +150,10 @@ app.use((err, req, res, next) => {
   // Erreurs métier (ErreurMetier) : message clair pour l'utilisateur
   if (err.name === 'ErreurMetier' || (err.status && err.status < 500 && err.expose !== false && !err.type)) {
     return res.status(err.status).json({ succes: false, message: err.message, code: err.code });
+  }
+  // Identifiant mal formé (ex. /equipe/n-importe-quoi) : demande invalide, pas une panne
+  if (err.name === 'CastError') {
+    return res.status(400).json({ succes: false, message: 'Identifiant invalide.' });
   }
   if (err.name === 'ValidationError') {
     return res.status(400).json({ succes: false, message: Object.values(err.errors)[0]?.message || 'Données invalides.' });

@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
+    // Filtres : les champs inconnus du modèle sont ignorés (défense contre les requêtes forgées)
+    mongoose.set('strictQuery', true);
     const conn = await mongoose.connect(process.env.MONGODB_URI);
     console.log(`✅ MongoDB connecté : ${conn.connection.host}`);
     try {

@@ -60,8 +60,9 @@ router.post('/colis/:numero/emettre', auth, role(ROLES.AGENT, ROLES.ADMIN), ah(a
 
 // ── Registre (admin) : GET /api/factures?debut=2026-10-01&fin=2026-10-31
 function filtrePeriode(q) {
-  const debut = q.debut ? new Date(q.debut) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const fin = q.fin ? new Date(q.fin) : new Date();
+  const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) && !isNaN(new Date(v));
+  const debut = ok(q.debut) ? new Date(q.debut) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const fin = ok(q.fin) ? new Date(q.fin) : new Date();
   fin.setHours(23, 59, 59, 999);
   return { date: { $gte: debut, $lte: fin } };
 }

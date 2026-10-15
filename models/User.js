@@ -56,6 +56,7 @@ const MDP_BLOCAGE_MIN = 15;
 userSchema.statics.mdpValide = (mdp) => typeof mdp === 'string' && mdp.length >= 8 && mdp.length <= 100;
 
 userSchema.methods.definirMotDePasse = async function (mdp) {
+  if (!userSchema.statics.mdpValide(mdp)) { const e = new Error('Mot de passe : 8 caractères minimum.'); e.status = 400; throw e; }
   this.motDePasse = await bcrypt.hash(mdp, 10);
   this.essaisMdp = 0;
   this.bloqueJusqua = undefined;
