@@ -942,6 +942,6 @@
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
     positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse, choisirSurCarte, chargerLeaflet,
     lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto, notifications, sectionner, googleDispo, boutonGoogle,
-    garderSession, tempsReel, miseAJourAuto, saisieEnCours,
+    garderSession, tempsReel, miseAJourAuto, saisieEnCours, adresseVersPosition,
   };
 })();

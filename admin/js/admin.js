@@ -1117,8 +1117,8 @@
         <label class="champ">Adresse <input class="saisie" name="adresse" value="${esc(a.adresse || '')}"></label>
         <label class="champ">Téléphone / WhatsApp <input class="saisie" name="telephone" value="${esc(a.telephone || '')}"></label>
         <label class="champ">Horaires <input class="saisie" name="horaires" value="${esc(a.horaires || '')}" placeholder="Lun–sam 9 h – 18 h"></label>
-        <div class="champ" style="grid-column:1/-1">Position GPS de l'agence
-          <span class="petit" data-etat-pos>${a.position?.lat ? `<span class="vert">${ic('ok', 'ic-sm')} ${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)}</span>` : '<span class="rouge">Non renseignée : pas de ramassage ni de livraison depuis cette agence</span>'}</span>
+        <div class="champ" style="grid-column:1/-1">Position de l'agence <span class="tres-petit muet">(l'adresse écrite suffit : elle est placée sur la carte automatiquement)</span>
+          <span class="petit" data-etat-pos>${a.position?.lat ? `<span class="vert">${ic('ok', 'ic-sm')} ${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)}</span>` : '<span class="rouge">Non renseignée : écrivez l\'adresse ou placez l\'agence sur la carte (sinon pas de ramassage ni de livraison)</span>'}</span>
           <span class="ligne" style="--gap:8px;flex-wrap:wrap">
             <button type="button" class="btn btn-petit" data-placer>${ic('lieu', 'ic-sm')} Placer sur la carte</button>
             <button type="button" class="btn btn-petit" data-ici>${ic('gps', 'ic-sm')} Je suis à l'agence</button>
@@ -1241,12 +1241,30 @@
     });
     form.addEventListener('input', majExemples);
     // Position d'une agence : carte ou GPS du téléphone
-    const poserPosition = (bloc, p) => {
+    const poserPosition = (bloc, p, { auto = false } = {}) => {
       bloc.querySelector('[name=positionLat]').value = p.lat;
       bloc.querySelector('[name=positionLng]').value = p.lng;
       bloc.querySelector('[name=lienPosition]').value = '';
-      bloc.querySelector('[data-etat-pos]').innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span> <span class="muet">(pensez à enregistrer)</span>`;
+      bloc.dataset.posAuto = auto ? '1' : '';
+      bloc.querySelector('[data-etat-pos]').innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} ${auto ? 'Trouvée d\'après l\'adresse' : `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`}</span> <span class="muet">(${auto ? 'vérifiez avec « Placer sur la carte », puis ' : ''}pensez à enregistrer)</span>`;
     };
+    // Adresse de l'agence écrite : placée sur la carte toute seule (si aucune position exacte n'a été posée)
+    let minuteurAg;
+    form.addEventListener('input', (e) => {
+      const bloc = e.target.closest('[data-agence]');
+      if (!bloc || !['adresse', 'commune', 'ville'].includes(e.target.name)) return;
+      if (bloc.querySelector('[name=positionLat]').value && !bloc.dataset.posAuto) return;
+      clearTimeout(minuteurAg);
+      minuteurAg = setTimeout(async () => {
+        const v = (k) => bloc.querySelector(`[name=${k}]`).value.trim();
+        if (!v('adresse') && !v('commune')) return;
+        try {
+          const p = await K.adresseVersPosition({ rue: v('adresse'), quartier: v('commune'), ville: v('ville') }, bloc.querySelector('[name=pays]').value);
+          if (p) poserPosition(bloc, p, { auto: true });
+          else bloc.querySelector('[data-etat-pos]').innerHTML = '<span class="rouge">Adresse introuvable sur la carte : placez l\'agence à la main.</span>';
+        } catch {}
+      }, 1000);
+    });
     form.addEventListener('click', async (e) => {
       const b = e.target.closest('[data-placer], [data-ici]');
       if (!b) return;
