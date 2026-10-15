@@ -1357,11 +1357,22 @@
           : 'Vos envois apparaissent dans « Mes colis ». Pour voir aussi les codes de retrait des colis qu\'on vous envoie, faites vérifier votre numéro en agence.'}</p>
         <div data-notifs></div>
         <a class="btn btn-plein" href="#/factures">${ic('liste', 'ic-sm')} Mes factures</a>
-        <button class="btn btn-plein" data-mdp>Changer mon mot de passe</button>
+        ${K.googleDispo() ? (session.utilisateur()?.google
+          ? `<p class="bandeau bandeau-vert petit">${ic('ok', 'ic-sm')}<span>Compte Google relié : vous pouvez vous connecter avec « Continuer avec Google ».</span></p>`
+          : `<div class="carte pile" style="--gap:10px"><div class="gras">Se connecter avec Google</div><p class="petit muet">Reliez votre compte Google pour vous connecter en un geste, sans mot de passe.</p><div class="zone-google" data-google-lier></div></div>`) : ''}
+        <button class="btn btn-plein" data-mdp>${session.utilisateur()?.google ? 'Définir ou changer mon mot de passe' : 'Changer mon mot de passe'}</button>
         <button class="btn btn-plein" data-sortir>${ic('sortie', 'ic-sm')} Se déconnecter</button>
         ${mentions()}
       </div>`;
     main.querySelector('[data-mdp]').addEventListener('click', () => K.changerMotDePasse());
+    const zLier = main.querySelector('[data-google-lier]');
+    if (zLier) K.boutonGoogle(zLier, { texte: 'continue_with', surCredential: async (credential) => {
+      try {
+        const r = await api.post('/auth/google/lier', { credential });
+        session.ouvrir(stock.lire('jeton'), r.utilisateur);
+        toast('Compte Google relié.', 'ok'); compte();
+      } catch (err) { toast(err.message, 'erreur'); }
+    } });
     K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Arrivée de vos colis, code de retrait, livreur en route : prévenu tout de suite, même sans SMS.' });
     main.querySelector('[data-sortir]').addEventListener('click', () => {
       session.fermer(); stock.suppr('mes_colis'); location.hash = '#/';

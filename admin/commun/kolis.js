@@ -284,6 +284,7 @@
           ${erreur ? `<p class="bandeau bandeau-rouge" role="alert">${esc(erreur)}</p>` : ''}
           <button class="btn btn-principal btn-grand btn-plein" type="submit">${vue === 'inscription' ? 'Créer mon compte' : 'Se connecter'}</button>
           ${vue === 'connexion' ? `<button class="btn btn-lien" type="button" data-vue="oubli">Mot de passe oublié ?</button>` : ''}
+          ${googleDispo() ? `<div class="separateur-ou"><span>ou</span></div><div class="zone-google" data-google></div>` : ''}
           ${inscription ? (vue === 'connexion'
             ? `<button class="btn btn-plein" type="button" data-vue="inscription">Pas encore de compte ? Créer un compte</button>`
             : `<button class="btn btn-lien" type="button" data-vue="connexion">J'ai déjà un compte</button>`) : ''}
@@ -294,6 +295,8 @@
       }));
       const form = cible.querySelector('form');
       if (!form) return;
+      const zg = cible.querySelector('[data-google]');
+      if (zg) boutonGoogle(zg, { texte: vue === 'inscription' ? 'signup_with' : 'continue_with', surCredential: (cred) => etapeGoogle(cible, cred, { surSucces, retour: dessiner }) });
       form.querySelector('input').focus();
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -322,13 +325,85 @@
     dessiner();
   }
 
+  // ── Connexion avec Google (espace client seulement, si GOOGLE_CLIENT_ID est réglé) ──
+  const googleDispo = () => APP === 'client' && !!stock.lire('config')?.googleClientId;
+  let gisCharge = null;
+  function chargerGoogle() {
+    if (window.google?.accounts?.id) return Promise.resolve();
+    gisCharge = gisCharge || new Promise((ok, ko) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = ok; sc.onerror = () => { gisCharge = null; ko(new Error('Google indisponible')); };
+      document.head.appendChild(sc);
+    });
+    return gisCharge;
+  }
+  // Affiche le bouton officiel « Continuer avec Google » dans zone
+  async function boutonGoogle(zone, { texte = 'continue_with', surCredential }) {
+    try { await chargerGoogle(); } catch { zone.innerHTML = '<p class="tres-petit muet centre">Connexion Google indisponible pour le moment.</p>'; return; }
+    window.google.accounts.id.initialize({
+      client_id: stock.lire('config').googleClientId,
+      callback: (r) => r?.credential && surCredential(r.credential),
+      ux_mode: 'popup', auto_select: false, cancel_on_tap_outside: true,
+    });
+    zone.innerHTML = '';
+    window.google.accounts.id.renderButton(zone, { type: 'standard', theme: 'outline', size: 'large', shape: 'pill', text: texte, locale: 'fr', logo_alignment: 'center', width: Math.min(400, Math.max(240, zone.clientWidth || 320)) });
+  }
+  // Après Google : connexion directe, ou dernière étape (téléphone, et mot de passe si le numéro a déjà un compte)
+  async function etapeGoogle(cible, credential, { surSucces, retour }) {
+    const envoyer = async (extra = {}) => api.post('/auth/google', { credential, ...extra });
+    let r;
+    try { r = await envoyer(); } catch (err) { toast(err.message, 'erreur'); return; }
+    if (!r.besoinTelephone) { session.ouvrir(r.token, r.utilisateur); toast(`Bienvenue ${r.utilisateur.prenom} !`, 'ok'); surSucces?.(r.utilisateur); return; }
+    const p = r.profil || {};
+    let avecMdp = false;
+    const dessiner = (erreur = '') => {
+      cible.innerHTML = `
+        <form class="pile" style="--gap:16px" novalidate>
+          <img class="logo-connexion" src="commun/logo.png" alt="Talib Multi Services" width="200" height="136">
+          <h1>Dernière étape</h1>
+          <p class="muet">Connecté avec Google${p.email ? ` (<b>${esc(p.email)}</b>)` : ''}. Indiquez votre numéro de téléphone : il sert au suivi de vos colis et à l'agence.</p>
+          <div class="grille-2">
+            <label class="champ">Prénom <input class="saisie" name="prenom" value="${esc(p.prenom || '')}" autocomplete="given-name" required></label>
+            <label class="champ">Nom <input class="saisie" name="nom" value="${esc(p.nom || '')}" autocomplete="family-name" required></label>
+          </div>
+          <label class="champ">Téléphone <input class="saisie saisie-forte" name="telephone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+224 6XX XX XX XX ou 06 XX XX XX XX" required></label>
+          ${avecMdp ? `<p class="bandeau bandeau-bleu petit">${ic('cadenas', 'ic-sm')}<span>Ce numéro a déjà un compte. Entrez son mot de passe pour y relier Google : ensuite, un seul geste suffira pour vous connecter.</span></p>
+          <label class="champ">Mot de passe du compte <input class="saisie saisie-forte" name="motDePasse" type="password" autocomplete="current-password" required></label>` : ''}
+          ${erreur ? `<p class="bandeau bandeau-rouge" role="alert">${esc(erreur)}</p>` : ''}
+          <button class="btn btn-principal btn-grand btn-plein" type="submit">${avecMdp ? 'Relier et me connecter' : 'Terminer'}</button>
+          <button class="btn btn-lien" type="button" data-annuler>Annuler</button>
+        </form>`;
+      const form = cible.querySelector('form');
+      cible.querySelector('[data-annuler]').addEventListener('click', () => retour?.());
+      (avecMdp ? form.motDePasse : form.telephone).focus();
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = new FormData(form);
+        const btn = form.querySelector('[type=submit]'); btn.disabled = true;
+        try {
+          const r2 = await envoyer({ telephone: normTel(f.get('telephone')), prenom: f.get('prenom'), nom: f.get('nom'), ...(avecMdp ? { motDePasse: f.get('motDePasse') } : {}) });
+          session.ouvrir(r2.token, r2.utilisateur);
+          toast(avecMdp ? 'Google est relié à votre compte.' : `Bienvenue ${r2.utilisateur.prenom} !`, 'ok');
+          surSucces?.(r2.utilisateur);
+        } catch (err) {
+          if (err.data?.code === 'compte_existant' || err.code === 'compte_existant') {
+            const tel = f.get('telephone'), pre = f.get('prenom'), no = f.get('nom');
+            const premiere = !avecMdp; avecMdp = true; dessiner(premiere ? '' : err.message);
+            cible.querySelector('[name=telephone]').value = tel; cible.querySelector('[name=prenom]').value = pre; cible.querySelector('[name=nom]').value = no;
+          } else { dessiner(err.message); }
+        }
+      });
+    };
+    dessiner();
+  }
+
   // ── Changer son mot de passe (fenêtre) ──
   function changerMotDePasse({ actuel = '', obligatoire = false } = {}) {
     return new Promise((fini) => {
       const { el, fermer } = modale(`
         <form class="pile" style="--gap:14px">
           <div class="ligne entre"><h2>${obligatoire ? 'Choisissez votre mot de passe' : 'Changer mon mot de passe'}</h2>${obligatoire ? '' : `<button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button>`}</div>
-          ${actuel ? '' : '<label class="champ">Mot de passe actuel <input class="saisie" name="actuel" type="password" autocomplete="current-password" required></label>'}
+          ${actuel ? '' : `<label class="champ">Mot de passe actuel ${session.utilisateur()?.google ? '<span class="tres-petit muet">(laissez vide si vous n\'en avez jamais eu : compte créé avec Google)</span>' : ''}<input class="saisie" name="actuel" type="password" autocomplete="current-password" ${session.utilisateur()?.google ? '' : 'required'}></label>`}
           <label class="champ">Nouveau mot de passe (8 caractères minimum) <input class="saisie" name="nouveau" type="password" autocomplete="new-password" minlength="8" required></label>
           <label class="champ">Confirmez <input class="saisie" name="confirmation" type="password" autocomplete="new-password" required></label>
           <p class="bandeau bandeau-rouge cache" data-erreur role="alert"></p>
@@ -725,6 +800,6 @@
     API_URL, api, session, stock, config, ErreurReseau,
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
     positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse, choisirSurCarte, chargerLeaflet,
-    lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto, notifications, sectionner,
+    lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto, notifications, sectionner, googleDispo, boutonGoogle,
   };
 })();
