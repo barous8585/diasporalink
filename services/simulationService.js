@@ -262,7 +262,8 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
     // Dépôt et pesée
     colis.poidsReel = poids;
     colis.tarif = { ...tarif, estime: false };
-    if (avecLivraison) colis.livraison = course(guichet, maintenant + J, null, equipe[guichet.code].livreurs);
+    // Livraison demandée : le plus souvent un livreur est déjà prévu avant l'arrivée du colis
+    if (avecLivraison) colis.livraison = course(guichet, R.proba(0.75) ? deposeLe + R.entre(2, 30) * H : maintenant + J, null, equipe[guichet.code].livreurs);
     ev(STATUTS.DEPOSE, deposeLe, `Pesé ${poids} kg${colis.poidsEstime ? ` (déclaré ${colis.poidsEstime} kg)` : ''}`, depot.code, agentDepot);
     colis.genererCodeRetrait();
     if (!payeurArrivee) {
@@ -314,8 +315,6 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
       ev(STATUTS.REMIS, remisLe, `Remis à ${colis.remise.nomRetrait}${aDomicile ? ' à domicile' : ''}`, guichet.code, agentRemise);
       facRemise = { moment: 'remise', date: remisLe + 60000, agent: agentRemise };
       if (R.proba(0.025)) remisesPourReclamations.push(colis);
-    } else if (colis.statut === STATUTS.PRET && colis.livraison) {
-      colis.livraison.statut = R.proba(0.5) ? STATUTS_COURSE.ASSIGNEE : STATUTS_COURSE.A_PLANIFIER;
     }
     await enregistrer();
     // Factures préparées avec la vraie logique de facturation, enregistrées en bloc à la fin

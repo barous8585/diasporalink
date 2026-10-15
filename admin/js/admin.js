@@ -540,7 +540,7 @@
     const choisis = new Set();
     const actions = {
       preparation: { statut: 'parti', lib: 'Marquer le lot comme parti', msg: `Tous les colis chargés passeront « En route » et les clients recevront un SMS. Confirmer ?` },
-      parti: { statut: 'arrive', lib: 'Marquer le lot comme arrivé', msg: 'Tous les colis passeront « Arrivé en Guinée ». Confirmer ?' },
+      parti: { statut: 'arrive', lib: 'Marquer le lot comme arrivé', msg: 'Tous les colis passeront « Arrivé à destination ». Confirmer ?' },
       arrive: { statut: 'cloture', lib: 'Clôturer le lot', msg: 'Clôturer ce lot ?' },
     };
     const a = actions[lot.statut];
@@ -550,7 +550,7 @@
           <div>
             <h2 style="font-size:24px">Lot ${esc(lot.code)} · ${K.libMode(lot.mode)}</h2>
             <p class="petit muet" style="margin-top:4px">${[lot.reference, lot.transporteur].filter(Boolean).map(esc).join(' · ') || 'Sans référence'} ·
-              ${stats.nb} colis · ${kg(stats.poids)}${lot.statut !== 'preparation' ? ` · reçus en Guinée : ${stats.scannesArrivee} / ${stats.nb}` : ''}
+              ${stats.nb} colis · ${kg(stats.poids)}${lot.statut !== 'preparation' ? ` · reçus en ${lot.sens === 'GN-FR' ? 'France' : 'Guinée'} : ${stats.scannesArrivee} / ${stats.nb}` : ''}
               ${lot.departLe ? ` · parti le ${esc(date(lot.departLe, false))}` : lot.dateDepartPrevue ? ` · départ prévu ${esc(date(lot.dateDepartPrevue, false))}` : ''}</p>
           </div>
           <div class="ligne" style="--gap:8px">
@@ -564,7 +564,7 @@
           <span class="gras grandit" data-nb-choisis></span>
           ${lot.statut === 'preparation' ? `<button class="btn btn-contour" data-retirer>Retirer du lot</button>` : `
           <button class="btn btn-ocre" data-masse-statut="pret">Passer à « Prêt au guichet »</button>
-          ${lot.statut === 'parti' ? `<button class="btn btn-contour" data-masse-statut="arrive">Arrivé en Guinée</button>` : ''}`}
+          ${lot.statut === 'parti' ? `<button class="btn btn-contour" data-masse-statut="arrive">Arrivé en ${lot.sens === 'GN-FR' ? 'France' : 'Guinée'}</button>` : ''}`}
           <button class="btn btn-contour" data-etiquettes>Imprimer étiquettes</button>
         </div>
         <div class="defile"><table class="tableau">
@@ -851,6 +851,14 @@
     const debut = stock.lire('fact_debut') || new Date(auj.getFullYear(), auj.getMonth(), 1).toISOString().slice(0, 10);
     const fin = stock.lire('fact_fin') || auj.toISOString().slice(0, 10);
     const { factures: liste } = await api.get(`/factures?debut=${debut}&fin=${fin}`);
+    const PAGE_FACT = 100;
+    const ligneFacture = (f) => `<tr>
+          <td class="gras">${f.type === 'avoir' ? 'Avoir ' : ''}${esc(f.numero)}${f.factureOrigine ? `<div class="tres-petit muet">sur ${esc(f.factureOrigine)}</div>` : ''}</td>
+          <td>${esc(date(f.date, false))}</td><td>${esc(f.numeroSuivi || '')}</td>
+          <td>${esc(f.client?.nom || '')}<div class="tres-petit muet">${esc(f.client?.role || '')}</div></td><td>${esc(f.agence?.nom || '')}</td>
+          <td class="chiffres n">${montant(f.totalHT, f.devise)}</td><td class="chiffres n">${montant(f.totalTVA, f.devise)}</td><td class="chiffres n gras">${montant(f.totalTTC, f.devise)}</td>
+          <td><div class="ligne" style="--gap:6px"><a class="btn btn-petit" href="${esc(K.lienFacture(f))}" target="_blank" rel="noopener">Ouvrir</a><a class="btn btn-petit" href="${esc(K.lienFacture(f))}&imprimer=1" target="_blank" rel="noopener" title="Imprimer ou enregistrer en PDF">${ic('imprimer', 'ic-sm')}</a></div></td>
+        </tr>`;
     const total = (dev, type) => liste.filter(f => f.devise === dev && f.type === type).reduce((s, f) => s + Math.abs(f.totalTTC), 0);
     main.innerHTML = `
       <div class="entete-page"><h1>Factures</h1>
@@ -869,13 +877,15 @@
       ${CONFIG.facturation?.capital ? '' : '<p class="bandeau bandeau-ocre">Le capital social n\'est pas renseigné : il doit figurer sur les factures d\'une SAS. Complétez-le dans Tarifs &amp; agences → Facturation.</p>'}
       <section class="panneau"><div class="defile"><table class="tableau">
         <thead><tr><th>Numéro</th><th>Date</th><th>Colis</th><th>Client</th><th>Agence</th><th class="n">HT</th><th class="n">TVA</th><th class="n">TTC</th><th></th></tr></thead>
-        <tbody>${liste.map(f => `<tr>
-          <td class="gras">${f.type === 'avoir' ? 'Avoir ' : ''}${esc(f.numero)}${f.factureOrigine ? `<div class="tres-petit muet">sur ${esc(f.factureOrigine)}</div>` : ''}</td>
-          <td>${esc(date(f.date, false))}</td><td>${esc(f.numeroSuivi || '')}</td>
-          <td>${esc(f.client?.nom || '')}<div class="tres-petit muet">${esc(f.client?.role || '')}</div></td><td>${esc(f.agence?.nom || '')}</td>
-          <td class="chiffres n">${montant(f.totalHT, f.devise)}</td><td class="chiffres n">${montant(f.totalTVA, f.devise)}</td><td class="chiffres n gras">${montant(f.totalTTC, f.devise)}</td>
-          <td><div class="ligne" style="--gap:6px"><a class="btn btn-petit" href="${esc(K.lienFacture(f))}" target="_blank" rel="noopener">Ouvrir</a><a class="btn btn-petit" href="${esc(K.lienFacture(f))}&imprimer=1" target="_blank" rel="noopener" title="Imprimer ou enregistrer en PDF">${ic('imprimer', 'ic-sm')}</a></div></td>
-        </tr>`).join('') || '<tr><td colspan="9" class="muet">Aucune facture sur cette période.</td></tr>'}</tbody></table></div></section>`;
+        <tbody data-lignes>${liste.slice(0, PAGE_FACT).map(ligneFacture).join('') || '<tr><td colspan="9" class="muet">Aucune facture sur cette période.</td></tr>'}</tbody></table></div>
+        ${liste.length > PAGE_FACT ? `<div style="padding:16px;text-align:center"><button class="btn" data-plus>Afficher plus (${liste.length - PAGE_FACT} autres)</button></div>` : ''}</section>`;
+    let affichees = PAGE_FACT;
+    main.querySelector('[data-plus]')?.addEventListener('click', (e) => {
+      main.querySelector('[data-lignes]').insertAdjacentHTML('beforeend', liste.slice(affichees, affichees + PAGE_FACT).map(ligneFacture).join(''));
+      affichees += PAGE_FACT;
+      const reste = liste.length - affichees;
+      if (reste > 0) e.target.textContent = `Afficher plus (${reste} autres)`; else e.target.parentElement.remove();
+    });
     main.querySelector('[data-periode]').addEventListener('submit', (e) => {
       e.preventDefault();
       stock.ecrire('fact_debut', e.target.debut.value); stock.ecrire('fact_fin', e.target.fin.value); factures();
@@ -1401,10 +1411,11 @@
   //  ÉQUIPE
   // ══════════════════════════════════════════════════════════
   async function equipe() {
-    const { equipe: liste } = await api.get('/utilisateurs/equipe');
+    const { equipe: liste, demo: nbDemo } = await api.get('/utilisateurs/equipe');
     const lieux = CONFIG.agences;
     main.innerHTML = `
       <div class="entete-page"><h1>Équipe</h1></div>
+      ${nbDemo ? `<p class="bandeau" style="margin-bottom:18px">${nbDemo} membres fictifs de la démo ne sont pas affichés ici. Ils disparaissent avec « Tout effacer » dans Réglages.</p>` : ''}
       <div class="deux-col">
         <section class="panneau"><div class="defile"><table class="tableau">
           <thead><tr><th>Nom</th><th>Téléphone</th><th>Rôle</th><th>Agence</th><th>Accès</th><th></th></tr></thead>
