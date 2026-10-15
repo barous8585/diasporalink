@@ -26,6 +26,14 @@ router.get('/public/:numero', lienLimiter, ah(async (req, res) => {
   res.json({ succes: true, facture: await avecEtat(f) });
 }));
 
+// ── GET /api/factures/mes ── toutes les factures des colis du client (envoyés et reçus)
+router.get('/mes', auth, ah(async (req, res) => {
+  const u = req.user;
+  const ids = (await Colis.find({ $or: [{ client: u._id }, { 'expediteur.telephone': u.telephone }, { 'destinataire.telephone': u.telephone }, { 'tiersAutorise.telephone': u.telephone }] }).select('_id').limit(1000).lean()).map(c => c._id);
+  const factures = await Facture.find({ colis: { $in: ids } }).sort({ date: -1 }).limit(500).lean();
+  res.json({ succes: true, factures: await Promise.all(factures.map(avecEtat)) });
+}));
+
 // ── GET /api/factures/colis/:numero ── factures d'un colis (client lié, équipe)
 router.get('/colis/:numero', auth, ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.toUpperCase() });

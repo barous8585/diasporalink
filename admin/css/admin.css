@@ -215,3 +215,28 @@ table.tableau { border-collapse: collapse; width: 100%; font-size: 14px; }
 .ca-ligne.alerte span, .ca-ligne.alerte b { color: var(--rouge); }
 .sous-titre-tdb { font-family: var(--police); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--gris); margin-bottom: 10px; }
 .bh { grid-template-columns: 160px minmax(0, 1fr) auto; }
+
+/* ── Exports et impression des pages du back-office ── */
+.barre-export { display: flex; justify-content: flex-end; padding: 10px 14px 0; }
+.btn-csv { white-space: nowrap; }
+.ligne-facture > a.grandit { color: inherit; text-decoration: none; min-width: 0; }
+.ligne-facture > .chiffres { white-space: nowrap; }
+.entete-impression { display: none; }
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body.impression-page { background: #fff !important; }
+  body.impression-page .menu, body.impression-page .barre-mobile, body.impression-page .voile-menu,
+  body.impression-page .non-imprime, body.impression-page .entete-page .btn, body.impression-page .entete-page .segments,
+  body.impression-page .panneau-tete .btn, body.impression-page .modale-fond, body.impression-page .toast,
+  body.impression-page form[data-filtres], body.impression-page .carte-notifs, body.impression-page .etiquette, body.impression-page td .btn { display: none !important; }
+  body.impression-page .entete-impression { display: flex !important; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 11pt; border-bottom: 2px solid #04244F; padding-bottom: 6px; margin-bottom: 12px; color: #04244F; }
+  body.impression-page .entete-impression span { font-size: 9pt; color: #55617A; }
+  body.impression-page .cadre-admin { display: block !important; min-height: 0 !important; }
+  body.impression-page main, body.impression-page #contenu { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
+  body.impression-page .defile { overflow: visible !important; max-height: none !important; }
+  body.impression-page .panneau, body.impression-page .kpi, body.impression-page .graphe { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; }
+  body.impression-page .tableau { font-size: 9pt; }
+  body.impression-page .tableau tr { break-inside: avoid; }
+  body.impression-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.impression-page .kpis-couleur { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}

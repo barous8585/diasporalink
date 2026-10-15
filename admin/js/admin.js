@@ -51,7 +51,111 @@
       t.querySelectorAll('tbody tr').forEach(tr => [...tr.children].forEach((td, i) => { if (!td.hasAttribute('data-lib') && !td.hasAttribute('colspan')) td.setAttribute('data-lib', libs[i] || ''); }));
     });
   }
-  new MutationObserver(() => etiqueterTableaux()).observe(main, { childList: true, subtree: true });
+  new MutationObserver(() => { etiqueterTableaux(); boutonsExport(); }).observe(main, { childList: true, subtree: true });
+
+  // ══════════════════════════════════════════════════════════
+  //  EXPORTS (Excel / CSV) ET IMPRESSION
+  // ══════════════════════════════════════════════════════════
+  const aujourdhui = () => new Date().toLocaleDateString('sv'); // AAAA-MM-JJ, heure locale
+  const nomFichier = (txt) => String(txt || 'export').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+  // CSV lisible par Excel en français : BOM, séparateur « ; »
+  const celluleCsv = (v) => { const t = String(v ?? '').replace(/\s+/g, ' ').trim(); return /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const versCsv = (lignes) => '\ufeff' + lignes.map(l => l.map(celluleCsv).join(';')).join('\r\n');
+  const nombreCsv = (n) => (n === null || n === undefined || n === '') ? '' : String(Math.round(Number(n) * 100) / 100).replace('.', ',');
+  function telechargerTexte(texte, nom) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([texte], { type: 'text/csv;charset=utf-8' }));
+    a.download = nom; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  // Fichier préparé par le serveur (accès admin : jeton dans l'en-tête)
+  async function telechargerApi(chemin, nom) {
+    try {
+      const r = await fetch(`${K.API_URL}${chemin}`, { headers: { Authorization: `Bearer ${session.jeton()}` } });
+      if (!r.ok) throw new Error('Export impossible pour le moment.');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await r.blob()); a.download = nom; document.body.appendChild(a); a.click(); a.remove();
+      toast('Fichier téléchargé.', 'ok');
+    } catch (e) { toast(e.message, 'erreur'); }
+  }
+  // Un tableau affiché à l'écran → CSV (les boutons et cellules vides d'action sont ignorés)
+  function tableauVersCsv(table) {
+    const entetes = [...table.querySelectorAll('thead th')].map(th => th.textContent.trim());
+    const garder = entetes.map((e, i) => e !== '' || [...table.querySelectorAll('tbody tr')].some(tr => tr.children[i] && !tr.children[i].querySelector('button, a.btn') && tr.children[i].textContent.trim()));
+    const lignes = [entetes.filter((_, i) => garder[i])];
+    table.querySelectorAll('tbody tr').forEach(tr => {
+      if (tr.querySelector('td[colspan]')) return;
+      const cellules = [...tr.children].map(td => {
+        if (td.dataset.csv !== undefined) return td.dataset.csv;
+        const c = td.cloneNode(true); c.querySelectorAll('button, a.btn, select, .sr-only').forEach(x => x.remove());
+        c.querySelectorAll('div, br').forEach(x => x.before(' · '));
+        return c.textContent.replace(/^\s*·\s*/, '');
+      });
+      lignes.push(cellules.filter((_, i) => garder[i]));
+    });
+    return lignes;
+  }
+  // Ajoute un bouton « CSV » à chaque panneau qui contient un tableau
+  function boutonsExport() {
+    main.querySelectorAll('.panneau').forEach(p => {
+      const table = p.querySelector('table.tableau');
+      if (!table || p.dataset.exportPose || p.closest('.modale')) return;
+      p.dataset.exportPose = '1';
+      const titre = p.querySelector('h2')?.textContent.trim() || main.querySelector('h1')?.textContent.trim() || 'tableau';
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn-petit btn-csv non-imprime'; b.title = 'Télécharger ce tableau pour Excel';
+      b.innerHTML = `${ic('liste', 'ic-sm')} CSV`;
+      b.addEventListener('click', () => {
+        const t = p.querySelector('table.tableau');
+        if (!t) return;
+        telechargerTexte(versCsv(tableauVersCsv(t)), `TMS-${nomFichier(titre)}-${aujourdhui()}.csv`);
+      });
+      const tete = p.querySelector(':scope > .panneau-tete');
+      if (tete) { (tete.querySelector(':scope > .ligne') || tete).appendChild(b); }
+      else { const barre = document.createElement('div'); barre.className = 'barre-export non-imprime'; barre.appendChild(b); p.prepend(barre); }
+    });
+    // Bouton « Imprimer / PDF » dans l'en-tête de chaque page
+    const entete = main.querySelector('.entete-page');
+    if (entete && !entete.querySelector('[data-imprimer-page]')) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn-petit non-imprime'; b.dataset.imprimerPage = '1';
+      b.innerHTML = `${ic('imprimer', 'ic-sm')} Imprimer / PDF`;
+      b.addEventListener('click', imprimerPage);
+      const zone = entete.querySelector(':scope > .ligne') || entete;
+      zone.appendChild(b);
+    }
+  }
+  // Impression de la page affichée (ou « Enregistrer au format PDF » dans la fenêtre d'impression)
+  function imprimerPage() {
+    const titre = main.querySelector('h1')?.textContent.trim() || 'Back-office';
+    let bandeau = document.querySelector('[data-entete-impression]');
+    if (!bandeau) { bandeau = document.createElement('div'); bandeau.className = 'entete-impression'; bandeau.dataset.enteteImpression = '1'; main.before(bandeau); }
+    bandeau.innerHTML = `<div><b>${esc(CONFIG?.app || 'Talib Multi Services')}</b> · ${esc(titre)}</div><span>Édité le ${esc(date(new Date()))} par ${esc(session.utilisateur()?.nom || '')}</span>`;
+    const ancien = document.title;
+    document.title = `TMS ${titre} ${aujourdhui()}`;
+    document.body.classList.add('impression-page');
+    const fin = () => { document.body.classList.remove('impression-page'); document.title = ancien; window.removeEventListener('afterprint', fin); };
+    window.addEventListener('afterprint', fin);
+    setTimeout(() => window.print(), 50);
+  }
+  // Choix d'une période avant un export serveur
+  function exporterPeriode({ titre, chemin, prefixe, debut, fin }) {
+    const d0 = debut || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toLocaleDateString('sv');
+    const { el, fermer } = modale(`
+      <h2>${esc(titre)}</h2>
+      <p class="petit muet">Fichier CSV qui s'ouvre directement dans Excel ou Google Sheets.</p>
+      <form class="pile" data-f>
+        <div class="grille-2"><label class="champ">Du<input class="saisie" type="date" name="debut" value="${d0}" required></label>
+        <label class="champ">Au<input class="saisie" type="date" name="fin" value="${fin || aujourdhui()}" required></label></div>
+        <div class="ligne" style="--gap:8px;justify-content:flex-end"><button type="button" class="btn" data-fermer>Annuler</button><button class="btn btn-principal">${ic('liste', 'ic-sm')} Télécharger</button></div>
+      </form>`);
+    el.querySelector('[data-f]').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const { debut: d, fin: f } = e.target;
+      fermer();
+      await telechargerApi(`${chemin}?debut=${d.value}&fin=${f.value}`, `${prefixe}-${d.value}-au-${f.value}.csv`);
+    });
+  }
 
   // ── Rafraîchissement automatique des pages « vivantes » ──
   // Toutes les 45 s si la page est visible et que personne n'est en train de saisir.
@@ -190,6 +294,43 @@
     });
   }
 
+  // Tout le tableau de bord dans un seul fichier, section par section
+  function exporterTableau(t, lib) {
+    const k = t.kpi, n = nombreCsv, L = [];
+    const section = (titre, entetes, lignes) => { L.push([titre.toUpperCase()]); if (entetes) L.push(entetes); lignes.forEach(l => L.push(l)); L.push([]); };
+    L.push([`${CONFIG?.app || 'Talib Multi Services'} · Tableau de bord`]);
+    L.push(['Période', lib, 'Édité le', date(new Date()), 'Taux', `1 € = ${n(t.taux)} GNF`]);
+    L.push([]);
+    section('Indicateurs', ['Indicateur', 'Période', 'Période précédente'], [
+      ['Encaissé (équivalent €)', n(k.encaisseEur), n(k.encaisseEurPrec)],
+      ['Encaissé en euros', n(t.encaisse?.EUR), ''], ['Encaissé en GNF', n(t.encaisse?.GNF), ''],
+      ['CA transport (€)', n(k.caEur), n(k.caEurPrec)],
+      ['Colis déposés', n(k.deposes), n(k.deposesPrec)], ['Réservations en ligne', n(k.reservations), ''],
+      ['Kilos transportés', n(k.kg), n(k.kgPrec)], ['Colis remis', n(k.remis), n(k.remisPrec)],
+      ['Panier moyen (€)', n(k.deposes ? k.caEur / k.deposes : 0), ''],
+    ]);
+    const ca = t.ca || {};
+    section("Chiffre d'affaires facturé", ['Poste', 'Montant'], [
+      ['CA TTC (équivalent €)', n(ca.eur)], ['CA période précédente (€)', n(ca.eurPrec)],
+      ['Facturé en euros', n(ca.ttc?.EUR)], ['Facturé en GNF', n(ca.ttc?.GNF)],
+      ['Hors taxes (€)', n(ca.htEur)], ['TVA (€)', n(ca.tvaEur)], ['Avoirs (€)', n(ca.avoirsEur)],
+      ['Nombre de factures', n(ca.nbFactures)], ['Reste à encaisser (€)', n(ca.creancesEur)],
+    ]);
+    if (ca.parNature?.length) section('CA par nature', ['Nature', 'Montant €'], ca.parNature.map(x => [x.nature, n(x.eur)]));
+    if (ca.parAgence?.length) section('CA par agence', ['Agence', 'Montant €'], ca.parAgence.map(x => [nomLieu(x.code), n(x.eur)]));
+    if (ca.parMois?.length) section('12 derniers mois', ['Mois', 'Facturé €', 'Encaissé €'], ca.parMois.map(x => [x.mois, n(x.factureEur), n(x.encaisseEur)]));
+    section('Agences', ['Agence', 'Pays', 'Déposés', 'Kilos', 'CA €', 'Encaissé €', 'Encaissé GNF', 'À retirer', 'Impayés', 'Impayés GNF', 'Garde longue'],
+      (t.agences || []).map(a => [a.nom, a.pays, n(a.deposes), n(a.kg), n(a.caEur), n(a.encaisse?.EUR), n(a.encaisse?.GNF), n(a.aRetirer), n(a.impayes), n(a.impayesGnf), n(a.gardeLongue)]));
+    section('Lignes (sens et mode)', ['Sens', 'Mode', 'Colis', 'Kilos', 'CA €'], (t.lignes || []).map(l => [libSens(l.sens) || l.sens, K.libMode ? K.libMode(l.mode) : l.mode, n(l.nb), n(l.kg), n(l.caEur)]));
+    section('Meilleurs clients', ['Client', 'Téléphone', 'Colis', 'Kilos', 'CA €'], (t.clients || []).map(c => [c.nom, c.telephone, n(c.nb), n(c.kg), n(c.caEur)]));
+    section('Délais moyens (dépôt à prêt)', ['Mode', 'Jours en moyenne', 'Colis mesurés'], Object.entries(t.delais || {}).map(([m, d]) => [K.libMode ? K.libMode(m) : m, n(d.moyenne), n(d.nb)]));
+    section('Colis qui n\'avancent plus', ['Colis', 'Statut', 'Mode', 'Jours sans bouger', 'Expéditeur', 'Lieu'], (t.bloques || []).map(b => [b.numeroSuivi, CONFIG?.statuts?.[b.statut] || b.statut, b.mode, n(b.jours), b.expediteur, nomLieu(b.lieu)]));
+    section('Colis en cours par étape', ['Étape', 'Colis'], Object.entries(t.pipeline || {}).map(([s, v]) => [CONFIG?.statuts?.[s] || s, n(v)]));
+    section('Jour par jour', ['Jour', 'Express', 'Avion', 'Bateau', 'Encaissé €'], (t.parJour || []).map(j => [j.jour, n(j.express), n(j.air), n(j.mer), n(j.encaisseEur)]));
+    telechargerTexte(versCsv(L), `TMS-tableau-de-bord-${aujourdhui()}.csv`);
+    toast('Tableau de bord exporté.', 'ok');
+  }
+
   async function tableauDeBord() {
     const jours = stock.lire('tdb_jours') || 30;
     const t = await api.get(`/admin/tableau?jours=${jours}`);
@@ -215,6 +356,7 @@
         <div class="ligne" style="--gap:8px;flex-wrap:wrap">
           <div class="segments segments-compacts" role="group" aria-label="Période">${[[7, '7 j'], [30, '30 j'], [90, '90 j'], [365, '12 mois']].map(([v, l]) => `<button type="button" data-jours="${v}" aria-pressed="${v === jours}">${l}</button>`).join('')}</div>
           <button class="btn btn-principal btn-petit" data-nouveau-lot>${ic('plus', 'ic-sm')} Nouveau lot</button>
+          <button class="btn btn-petit non-imprime" data-export-tdb>${ic('liste', 'ic-sm')} Exporter (Excel)</button>
         </div></div>
 
       <section class="a-faire-bandeau">
@@ -343,6 +485,7 @@
     K.notifications.carte(main.querySelector('[data-notifs]'), { texte: 'Nouvelle réclamation, paiement à vérifier : prévenu sur cet appareil.' });
     main.querySelectorAll('[data-jours]').forEach(b => b.addEventListener('click', () => { stock.ecrire('tdb_jours', Number(b.dataset.jours)); tableauDeBord(); }));
     main.querySelector('[data-nouveau-lot]').addEventListener('click', nouveauLot);
+    main.querySelector('[data-export-tdb]').addEventListener('click', () => exporterTableau(t, lib));
     main.querySelector('a[href="#bloques"]')?.addEventListener('click', (e) => { e.preventDefault(); main.querySelector('#bloques').scrollIntoView({ behavior: 'smooth' }); });
     main.querySelectorAll('tr[data-num]').forEach(tr => tr.addEventListener('click', () => { location.hash = `#/colis?q=${encodeURIComponent(tr.dataset.num)}`; }));
     brancherInfobulles(main);
@@ -495,7 +638,7 @@
     const params = new URLSearchParams(location.hash.split('?')[1] || '');
     const etat = { q: params.get('q') || '', statut: params.get('statut') || '', guichet: '', page: 1 };
     main.innerHTML = `
-      <div class="entete-page"><h1>Colis</h1></div>
+      <div class="entete-page"><h1>Colis</h1><div class="ligne" style="--gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-petit" data-export-colis>${ic('liste', 'ic-sm')} Exporter les colis (Excel)</button></div></div>
       <form class="ligne" style="--gap:8px;flex-wrap:wrap;margin-bottom:16px" data-filtres>
         <input class="saisie" style="flex:2;min-width:220px" name="q" placeholder="N° de suivi, téléphone ou nom" value="${esc(etat.q)}" aria-label="Rechercher">
         <select class="saisie" style="flex:1;min-width:160px" name="statut" aria-label="Statut"><option value="">Tous les statuts</option>${Object.entries(CONFIG.statuts).map(([k, v]) => `<option value="${k}" ${k === etat.statut ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
@@ -503,6 +646,7 @@
         <button class="btn btn-noir">${ic('loupe', 'ic-sm')} Chercher</button>
       </form>
       <section class="panneau"><div class="defile" data-resultats></div></section>`;
+    main.querySelector('[data-export-colis]').addEventListener('click', () => exporterPeriode({ titre: 'Exporter les colis', chemin: '/admin/export/colis.csv', prefixe: 'colis-TMS' }));
     const charger = async () => {
       const zone = main.querySelector('[data-resultats]');
       zone.innerHTML = '<div class="chargement"></div>';
@@ -592,7 +736,12 @@
     el.querySelectorAll('[data-photo-id]').forEach(img => K.afficherPhoto(img, img.dataset.photoId));
     api.get(`/factures/colis/${numero}`).then(({ factures: fs }) => {
       const z = el.querySelector('[data-factures-colis]');
-      z.innerHTML = fs.length ? `<div class="petit muet">Factures</div>${fs.map(ligneFacture).join('')}` : '<div class="petit muet">Aucune facture.</div>';
+      z.innerHTML = fs.length ? `<div class="petit muet">Factures</div>${fs.map(ligneFacture).join('')}`
+        : `<div class="ligne entre"><span class="petit muet">Aucune facture.</span><button type="button" class="btn btn-petit" data-emettre>${ic('liste', 'ic-sm')} Émettre la facture</button></div>`;
+      z.querySelector('[data-emettre]')?.addEventListener('click', async () => {
+        try { await api.post(`/factures/colis/${numero}/emettre`); toast('Facture émise.', 'ok'); ficheColis(numero, apres); }
+        catch (err) { toast(err.status === 409 ? 'Rien à facturer pour le moment (colis pas encore pesé ou déjà facturé).' : err.message, 'erreur'); }
+      });
     }).catch(() => {});
   }
 
@@ -681,9 +830,15 @@
   // ══════════════════════════════════════════════════════════
   //  FACTURES
   // ══════════════════════════════════════════════════════════
-  const ligneFacture = (f) => `<a class="ligne-facture" href="${esc(K.lienFacture(f))}" target="_blank" rel="noopener">
-    <span class="grandit"><span class="gras">${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${esc(f.numero)}</span> <span class="tres-petit muet">${esc(date(f.date, false))} · ${esc(f.client?.nom || '')}${f.etat ? ` · ${esc(K.ETATS_FACTURE[f.etat] || f.etat)}` : ''}</span></span>
-    <span class="gras chiffres">${montant(f.type === 'avoir' ? -Math.abs(f.totalTTC) : f.totalTTC, f.devise)}</span></a>`;
+  const ligneFacture = (f) => {
+    const lien = K.lienFacture(f);
+    const tel = String(f.client?.telephone || '').replace(/\D/g, '');
+    const texte = `${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${f.numero} (${CONFIG?.app || 'TMS'}) : ${lien}`;
+    return `<div class="ligne-facture">
+    <a class="grandit" href="${esc(lien)}" target="_blank" rel="noopener"><span class="gras">${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${esc(f.numero)}</span> <span class="tres-petit muet">${esc(date(f.date, false))} · ${esc(f.client?.nom || '')}${f.etat ? ` · ${esc(K.ETATS_FACTURE[f.etat] || f.etat)}` : ''}</span></a>
+    <span class="gras chiffres">${montant(f.type === 'avoir' ? -Math.abs(f.totalTTC) : f.totalTTC, f.devise)}</span>
+    <span class="ligne non-imprime" style="--gap:4px"><a class="btn btn-petit" href="${esc(lien)}&imprimer=1" target="_blank" rel="noopener" title="Imprimer ou PDF">${ic('imprimer', 'ic-sm')}</a><a class="btn btn-petit" href="https://wa.me/${esc(tel)}?text=${encodeURIComponent(texte)}" target="_blank" rel="noopener" title="Envoyer par WhatsApp">${ic('bulle', 'ic-sm')}</a></span></div>`;
+  };
 
   async function factures() {
     const auj = new Date();
@@ -713,20 +868,13 @@
           <td>${esc(date(f.date, false))}</td><td>${esc(f.numeroSuivi || '')}</td>
           <td>${esc(f.client?.nom || '')}<div class="tres-petit muet">${esc(f.client?.role || '')}</div></td><td>${esc(f.agence?.nom || '')}</td>
           <td class="chiffres n">${montant(f.totalHT, f.devise)}</td><td class="chiffres n">${montant(f.totalTVA, f.devise)}</td><td class="chiffres n gras">${montant(f.totalTTC, f.devise)}</td>
-          <td><a class="btn btn-petit" href="${esc(K.lienFacture(f))}" target="_blank" rel="noopener">Ouvrir</a></td>
+          <td><div class="ligne" style="--gap:6px"><a class="btn btn-petit" href="${esc(K.lienFacture(f))}" target="_blank" rel="noopener">Ouvrir</a><a class="btn btn-petit" href="${esc(K.lienFacture(f))}&imprimer=1" target="_blank" rel="noopener" title="Imprimer ou enregistrer en PDF">${ic('imprimer', 'ic-sm')}</a></div></td>
         </tr>`).join('') || '<tr><td colspan="9" class="muet">Aucune facture sur cette période.</td></tr>'}</tbody></table></div></section>`;
     main.querySelector('[data-periode]').addEventListener('submit', (e) => {
       e.preventDefault();
       stock.ecrire('fact_debut', e.target.debut.value); stock.ecrire('fact_fin', e.target.fin.value); factures();
     });
-    main.querySelector('[data-export]').addEventListener('click', async () => {
-      try {
-        const r = await fetch(`${K.API_URL}/factures/export.csv?debut=${debut}&fin=${fin}`, { headers: { Authorization: `Bearer ${session.jeton()}` } });
-        if (!r.ok) throw new Error('Export impossible.');
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(await r.blob()); a.download = `factures-TMS-${debut}-au-${fin}.csv`; a.click();
-      } catch (e) { toast(e.message, 'erreur'); }
-    });
+    main.querySelector('[data-export]').addEventListener('click', () => telechargerApi(`/factures/export.csv?debut=${debut}&fin=${fin}`, `factures-TMS-${debut}-au-${fin}.csv`));
   }
 
   // ══════════════════════════════════════════════════════════
@@ -882,7 +1030,7 @@
   async function caisses() {
     const jour = new Date().toISOString().slice(0, 10);
     main.innerHTML = `
-      <div class="entete-page"><h1>Caisses</h1><label class="ligne" style="--gap:8px">Jour <input class="saisie" type="date" data-jour value="${jour}" style="width:auto"></label></div>
+      <div class="entete-page"><h1>Caisses</h1><div class="ligne" style="--gap:8px;flex-wrap:wrap"><label class="ligne" style="--gap:8px">Jour <input class="saisie" type="date" data-jour value="${jour}" style="width:auto"></label><button type="button" class="btn btn-petit" data-export-enc>${ic('liste', 'ic-sm')} Exporter les encaissements</button></div></div>
       <div data-declarations></div>
       <div data-caisses></div>`;
     // Paiements Orange Money / MTN MoMo déclarés par les clients : à vérifier sur le compte marchand
@@ -943,6 +1091,7 @@
           </div></section>
         </div>`;
     };
+    main.querySelector('[data-export-enc]').addEventListener('click', () => { const j = main.querySelector('[data-jour]').value; exporterPeriode({ titre: 'Exporter les encaissements', chemin: '/admin/export/encaissements.csv', prefixe: 'encaissements-TMS', debut: j, fin: j }); });
     main.querySelector('[data-jour]').addEventListener('change', (e) => charger(e.target.value).catch(err => toast(err.message, 'erreur')));
     await charger(jour);
   }

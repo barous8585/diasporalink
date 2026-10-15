@@ -207,12 +207,12 @@ textarea.saisie { padding: 12px 14px; min-height: 80px; resize: vertical; }
 
 /* Étiquettes à imprimer (10 × 15 cm, une page par carton) */
 .etiquette { display: none; }
+@page etiquette { size: 100mm 150mm; margin: 0; }
 @media print {
-  @page { size: 100mm 150mm; margin: 0; }
-  body > *:not(.etiquette) { display: none !important; }
+  body:not(.impression-page) > *:not(.etiquette) { display: none !important; }
   body { background: #fff; }
-  .etiquette { display: block !important; }
-  .etiquette .page { width: 100mm; height: 150mm; padding: 6mm; display: flex; flex-direction: column; gap: 3mm; font-family: var(--police); color: #000; page-break-after: always; break-after: page; overflow: hidden; }
+  body:not(.impression-page) .etiquette { display: block !important; }
+  .etiquette .page { page: etiquette; width: 100mm; height: 150mm; padding: 6mm; display: flex; flex-direction: column; gap: 3mm; font-family: var(--police); color: #000; page-break-after: always; break-after: page; overflow: hidden; }
   .etiquette .num { font-size: 22pt; font-weight: 800; letter-spacing: 1px; }
   .etiquette .qr svg { width: 55mm; height: 55mm; display: block; }
   .etiquette .grand { font-size: 16pt; font-weight: 800; }

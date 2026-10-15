@@ -2,7 +2,7 @@
 // Les réponses de l'API ne sont pas mises en cache ici : l'app garde elle-même
 // les dernières infos de suivi (avec leur heure) pour les montrer hors-ligne.
 importScripts('commun/sw-push.js'); // notifications push
-const CACHE = 'kolis-client-v10';
+const CACHE = 'kolis-client-v11';
 const ASSETS = ['./', './index.html', './css/app.css', './js/app.js', './commun/kolis.css', './commun/kolis.js', './commun/tarif.js', './commun/vendor/polices.css', './commun/vendor/polices/inter-latin-wght-normal.woff2', './commun/vendor/polices/fraunces-latin-opsz-normal.woff2', './manifest.json'];
 
 self.addEventListener('install', e => {

@@ -65,6 +65,7 @@
     [/^\/mes-colis$/, mesColis, 'mes-colis'],
     [/^\/guichets$/, guichets, 'guichets'],
     [/^\/compte$/, compte, null],
+    [/^\/factures$/, mesFactures, null],
     [/^\/connexion$/, connexion, null],
     [/^\/cgv$/, () => pageLegale('Conditions générales', KolisLegal.cgv(CONFIG)), null],
     [/^\/interdits$/, () => pageLegale('Objets interdits', KolisLegal.listeInterdits()), null],
@@ -385,7 +386,8 @@
           ${ic('liste', 'ic-sm')}
           <span class="grandit"><span class="gras">${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${esc(f.numero)}</span><span class="tres-petit muet" style="display:block">${esc(date(f.date, false))} · ${esc(K.ETATS_FACTURE[f.etat] || '')}</span></span>
           <span class="gras chiffres">${montant(f.totalTTC, f.devise)}</span>
-        </a>`).join('') : '<p class="petit muet">La facture est émise au dépôt ou à la remise du colis.</p>'}`;
+        </a>`).join('') : '<p class="petit muet">La facture est émise au dépôt ou à la remise du colis.</p>'}
+        ${factures.length ? `<a class="btn btn-petit" href="#/factures" style="align-self:flex-start">Toutes mes factures</a>` : ''}`;
       const miennes = reclamations.filter(r => r.numeroSuivi === c.numeroSuivi);
       const ouverte = miennes.find(r => ['ouverte', 'en_cours'].includes(r.statut));
       zr.innerHTML = `
@@ -1158,7 +1160,7 @@
     const termines = tous.filter(c => ['remis', 'annule'].includes(c.statut));
     main.innerHTML = `
       <div class="pile">
-        <div class="ligne entre"><h1>Mes colis</h1><a class="btn btn-principal btn-petit" href="#/envoyer">${ic('plus', 'ic-sm')} Envoyer</a></div>
+        <div class="ligne entre"><h1>Mes colis</h1><div class="ligne" style="--gap:6px"><a class="btn btn-petit" href="#/factures">${ic('liste', 'ic-sm')} Factures</a><a class="btn btn-principal btn-petit" href="#/envoyer">${ic('plus', 'ic-sm')} Envoyer</a></div></div>
         <div class="resume-colis">
           <div><b>${enCours.length}</b><span>en cours</span></div>
           <div><b>${enCours.filter(c => ['pret', 'en_livraison'].includes(c.statut)).length}</b><span>prêts</span></div>
@@ -1257,6 +1259,37 @@
     });
   }
 
+  // ── Mes factures : toutes les factures de mes colis, à ouvrir, imprimer ou partager ──
+  async function mesFactures() {
+    if (!exigerConnexion()) return;
+    const { factures } = await api.get('/factures/mes');
+    const total = (dev) => factures.filter(f => f.devise === dev && f.type === 'facture').reduce((a, f) => a + f.totalTTC, 0);
+    main.innerHTML = `
+      <div class="pile">
+        <div class="ligne"><a href="#/mes-colis" class="btn btn-rond" aria-label="Retour">${ic('retour')}</a><h1 class="grandit">Mes factures</h1></div>
+        ${factures.length ? `
+        <div class="resume-colis">
+          <div><b>${factures.filter(f => f.type === 'facture').length}</b><span>factures</span></div>
+          <div><b style="font-size:18px">${eur(total('EUR'))}</b><span>en euros</span></div>
+          <div><b style="font-size:18px">${gnf(total('GNF'))}</b><span>en GNF</span></div>
+        </div>
+        <div class="pile" style="--gap:10px">${factures.map(f => `
+          <div class="carte facture-carte">
+            <div class="ligne entre" style="align-items:flex-start">
+              <div><div class="gras">${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${esc(f.numero)}</div>
+                <div class="tres-petit muet">${esc(date(f.date, false))} · colis <a href="#/suivi/${esc(f.numeroSuivi)}">${esc(f.numeroSuivi)}</a>${f.agence?.nom ? ` · ${esc(f.agence.nom)}` : ''}</div></div>
+              <div style="text-align:right"><div class="gras chiffres" style="font-size:17px">${montant(f.totalTTC, f.devise)}</div><span class="badge ${f.etat === 'payee' ? 'b-pret' : f.etat === 'avoir' ? 'b-depose' : 'b-reserve'}">${esc(K.ETATS_FACTURE[f.etat] || '')}</span></div>
+            </div>
+            <div class="ligne" style="--gap:8px;flex-wrap:wrap;margin-top:10px">
+              <a class="btn btn-petit btn-principal" href="${esc(K.lienFacture(f))}" target="_blank" rel="noopener">${ic('liste', 'ic-sm')} Voir</a>
+              <a class="btn btn-petit" href="${esc(K.lienFacture(f))}&imprimer=1" target="_blank" rel="noopener">${ic('imprimer', 'ic-sm')} Imprimer / PDF</a>
+              <a class="btn btn-petit" href="${esc(lienWhatsApp('', `${f.type === 'avoir' ? 'Avoir' : 'Facture'} ${f.numero} : ${new URL(K.lienFacture(f), location.href).href}`))}" target="_blank" rel="noopener">${ic('bulle', 'ic-sm')} WhatsApp</a>
+            </div>
+          </div>`).join('')}</div>`
+        : `<div class="vide pile"><p class="gras">Aucune facture pour le moment</p><p class="petit muet">La facture est émise quand le colis est pesé et payé en agence, ou quand vous payez une livraison en ligne.</p></div>`}
+      </div>`;
+  }
+
   function compte() {
     const u = session.utilisateur();
     if (!u) { location.hash = '#/connexion'; return; }
@@ -1268,6 +1301,7 @@
           ? 'Les colis envoyés à ce numéro apparaissent dans « Mes colis », avec leur code de retrait.'
           : 'Vos envois apparaissent dans « Mes colis ». Pour voir aussi les codes de retrait des colis qu\'on vous envoie, faites vérifier votre numéro en agence.'}</p>
         <div data-notifs></div>
+        <a class="btn btn-plein" href="#/factures">${ic('liste', 'ic-sm')} Mes factures</a>
         <button class="btn btn-plein" data-mdp>Changer mon mot de passe</button>
         <button class="btn btn-plein" data-sortir>${ic('sortie', 'ic-sm')} Se déconnecter</button>
         ${mentions()}
