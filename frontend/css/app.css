@@ -8,9 +8,9 @@
 .logo .titre { font-size: 20px; font-weight: 800; }
 .logo-img { height: 56px; width: auto; display: block; }
 #reseau { margin: 4px 20px 0; }
-main { padding: 12px 20px 0; outline: none; }
+main { padding: 16px 20px 0; outline: none; }
 main:focus-visible { outline: none; }
-main > .pile { --gap: 18px; }
+main > .pile { --gap: 22px; }
 
 /* Barre de navigation du bas */
 .barre-nav {
@@ -100,3 +100,15 @@ main > .pile { --gap: 18px; }
 .moyens-envoi { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--ligne-2); display: flex; flex-direction: column; gap: 8px; }
 .puces-moyens { display: flex; flex-wrap: wrap; gap: 6px; }
 .puces-moyens span { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 8px; background: #fff; color: var(--marine); border: 1px solid var(--ligne); }
+
+/* Respiration : étapes de « Envoyer » dans des blocs séparés */
+.envoyer-grille > section.pile { background: var(--carte); border: 1px solid var(--ligne); border-radius: var(--r-lg); padding: 20px 18px; --gap: 14px !important; gap: 14px; box-shadow: 0 1px 2px rgba(4, 36, 79, .04); }
+.envoyer-grille > section.pile > h3 { font-size: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--ligne); }
+.envoyer-grille > section .carte { background: var(--creme-2); border-color: transparent; }
+.grille-5-poids { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.envoyer-grille > section .carte, .bloc-etape .carte { padding: 16px 14px; }
+@media (max-width: 400px) { .envoyer-grille > section.pile { padding: 18px 14px; } }
+/* Suivi : le bouton Payer passe sous le montant, sur toute la largeur */
+.page-suivi .carte-ocre > .ligne.entre { flex-direction: column; align-items: stretch !important; gap: 14px; }
+.page-suivi .carte-ocre > .ligne.entre > .btn { width: 100%; min-height: 52px; }
+.page-suivi .carte-ocre { gap: 10px !important; }

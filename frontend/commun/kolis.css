@@ -396,3 +396,30 @@ main.entree > * { animation: pgIn .28s var(--ease) both; }
 .carte-qr-paiement { border: 2px solid var(--bleu-vif, #1F5FBF); }
 .carte-code { background: var(--ocre-doux); }
 .carte-code .code-4 > div { background: #fff; }
+
+/* ══════════════════════════════════════════════════════════
+   Respiration : plus d'air entre les éléments, chaque partie dans son bloc
+   ══════════════════════════════════════════════════════════ */
+body { line-height: 1.5; }
+.pile { gap: var(--gap, 16px); }
+.grille-2 { gap: 12px; }
+.grille-3, .grille-4 { gap: 10px; }
+.carte { padding: 20px; }
+.carte-ocre { padding: 20px; }
+.carte-vert, .carte-noire { padding: 22px; }
+label.champ { gap: 8px; }
+.case { gap: 14px; }
+.bandeau { line-height: 1.5; }
+h1 + p, h2 + p { margin-top: 2px; }
+
+/* Bloc d'étape (formulaires découpés par K.sectionner, et étapes de « Envoyer ») */
+.bloc-etape {
+  display: flex; flex-direction: column; gap: 14px;
+  background: var(--carte); border: 1px solid var(--ligne); border-radius: var(--r-lg);
+  padding: 20px 18px; box-shadow: 0 1px 2px rgba(4, 36, 79, .04);
+}
+.bloc-etape > h3 { font-size: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--ligne); }
+.bloc-etape .carte { background: var(--creme-2); border-color: transparent; }
+form.pile:has(> .bloc-etape) { gap: 20px; }
+.case-cgv { padding: 4px 2px; }
+@media (max-width: 400px) { .bloc-etape { padding: 18px 14px; } }

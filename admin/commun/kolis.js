@@ -600,6 +600,27 @@
     };
   }
 
+  // ── Mise en sections : chaque titre (h3) d'un formulaire et ce qui le suit forment un bloc
+  // blanc séparé (« chaque chose dans son espace »). S'arrête au bouton d'envoi et aux
+  // éléments marqués data-hors-etape. Les éléments gardent leurs écouteurs.
+  function sectionner(racine) {
+    if (!racine || racine.dataset.sectionne) return;
+    racine.dataset.sectionne = '1';
+    let bloc = null;
+    for (const el of [...racine.children]) {
+      if (el.tagName === 'H3') {
+        bloc = document.createElement('section');
+        bloc.className = 'bloc-etape';
+        el.before(bloc);
+        bloc.appendChild(el);
+        continue;
+      }
+      if (!bloc) continue;
+      if ((el.matches('button[type=submit], [data-hors-etape]')) || el.querySelector?.(':scope > button[type=submit]')) { bloc = null; continue; }
+      bloc.appendChild(el);
+    }
+  }
+
   // ── Factures : page publique de l'app client (lien avec jeton, partageable) ──
   function lienFacture(f) {
     const q = `facture.html?n=${encodeURIComponent(f.numero)}&t=${encodeURIComponent(f.jeton)}`;
@@ -703,6 +724,6 @@
     API_URL, api, session, stock, config, ErreurReseau,
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
     positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse, choisirSurCarte, chargerLeaflet,
-    lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto, notifications,
+    lienFacture, ETATS_FACTURE, photoReduite, afficherPhoto, notifications, sectionner,
   };
 })();

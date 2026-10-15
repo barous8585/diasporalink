@@ -3,9 +3,9 @@
 .coque { max-width: 560px; margin: 0 auto; min-height: 100vh; padding-bottom: 110px; }
 .entete-agent { display: flex; align-items: center; gap: 10px; padding: 16px 20px 10px; position: sticky; top: 0; background: var(--fond); z-index: 40; }
 .entete-agent .tres-petit { color: var(--gris); }
-main { padding: 4px 20px 0; outline: none; }
+main { padding: 10px 20px 0; outline: none; }
 main:focus-visible { outline: none; }
-main > .pile { --gap: 16px; }
+main > .pile { --gap: 20px; }
 
 .pastille-synchro {
   display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border-radius: 20px;
