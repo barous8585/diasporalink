@@ -8,9 +8,12 @@ let io = null;
 const enAttente = new Map(); // salle → minuterie (regroupe les rafales)
 
 function brancher(serveurIo) { io = serveurIo; }
+// Pendant une génération en masse (simulation), on se tait puis on prévient tout le monde une fois
+let silence = false;
+function taire(oui) { silence = !!oui; if (!oui && io) io.emit('maj', { type: 'colis' }); }
 
 function prevenir(salles, type) {
-  if (!io) return;
+  if (!io || silence) return;
   for (const salle of new Set(salles.filter(Boolean))) {
     if (enAttente.has(salle)) continue;
     enAttente.set(salle, setTimeout(() => { enAttente.delete(salle); io.to(salle).emit('maj', { type }); }, 400));
@@ -32,4 +35,4 @@ const lotChange = (l) => prevenir(['admins', `agence:${l?.depot}`, `agence:${l?.
 const mouvementChange = (m) => prevenir(['admins', `agence:${m?.lieu}`, m?.agent && `user:${m.agent}`], 'caisse');
 const reclamationChange = (r) => prevenir(['admins', r?.demandeur?.user && `user:${r.demandeur.user}`], 'reclamation');
 
-module.exports = { brancher, prevenir, colisChange, lotChange, mouvementChange, reclamationChange, adminsSeulement };
+module.exports = { brancher, taire, prevenir, colisChange, lotChange, mouvementChange, reclamationChange, adminsSeulement };

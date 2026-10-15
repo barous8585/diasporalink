@@ -1230,7 +1230,18 @@
         <section class="panneau"><div class="panneau-tete"><div><h2>Agences</h2><p class="petit muet" style="margin-top:4px">Chaque agence reçoit les colis à envoyer, remet les colis arrivés et encaisse. Dans chaque pays, cochez la plateforme où arrivent les lots.</p></div><button type="button" class="btn btn-petit" data-ajout>${ic('plus', 'ic-sm')} Ajouter une agence</button></div>
           <div class="panneau-corps pile" data-liste-agences>${(c.agences || []).map(agenceHtml).join('')}</div></section>
         <div><button class="btn btn-principal btn-grand">Enregistrer les réglages</button></div>
-      </form>`;
+      </form>
+      <section class="panneau" style="max-width:1040px;margin-top:28px" data-demo>
+        <div class="panneau-tete"><div><h2>Données de démonstration</h2><p class="petit muet" style="margin-top:4px">Simule 30 jours d'activité d'une entreprise qui tourne bien : clients, réservations, dépôts, vols et conteneurs, arrivées, remises, livraisons, paiements, caisses, factures, réclamations. Tout est numéroté à part (DEMO-…), aucun SMS n'est envoyé, et tout s'efface d'un clic. Vos vraies données ne sont jamais touchées.</p></div></div>
+        <div class="panneau-corps pile" style="--gap:14px">
+          <p data-demo-etat class="petit">Chargement…</p>
+          <div class="ligne" style="--gap:12px;flex-wrap:wrap">
+            <button type="button" class="btn btn-principal" data-demo-generer>Générer 30 jours d'activité</button>
+            <button type="button" class="btn" data-demo-effacer>Tout effacer</button>
+          </div>
+        </div>
+      </section>`;
+    brancherDemo(main.querySelector('[data-demo]'));
     const form = main.querySelector('[data-reglages]');
     // Exemples de prix, recalculés pendant la saisie
     const majExemples = () => form.querySelectorAll('[data-domicile]').forEach(b => {
@@ -1349,6 +1360,41 @@
         reglages();
       } catch (err) { toast(err.message, 'erreur'); }
     });
+  }
+
+  // Données de démonstration : génération en arrière-plan (suivi toutes les 2 s) et purge
+  function brancherDemo(bloc) {
+    const etat = bloc.querySelector('[data-demo-etat]');
+    const bGen = bloc.querySelector('[data-demo-generer]');
+    const bEff = bloc.querySelector('[data-demo-effacer]');
+    const nb = (n) => Number(n || 0).toLocaleString('fr-FR');
+    const maj = async () => {
+      if (!document.body.contains(bloc)) return;
+      let e;
+      try { e = await api.get('/admin/demo'); } catch (err) { etat.textContent = err.message; return; }
+      const c = e.compte || {};
+      bGen.disabled = bEff.disabled = !!e.enCours;
+      if (e.enCours) {
+        etat.innerHTML = `<b>Simulation en cours…</b> ${esc(e.etape || '')}${e.total ? ` · ${nb(e.fait)} / ${nb(e.total)} colis` : ''}`;
+        return setTimeout(maj, 2000);
+      }
+      if (e.dernier?.erreur) etat.innerHTML = `<span style="color:var(--rouge,#c0392b)">La simulation a échoué : ${esc(e.dernier.erreur)}</span>`;
+      else if (c.colis) etat.innerHTML = `<b>Démo en place :</b> ${nb(c.colis)} colis · ${nb(c.factures)} factures · ${nb(c.lots)} vols et conteneurs · ${nb(c.mouvements)} encaissements · ${nb(c.reclamations)} réclamations · ${nb(c.utilisateurs)} clients et membres d'équipe fictifs.`;
+      else etat.textContent = 'Aucune donnée de démonstration pour l\'instant.';
+      bGen.textContent = c.colis ? 'Régénérer 30 jours' : 'Générer 30 jours d\'activité';
+      bEff.hidden = !c.colis;
+    };
+    bGen.addEventListener('click', async () => {
+      if (!confirm('Générer 30 jours d\'activité fictive ? (Les anciennes données de démonstration sont remplacées, vos vraies données ne sont pas touchées.)')) return;
+      try { await api.post('/admin/demo/generer', { jours: 30 }); toast('Simulation lancée, cela prend moins d\'une minute.', 'ok'); maj(); } catch (err) { toast(err.message, 'erreur'); }
+    });
+    bEff.addEventListener('click', async () => {
+      if (!confirm('Effacer toutes les données de démonstration (colis, factures, lots, caisses, clients fictifs) ?')) return;
+      bEff.disabled = true;
+      try { const r = await api.del('/admin/demo'); toast(`Démo effacée : ${nb(r.efface?.colis)} colis, ${nb(r.efface?.factures)} factures.`, 'ok'); } catch (err) { toast(err.message, 'erreur'); }
+      maj();
+    });
+    maj();
   }
 
   // ══════════════════════════════════════════════════════════

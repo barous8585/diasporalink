@@ -14,6 +14,7 @@ const mouvementSchema = new mongoose.Schema({
   reference: { type: String },
   cloture: { type: mongoose.Schema.Types.ObjectId, ref: 'Cloture', default: null, index: true },
   le:      { type: Date, default: Date.now },
+  demo:    { type: Boolean, index: true },
 }, { timestamps: true });
 
 const clotureSchema = new mongoose.Schema({
@@ -25,6 +26,7 @@ const clotureSchema = new mongoose.Schema({
   ecart:           { EUR: Number, GNF: Number },
   nbMouvements: Number,
   commentaire: String,
+  demo: { type: Boolean, index: true },
 }, { timestamps: true, minimize: false });
 
 // Prévient les apps ouvertes (rafraîchissement automatique)

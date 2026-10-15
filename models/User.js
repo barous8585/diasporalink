@@ -26,6 +26,7 @@ const userSchema = new mongoose.Schema({
   jetonVersion: { type: Number, default: 0 },             // +1 = déconnecte partout
   stripeId:    { type: String },
   googleId:    { type: String, index: { unique: true, sparse: true } }, // compte Google relié (connexion « avec Google »)
+  demo:        { type: Boolean, index: true },              // personne fictive (simulation), sans mot de passe
 }, {
   timestamps: true,
   toJSON: {

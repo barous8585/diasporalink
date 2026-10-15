@@ -1,4 +1,4 @@
-// Service worker du back-office : seulement les notifications (pas de cache hors-ligne). (version 14)
+// Service worker du back-office : seulement les notifications (pas de cache hors-ligne). (version 15)
 importScripts('commun/sw-push.js');
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));

@@ -115,9 +115,18 @@ function emetteur(config) {
  * moment : 'depot' (facture à l'expéditeur) ou 'remise' (à la personne qui retire).
  * Renvoie null s'il n'y a rien à facturer.
  */
-async function emettre(colis, { moment = 'depot', agent } = {}) {
+async function emettre(colis, { moment = 'depot', agent, date } = {}) {
   const config = await Config.get();
   const deja = await Facture.find({ colis: colis._id, type: 'facture' }).lean();
+  const donnees = preparer(colis, config, { moment, agent, date, deja });
+  return donnees ? Facture.create(donnees) : null;
+}
+
+/**
+ * Contenu de la facture (sans l'enregistrer) : ce qui n'a pas encore été facturé
+ * sur le colis (deja = ses factures existantes). null s'il n'y a rien à facturer.
+ */
+function preparer(colis, config, { moment = 'depot', agent, date, deja = [] } = {}) {
   const groupesFactures = new Set(deja.flatMap(f => f.lignes.map(l => groupe(l.cle))));
   let lignes = lignesDuColis(colis, config).filter(l => !groupesFactures.has(groupe(l.cle)));
   // Au dépôt : la garde et la douane n'existent pas encore ; seulement ce qui est connu
@@ -141,7 +150,7 @@ async function emettre(colis, { moment = 'depot', agent } = {}) {
   else if (colis.remise?.retirePar === 'tiers') client = { nom: colis.remise.nomRetrait, telephone: colis.tiersAutorise?.telephone, role: 'Pour le destinataire' };
   else client = { ...colis.destinataire.toObject?.() || colis.destinataire, role: 'Destinataire' };
 
-  return Facture.create({
+  return {
     type: 'facture', colis: colis._id, numeroSuivi: colis.numeroSuivi,
     emetteur: emetteur(config),
     agence: agence ? { code: agence.code, nom: agence.nom, adresse: [agence.adresse, agence.commune, agence.ville].filter(Boolean).join(', '), pays: agence.pays } : undefined,
@@ -150,7 +159,9 @@ async function emettre(colis, { moment = 'depot', agent } = {}) {
     mentionTva: tva.taux ? '' : (tva.mention || ''),
     conditionsPaiement: config.facturation?.conditionsPaiement,
     agent: agent?._id,
-  });
+    ...(date && { date }),
+    ...(colis.demo && { demo: true }),
+  };
 }
 
 /** Avoir (remboursement) sur une facture, pour un montant TTC dans sa devise. */
@@ -199,4 +210,4 @@ async function emettreSansBloquer(colis, options) {
   try { return await emettre(colis, options); } catch (e) { console.error('[facture]', colis?.numeroSuivi, e.message); return null; }
 }
 
-module.exports = { lignesDuColis, chiffrer, emettre, emettreSansBloquer, emettreAvoir, facturesDuColis, GROUPE };
+module.exports = { lignesDuColis, chiffrer, preparer, emettre, emettreSansBloquer, emettreAvoir, facturesDuColis, GROUPE };

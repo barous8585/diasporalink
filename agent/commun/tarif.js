@@ -182,7 +182,9 @@ function enGnf(montant, devise, taux) {
  */
 function calculerSolde(colis, config, maintenant = new Date()) {
   const taux       = colis.tarif?.taux || config.tauxEurGnf;
-  const magasinage = calculerMagasinage(config, colis.arriveGuichetLe, maintenant, { pays: paysArrivee(colis.sens), taux });
+  // La garde s'arrête le jour de la remise (sinon un colis remis continuerait à « coûter »)
+  const finGarde = colis.remise?.le ? new Date(colis.remise.le) : maintenant;
+  const magasinage = calculerMagasinage(config, colis.arriveGuichetLe, finGarde, { pays: paysArrivee(colis.sens), taux });
   const domicileGnf = fraisDomicileGnf(colis);
   const du = (colis.tarif?.totalGnf || 0) + (colis.fraisDouaneGnf || 0) + magasinage.fraisGnf + domicileGnf;
   // Les avoirs (gestes commerciaux, remboursements) éteignent la dette comme un paiement

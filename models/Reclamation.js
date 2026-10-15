@@ -38,13 +38,15 @@ const reclamationSchema = new mongoose.Schema({
     avoir: String,                    // numéro de l'avoir émis
     versement: { methode: String, reference: String, le: Date },
   },
+  demo: { type: Boolean, index: true },
 }, { timestamps: true });
 
 reclamationSchema.pre('validate', async function (next) {
   try {
     if (!this.numero) {
       const an = new Date().getFullYear();
-      this.numero = `R-${an}-${String(await Compteur.suivant(`R-${an}`)).padStart(4, '0')}`;
+      const p = this.demo ? 'DEMO-R' : 'R';
+      this.numero = `${p}-${an}-${String(await Compteur.suivant(`${p}-${an}`)).padStart(4, '0')}`;
     }
     next();
   } catch (e) { next(e); }
