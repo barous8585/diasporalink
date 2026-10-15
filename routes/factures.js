@@ -30,8 +30,9 @@ router.get('/public/:numero', lienLimiter, ah(async (req, res) => {
 router.get('/mes', auth, ah(async (req, res) => {
   const u = req.user;
   const liste = await Colis.find({ $or: [{ client: u._id }, { 'expediteur.telephone': u.telephone }, { 'destinataire.telephone': u.telephone }, { 'tiersAutorise.telephone': u.telephone }] }).select('_id client expediteur destinataire tiersAutorise').limit(1000);
-  const complets = liste.filter(c => svc.niveauAcces(c, u) === 'complet').map(c => c._id);
-  const restreints = liste.filter(c => svc.niveauAcces(c, u) === 'restreint').map(c => c._id);
+  const niveaux = await Promise.all(liste.map(c => svc.niveauAcces(c, u)));
+  const complets = liste.filter((c, i) => niveaux[i] === 'complet').map(c => c._id);
+  const restreints = liste.filter((c, i) => niveaux[i] === 'restreint').map(c => c._id);
   // Numéro non vérifié : seulement les factures établies à son nom
   const factures = await Facture.find({ $or: [{ colis: { $in: complets } }, { colis: { $in: restreints }, 'client.telephone': u.telephone }] }).sort({ date: -1 }).limit(500).lean();
   res.json({ succes: true, factures: await Promise.all(factures.map(avecEtat)) });
@@ -40,7 +41,7 @@ router.get('/mes', auth, ah(async (req, res) => {
 // ── GET /api/factures/colis/:numero ── factures d'un colis (client lié, équipe)
 router.get('/colis/:numero', auth, ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.toUpperCase() });
-  const niveau = svc.niveauAcces(colis, req.user);
+  const niveau = await svc.niveauAcces(colis, req.user);
   if (!niveau) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
   const toutes = await fact.facturesDuColis(colis);
   res.json({ succes: true, factures: niveau === 'complet' ? toutes : toutes.filter(f => f.client?.telephone === req.user.telephone) });
@@ -49,7 +50,7 @@ router.get('/colis/:numero', auth, ah(async (req, res) => {
 // ── POST /api/factures/colis/:numero/emettre ── équipe : facturer ce qui ne l'est pas encore
 router.post('/colis/:numero/emettre', auth, role(ROLES.AGENT, ROLES.ADMIN), ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.toUpperCase() });
-  if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
+  if (!colis || !(await svc.agentVoitColis(colis, req.user))) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
   if (!colis.tarif || colis.tarif.estime) return res.status(409).json({ succes: false, message: 'Le colis n\'est pas encore pesé.' });
   const moment = colis.statut === 'remis' ? 'remise' : 'depot';
   const f = await fact.emettre(colis, { moment, agent: req.user });

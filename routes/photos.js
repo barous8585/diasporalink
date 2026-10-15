@@ -11,7 +11,7 @@ router.get('/:id', auth, ah(async (req, res) => {
   const photo = await Photo.findById(req.params.id).select('+donnees');
   if (!photo) return res.status(404).json({ succes: false, message: 'Photo introuvable.' });
   const colis = photo.colis ? await Colis.findById(photo.colis) : null;
-  if (!lieAuCompte(colis, req.user)) return res.status(403).json({ succes: false, message: 'Accès refusé.' });
+  if (!(await lieAuCompte(colis, req.user))) return res.status(403).json({ succes: false, message: 'Accès refusé.' });
   res.setHeader('Content-Type', photo.mime);
   res.setHeader('Cache-Control', 'private, max-age=86400');
   res.send(photo.donnees);

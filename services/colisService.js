@@ -64,9 +64,42 @@ async function nomLieu(code) {
 // Le colis concerne-t-il ce compte ? (réservé par lui, ou son numéro sur le colis)
 // Sans SMS, n'importe qui peut créer un compte avec le numéro d'un autre : un numéro non
 // vérifié ne donne donc accès qu'aux informations non sensibles (strict = vérifié exigé).
-function lieAuCompte(colis, user, { strict = true } = {}) {
+// ── Équipe : un agent / livreur ne voit que les colis de son agence ──
+// Son agence est l'agence de dépôt ou de retrait du colis ; une plateforme (agence où partent
+// et arrivent les lots) voit en plus les colis qui partent de son pays ou y arrivent.
+function agentVoitColisSync(colis, user, config) {
   if (!colis || !user) return false;
-  if (['agent', 'admin', 'livreur'].includes(user.role)) return true;
+  if (user.role === 'admin') return true;
+  if (!['agent', 'livreur'].includes(user.role) || !user.lieu) return false;
+  if (colis.depot === user.lieu || colis.guichet === user.lieu) return true;
+  if (user.role !== 'agent') return false;
+  const lieu = (config?.agences || []).find(a => a.code === user.lieu);
+  if (!lieu?.plateforme) return false;
+  const [pd, pa] = String(colis.sens || 'FR-GN').split('-');
+  return lieu.pays === pd || lieu.pays === pa;
+}
+async function agentVoitColis(colis, user) {
+  if (user?.role === 'admin') return !!colis;
+  return agentVoitColisSync(colis, user, await Config.get());
+}
+// Filtre MongoDB équivalent (listes, recherches)
+async function filtreAgence(user) {
+  if (user.role === 'admin') return {};
+  if (!user.lieu) return { _id: null };
+  const ou = [{ depot: user.lieu }, { guichet: user.lieu }];
+  const config = await Config.get();
+  const lieu = (config.agences || []).find(a => a.code === user.lieu);
+  if (user.role === 'agent' && lieu?.plateforme) {
+    const sens = SENS_LISTE.filter(s => s.depart === lieu.pays || s.arrivee === lieu.pays).map(s => s.key);
+    ou.push({ sens: { $in: sens } });
+    if (sens.includes('FR-GN')) ou.push({ sens: { $exists: false } });
+  }
+  return { $or: ou };
+}
+
+async function lieAuCompte(colis, user, { strict = true } = {}) {
+  if (!colis || !user) return false;
+  if (['agent', 'admin', 'livreur'].includes(user.role)) return agentVoitColis(colis, user);
   if (String(colis.client) === String(user._id)) return true;
   if (strict && !user.verifie) return false;
   return [colis.expediteur?.telephone, colis.destinataire?.telephone, colis.tiersAutorise?.telephone].includes(user.telephone);
@@ -74,9 +107,10 @@ function lieAuCompte(colis, user, { strict = true } = {}) {
 
 // Niveau d'accès d'un client à un colis : 'complet' (il l'a réservé, ou numéro vérifié),
 // 'restreint' (son numéro est sur le colis mais n'a pas été vérifié), ou null.
-function niveauAcces(colis, user) {
+async function niveauAcces(colis, user) {
   if (!colis || !user) return null;
-  if (['agent', 'admin', 'livreur'].includes(user.role) || String(colis.client) === String(user._id)) return 'complet';
+  if (['agent', 'admin', 'livreur'].includes(user.role)) return (await agentVoitColis(colis, user)) ? 'complet' : null;
+  if (String(colis.client) === String(user._id)) return 'complet';
   if (![colis.expediteur?.telephone, colis.destinataire?.telephone, colis.tiersAutorise?.telephone].includes(user.telephone)) return null;
   return user.verifie ? 'complet' : 'restreint';
 }
@@ -474,7 +508,8 @@ async function appliquerScan(agent, scan) {
 
   const colis = await Colis.findOne({ numeroSuivi: numero }).select('+codeRetrait +codeEssais');
   if (!colis) return { ...base, ok: false, erreur: 'Colis introuvable.' };
-  const resume = { destinataire: colis.destinataire.nom, poids: colis.poidsReel || colis.poidsEstime, lotCode: colis.lotCode };
+  // Scanner un colis demande de l'avoir en main ; on ne montre son destinataire qu'à son agence
+  const resume = { destinataire: (await agentVoitColis(colis, agent)) ? colis.destinataire.nom : undefined, poids: colis.poidsReel || colis.poidsEstime, lotCode: colis.lotCode };
 
   if (colis.statut === action.vers && scan.action !== 'guichet') {
     return { ...base, ...resume, ok: true, dejaFait: true, statut: colis.statut };
@@ -670,7 +705,7 @@ async function colisDuGuichet(guichet) {
 }
 
 module.exports = {
-  ErreurMetier, normTel, masquerTel, lieAuCompte, niveauAcces, restreindre, vuePublique, vueComplete, avecOperation,
+  ErreurMetier, normTel, masquerTel, lieAuCompte, niveauAcces, agentVoitColis, filtreAgence, restreindre, vuePublique, vueComplete, avecOperation,
   encaisser, deposer, appliquerScan, sensDepuisAgences, paysArriveeDe, nomPays, remettre, changerStatutMasse, colisDuGuichet,
   mettrePret, calculerMagasinage, etapePrecedente, annulerEtape, nettoyerArticles, articlesTexte,
 };

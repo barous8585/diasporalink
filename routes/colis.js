@@ -15,7 +15,7 @@ const { normTel, vuePublique, vueComplete, sensDepuisAgences, nettoyerArticles, 
 // Vue d'un colis pour un client : complète, ou restreinte si son numéro n'est pas vérifié
 const vueClient = async (colis, user) => {
   const obj = await vueComplete(colis, { avecCode: estAutorisePourCode(colis, user) });
-  return niveauAcces(colis, user) === 'restreint' ? restreindre(obj, user) : obj;
+  return (await niveauAcces(colis, user)) === 'restreint' ? restreindre(obj, user) : obj;
 };
 const dom = require('../services/domicileService');
 
