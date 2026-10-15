@@ -779,7 +779,7 @@
               <label class="saisie-poids"><input type="text" inputmode="decimal" autocomplete="off" data-poids aria-label="Poids en kilos" placeholder="0"><span>kg</span></label>
               <button type="button" class="btn" data-plus aria-label="Un kilo de plus">+</button>
             </div>
-            <div class="ligne" style="--gap:6px;flex-wrap:wrap">${[2, 5, 10, 20, 30].map(k => `<button type="button" class="choix choix-noir" style="min-height:44px;flex:1;align-items:center;padding:0 4px;white-space:nowrap;font-weight:600" data-preset="${k}">${k} kg</button>`).join('')}</div>
+            <div class="grille-5-poids">${[2, 5, 10, 20, 30].map(k => `<button type="button" class="choix choix-noir" style="min-height:44px;align-items:center;padding:0 2px;white-space:nowrap;font-weight:600" data-preset="${k}">${k} kg</button>`).join('')}</div>
           </div>
           <div class="carte pile" style="--gap:2px" data-bloc-articles>
             <div class="gras">À la pièce</div>
@@ -850,12 +850,13 @@
           </div>
           <input type="checkbox" name="payeurArrivee" hidden>
           <p class="tres-petit muet" data-note-quand></p>
-          <label class="case" style="align-items:flex-start"><input type="checkbox" name="cgv" style="margin-top:2px"> <span>J'accepte les <a href="#/cgv" target="_blank">conditions générales</a> et je confirme que mon colis ne contient aucun <a href="#/interdits" target="_blank">objet interdit</a>.</span></label>
+          <label class="case case-cgv" data-hors-etape style="align-items:flex-start"><input type="checkbox" name="cgv" style="margin-top:2px"> <span>J'accepte les <a href="#/cgv" target="_blank">conditions générales</a> et je confirme que mon colis ne contient aucun <a href="#/interdits" target="_blank">objet interdit</a>.</span></label>
           <button class="btn btn-principal btn-grand btn-plein" type="submit">Réserver mon envoi</button>
           <p class="tres-petit muet centre">Vous recevrez un numéro de suivi à présenter en agence.</p>
         </form>
       </div>`;
 
+    K.sectionner(main.querySelector('[data-form]'));
     const $ = (s) => main.querySelector(s);
     let sensAffiche = null;
     // Courses à domicile : disponibles si l'agence a une position et le service est ouvert dans le pays
@@ -1213,7 +1214,7 @@
     const termines = tous.filter(c => ['remis', 'annule'].includes(c.statut));
     main.innerHTML = `
       <div class="pile">
-        <div class="ligne entre"><h1>Mes colis</h1><div class="ligne" style="--gap:6px"><a class="btn btn-petit" href="#/factures">${ic('liste', 'ic-sm')} Factures</a><a class="btn btn-principal btn-petit" href="#/envoyer">${ic('plus', 'ic-sm')} Envoyer</a></div></div>
+        <div class="ligne entre" style="flex-wrap:wrap;row-gap:12px"><h1 style="white-space:nowrap">Mes colis</h1><div class="ligne" style="--gap:6px"><a class="btn btn-petit" href="#/factures">${ic('liste', 'ic-sm')} Factures</a><a class="btn btn-principal btn-petit" href="#/envoyer">${ic('plus', 'ic-sm')} Envoyer</a></div></div>
         <div class="resume-colis">
           <div><b>${enCours.length}</b><span>en cours</span></div>
           <div><b>${enCours.filter(c => ['pret', 'en_livraison'].includes(c.statut)).length}</b><span>prêts</span></div>

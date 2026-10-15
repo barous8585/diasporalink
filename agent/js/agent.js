@@ -628,6 +628,7 @@
           <div class="pile" style="--gap:0" data-articles></div>
         </div>
 
+        <h3>Transport et retrait</h3>
         ${choisirDepart ? `<label class="champ">Agence de départ <select class="saisie" name="depot">${CONFIG.agences.map(a => `<option value="${esc(a.code)}" ${a.code === etat.depot ? 'selected' : ''}>${esc(a.nom)} · ${esc(CONFIG.pays[a.pays]?.nom || a.pays)}</option>`).join('')}</select></label>` : ''}
         <div class="segments" role="group" aria-label="Transport">${CONFIG.modes.map(m => `<button type="button" data-mode="${m.key}" aria-pressed="${etat.mode === m.key}">${esc(m.label)}</button>`).join('')}</div>
         <label class="champ">Type d'affaires au kilo
@@ -657,10 +658,11 @@
           <label class="champ">Téléphone <input class="saisie" name="destTel" type="tel" inputmode="tel" value="${esc(r.destinataire?.telephone || '')}" required></label>
         </div>
 
+        <h3>Options</h3>
         <label class="case"><input type="checkbox" name="assurance" ${etat.assurance ? 'checked' : ''}> Assurance (${(CONFIG.tauxAssurance * 100).toLocaleString('fr-FR')} % de la valeur)</label>
         <label class="champ ${etat.assurance ? '' : 'cache'}" data-valeur><span data-lib-valeur>Valeur déclarée</span> <input class="saisie" name="valeurDeclaree" type="number" inputmode="decimal" min="0" value="${r.valeurDeclaree || ''}"></label>
 
-        <div class="carte-noire pile" style="--gap:6px" aria-live="polite">
+        <div class="carte-noire pile" style="--gap:6px" aria-live="polite" data-hors-etape>
           <div class="recap-prix cache" data-ligne-deja><span style="color: var(--gris)">Déjà payé en ligne</span><span class="gras" data-deja>0</span></div>
           <div class="recap-prix"><span style="color: var(--gris)">Prix à payer</span><span class="valeur" data-prix>0</span></div>
           <div class="recap-prix"><span style="color: var(--gris)">soit</span><span class="gras" data-prix-autre>0</span></div>
@@ -695,6 +697,7 @@
       </form>`;
 
     const form = main.querySelector('[data-depot]');
+    K.sectionner(form);
     const $ = (s) => form.querySelector(s);
     let photoColis = null;
     $('[data-photo-colis]').addEventListener('change', async (e) => {

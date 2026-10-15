@@ -240,3 +240,17 @@ table.tableau { border-collapse: collapse; width: 100%; font-size: 14px; }
   body.impression-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body.impression-page .kpis-couleur { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 }
+
+/* Respiration du back-office */
+main { padding: 32px 40px 64px; }
+.entete-page { margin-bottom: 28px; }
+.panneau + .panneau, .panneau + section, section + .panneau { margin-top: 24px; }
+.panneau-tete { padding: 18px 24px; }
+.panneau-corps { padding: 4px 24px 24px; }
+.kpis { gap: 16px; }
+.grille-tdb { gap: 24px; margin-top: 28px; }
+.tableau td { padding: 13px 14px; }
+.tableau th { padding: 0 14px; height: 44px; }
+.a-faire-bandeau { margin-bottom: 24px; }
+.bloc-ca { margin-top: 24px; }
+@media (max-width: 760px) { main { padding: 20px 16px 48px; } .panneau-tete { padding: 16px; } .panneau-corps { padding: 4px 16px 18px; } }
