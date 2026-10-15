@@ -18,6 +18,7 @@ const lotSchema = new mongoose.Schema({
   statut:   { type: String, enum: Object.values(STATUTS_LOT), default: STATUTS_LOT.PREPARATION },
   notes:    { type: String },
   creePar:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  demo:     { type: Boolean, index: true },
 }, { timestamps: true, toJSON: { transform: (_, o) => { delete o.__v; return o; } } });
 
 lotSchema.pre('validate', async function (next) {
@@ -25,8 +26,8 @@ lotSchema.pre('validate', async function (next) {
     if (!this.code) {
       const info = MODES_INFO.find(m => m.key === this.mode);
       const retour = this.sens === 'GN-FR';
-      const n = await Compteur.suivant(`lot-${this.mode}${retour ? '-gf' : ''}`);
-      this.code = `${info?.prefixeLot || 'LOT'}${retour ? '-GF' : ''}-${String(n).padStart(4, '0')}`;
+      const n = await Compteur.suivant(`lot-${this.mode}${retour ? '-gf' : ''}${this.demo ? '-demo' : ''}`);
+      this.code = `${this.demo ? 'DEMO-' : ''}${info?.prefixeLot || 'LOT'}${retour ? '-GF' : ''}-${String(n).padStart(4, '0')}`;
     }
     next();
   } catch (e) { next(e); }

@@ -1267,3 +1267,40 @@ test('injections : opérateurs MongoDB, types inattendus, recherche, noms de fic
   assert.ok(!res.headers.get('x-pirate'));
   assert.match(res.headers.get('content-disposition'), /^attachment; filename="colis-TMS-debut-au-/);
 });
+
+test('données de démonstration : 30 jours générés à part, puis tout effacé', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agent = await connexion('+33600000002');
+  assert.strictEqual((await appel('POST', '/admin/demo/generer', {}, agent)).status, 403, 'réservé à l\'admin');
+  const avant = (await appel('GET', '/admin/colis?limite=1', null, admin));
+  let r = await appel('POST', '/admin/demo/generer', { jours: 7 }, admin);
+  assert.strictEqual(r.status, 202, r.message);
+  assert.strictEqual((await appel('POST', '/admin/demo/generer', {}, admin)).status, 409, 'une seule à la fois');
+  for (let i = 0; i < 300; i++) { r = await appel('GET', '/admin/demo', null, admin); if (!r.enCours) break; await new Promise(x => setTimeout(x, 500)); }
+  assert.ok(!r.dernier?.erreur, r.dernier?.erreur);
+  assert.ok(r.compte.colis > 150 && r.compte.factures > 50 && r.compte.lots > 3 && r.compte.mouvements > 50, JSON.stringify(r.compte));
+  // Numérotation à part, et le tableau de bord voit l'activité
+  const mongoose = require('mongoose');
+  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/kolis_test');
+  const db = mongoose.connection.db;
+  const demo = await db.collection('colis').find({ demo: true }).limit(500).toArray();
+  assert.ok(demo.every(c => c.numeroSuivi.startsWith('DEMO-')));
+  assert.ok(demo.some(c => c.statut === 'remis') && demo.some(c => c.statut === 'en_transit' || c.statut === 'charge'));
+  assert.ok((await db.collection('factures').find({ demo: true }).toArray()).every(f => f.numero.startsWith('DEMO-FA-')));
+  assert.strictEqual(await db.collection('users').countDocuments({ demo: true, motDePasse: { $exists: true } }), 0, 'personne fictive ne peut se connecter');
+  const tdb = await appel('GET', '/admin/tableau?jours=30', null, admin);
+  assert.ok(tdb.kpi.deposes > 150);
+  // Une vraie facture garde sa numérotation continue
+  const nouveau = await appel('POST', '/agent/depot', { poidsReel: 2, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM', cgvAcceptees: true,
+    expediteur: { nom: 'Vrai Client', telephone: '0644445555' }, destinataire: { nom: 'Vrai Dest', telephone: '624445555' }, paiement: { montant: 30, devise: 'EUR', methode: 'especes' } }, agent);
+  assert.ok(!nouveau.colis.numeroSuivi.startsWith('DEMO'));
+  // Tout effacer
+  r = await appel('DELETE', '/admin/demo', null, admin);
+  assert.ok(r.efface.colis > 150, r.message);
+  assert.strictEqual(await db.collection('colis').countDocuments({ demo: true }), 0);
+  assert.strictEqual(await db.collection('factures').countDocuments({ demo: true }), 0);
+  assert.strictEqual(await db.collection('users').countDocuments({ demo: true }), 0);
+  assert.ok(await db.collection('colis').findOne({ numeroSuivi: nouveau.colis.numeroSuivi }), 'les vraies données restent');
+  assert.ok((await appel('GET', '/admin/colis?limite=1', null, admin)).total >= (avant.total || 0));
+  await mongoose.disconnect();
+});

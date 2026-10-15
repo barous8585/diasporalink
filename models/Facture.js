@@ -39,13 +39,15 @@ const factureSchema = new mongoose.Schema({
   factureOrigine: { type: String },                  // avoir : numéro de la facture corrigée
   motif:   String,
   agent:   { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  demo:    { type: Boolean, index: true },               // simulation : numérotation DEMO-FA-…
 }, { timestamps: true });
 
 factureSchema.pre('validate', async function (next) {
   try {
     if (!this.numero) {
       const an = new Date(this.date || Date.now()).getFullYear();
-      const prefixe = this.type === 'avoir' ? 'AV' : 'FA';
+      // La numérotation légale (continue) n'est jamais touchée par la démo
+      const prefixe = `${this.demo ? 'DEMO-' : ''}${this.type === 'avoir' ? 'AV' : 'FA'}`;
       const n = await Compteur.suivant(`${prefixe}-${an}`);
       this.numero = `${prefixe}-${an}-${String(n).padStart(5, '0')}`;
     }

@@ -36,7 +36,7 @@ router.get('/tableau', ah(async (req, res) => {
 
   const debutLecture = new Date(Math.min(debutPrec, new Date(maintenant.getFullYear(), maintenant.getMonth() - 11, 1)));
   const colis = await Colis.find({ $or: [{ updatedAt: { $gte: debutLecture } }, { statut: { $nin: [STATUTS.REMIS, STATUTS.ANNULE] } }] })
-    .select('numeroSuivi statut sens mode depot guichet expediteur destinataire poidsReel poidsEstime tarif paiements historique createdAt ramassage livraison arriveGuichetLe fraisDouaneGnf avoirsGnf declarations')
+    .select('numeroSuivi statut sens mode depot guichet expediteur destinataire poidsReel poidsEstime tarif paiements historique createdAt ramassage livraison arriveGuichetLe fraisDouaneGnf avoirsGnf declarations remise.le')
     .lean();
 
   // Jours de la période (graphiques)
@@ -451,5 +451,14 @@ router.post('/relances', ah(async (req, res) => {
   }
   res.json({ succes: true, envoyes });
 }));
+
+// ── Données de démonstration (simulation de 30 jours, effaçable) ──
+const simulation = require('../services/simulationService');
+router.get('/demo', ah(async (req, res) => res.json({ succes: true, ...simulation.etat(), compte: await simulation.compter() })));
+router.post('/demo/generer', ah(async (req, res) => {
+  const jours = Math.min(Math.max(parseInt(req.body?.jours, 10) || 30, 7), 60);
+  res.status(202).json({ succes: true, ...simulation.lancer({ jours }) });
+}));
+router.delete('/demo', ah(async (req, res) => res.json({ succes: true, efface: await simulation.effacer() })));
 
 module.exports = router;

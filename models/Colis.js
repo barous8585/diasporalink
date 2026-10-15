@@ -135,6 +135,9 @@ const colisSchema = new mongoose.Schema({
   cgv: { version: String, accepteesLe: Date, par: String }, // conditions acceptées (en ligne ou au comptoir)
   photoDepot: { type: mongoose.Schema.Types.ObjectId, ref: 'Photo' },
 
+  // Données de démonstration (simulation) : effaçables d'un coup depuis l'admin
+  demo: { type: Boolean, index: true },
+
   // Statut
   statut:     { type: String, enum: Object.values(STATUTS), default: STATUTS.RESERVE, index: true },
   historique: [evenementSchema],
@@ -188,9 +191,10 @@ colisSchema.virtual('statutLabel').get(function () {
 colisSchema.pre('validate', async function (next) {
   try {
     if (!this.numeroSuivi) {
-      const n = await Compteur.suivant('colis');
+      // Démo : numérotation à part (DEMO-26-00001), la vraie suite n'est jamais consommée
+      const n = await Compteur.suivant(this.demo ? 'colis-demo' : 'colis');
       const an = String(new Date().getFullYear()).slice(-2);
-      const prefixe = (process.env.PREFIXE_SUIVI || 'TMS').toUpperCase();
+      const prefixe = this.demo ? 'DEMO' : (process.env.PREFIXE_SUIVI || 'TMS').toUpperCase();
       this.numeroSuivi = `${prefixe}-${an}-${String(n).padStart(5, '0')}`;
     }
     next();
