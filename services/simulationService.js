@@ -101,7 +101,7 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
   if (!parPays('FR').length || !parPays('GN').length) throw new Error('Il faut au moins une agence en France et une en Guinée.');
   const plateforme = (p) => parPays(p).find(a => a.plateforme) || parPays(p)[0];
   // Position des agences (pour les courses) : la vraie, ou le centre-ville à défaut
-  const posAgence = (a) => (a.position?.lat ? a.position : CENTRE[a.pays]);
+  const posAgence = (a) => (require('../utils/tarif').pointDansPays(a.position, a.pays) ? a.position : CENTRE[a.pays]);
   const agencePos = (a) => ({ ...a, position: posAgence(a) });
   const taux = config.tauxEurGnf || 10000;
 

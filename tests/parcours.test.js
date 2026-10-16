@@ -47,7 +47,7 @@ test.before(async () => {
   await mongoose.disconnect();
   serveur = spawn('node', ['server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT, MONGODB_URI: uri, JWT_SECRET: 'test', NODE_ENV: 'development', ADMIN_TELEPHONES: ADMIN_TEL, ADMIN_MOT_DE_PASSE: ADMIN_MDP, AUTH_MODE: '',
+    env: { ...process.env, PORT, MONGODB_URI: uri, JWT_SECRET: 'test', NODE_ENV: 'development', ADMIN_TELEPHONES: ADMIN_TEL, ADMIN_MOT_DE_PASSE: ADMIN_MDP, AUTH_MODE: '', ITINERAIRE_URL: '', GEOCODAGE_URL: '',
       VAPID_PUBLIC_KEY: VAPID.publicKey, VAPID_PRIVATE_KEY: VAPID.privateKey, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -1302,5 +1302,63 @@ test('données de démonstration : 30 jours générés à part, puis tout effac�
   assert.strictEqual(await db.collection('users').countDocuments({ demo: true }), 0);
   assert.ok(await db.collection('colis').findOne({ numeroSuivi: nouveau.colis.numeroSuivi }), 'les vraies données restent');
   assert.ok((await appel('GET', '/admin/colis?limite=1', null, admin)).total >= (avant.total || 0));
+  await mongoose.disconnect();
+});
+
+test('livraison : positions dans le bon pays, devis identique au prix enregistré, agences mal placées corrigées', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const cfg = (await appel('GET', '/config/admin', null, admin)).config;
+  // 1. Agence de Conakry « placée » en France (GPS pris depuis Angers) : refusée avec une explication
+  let r = await appel('PATCH', '/config/admin', { agences: cfg.agences.map(a => a.code === 'KALOUM' ? { ...a, position: { lat: 47.461403, lng: -0.547412 } } : a) }, admin);
+  assert.strictEqual(r.status, 400);
+  assert.match(r.message, /en France, pas en Guinée/);
+  // Lien Google Maps vers la France pour une agence guinéenne : refusé aussi
+  r = await appel('PATCH', '/config/admin', { agences: cfg.agences.map(a => a.code === 'KALOUM' ? { ...a, lienPosition: 'https://www.google.com/maps/@47.4614,-0.5473,17z' } : a) }, admin);
+  assert.strictEqual(r.status, 400);
+  assert.strictEqual((await appel('GET', '/config')).agences.find(a => a.code === 'KALOUM').position.lat, 9.5092, 'position correcte gardée');
+
+  // 2. Devis : client dans le mauvais pays, client trop loin, client bien placé
+  r = await appel('GET', '/config/course?agence=KALOUM&lat=48.85&lng=2.35');
+  assert.strictEqual(r.course.ok, false);
+  assert.strictEqual(r.course.raison, 'hors_pays');
+  r = await appel('GET', '/config/course?agence=KALOUM&lat=10.3&lng=-13.7');
+  assert.strictEqual(r.course.raison, 'trop_loin');
+  r = await appel('GET', '/config/course?agence=KALOUM&lat=9.5542&lng=-13.7122');
+  assert.strictEqual(r.course.ok, true);
+  assert.strictEqual(r.course.distanceKm, 6.5); // itinéraire désactivé en test : estimation 5 km × 1,3
+  assert.strictEqual(r.course.prix, 23000);
+  assert.strictEqual((await appel('GET', '/config/course?agence=NULLEPART&lat=9.5&lng=-13.7')).status, 404);
+  assert.strictEqual((await appel('GET', '/config/adresse?agence=KALOUM')).status, 400, 'adresse vide');
+
+  // 3. Réservation : livraison pointée en France pour Conakry → refusée ; bien pointée → même prix que le devis
+  const client = await connexion('0633445566', 'Binta', 'Sow');
+  const corps = (pos) => ({ cgvAcceptees: true, mode: 'air', typeColis: 'vetements', poidsEstime: 3, depot: 'PARIS', guichet: 'KALOUM',
+    destinataire: { nom: 'Mamadou Sow', telephone: '622445566' },
+    livraison: { demande: true, adresse: { quartier: 'Kipé', repere: 'portail bleu', position: pos } } });
+  r = await appel('POST', '/colis', corps({ lat: 48.85, lng: 2.35, source: 'gps' }), client);
+  assert.strictEqual(r.status, 400);
+  assert.match(r.message, /en France, pas en Guinée/);
+  r = await appel('POST', '/colis', corps({ lat: 9.5542, lng: -13.7122, source: 'carte' }), client);
+  assert.strictEqual(r.status, 201, r.message);
+  assert.strictEqual(r.colis.livraison.prix, 23000);
+  assert.strictEqual(r.colis.livraison.distanceKm, 6.5);
+  // Adresse écrite sans position : la réservation passe, le prix viendra avec la position
+  r = await appel('POST', '/colis', corps(undefined), client);
+  assert.strictEqual(r.status, 201, r.message);
+  assert.strictEqual(r.colis.livraison.prix, undefined);
+
+  // 4. Au démarrage, une agence restée mal placée en base est corrigée (ici : adresse introuvable → position retirée)
+  process.env.GEOCODAGE_URL = '';
+  const mongoose = require('mongoose');
+  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/kolis_test');
+  const col = mongoose.connection.db.collection('configs');
+  const doc = await col.findOne();
+  await col.updateOne({ _id: doc._id }, { $set: { agences: doc.agences.map(a => a.code === 'MATOTO' ? { ...a, position: { lat: 47.461403, lng: -0.547412 } } : a) } });
+  const { corrigerAgences } = require('../scripts/corriger-agences');
+  const bilan = await corrigerAgences();
+  assert.ok(bilan.some(l => l.startsWith('MATOTO')), bilan.join());
+  const apres = (await col.findOne()).agences.find(a => a.code === 'MATOTO');
+  assert.ok(!apres.position?.lat, 'position fausse retirée');
+  assert.strictEqual((await col.findOne()).agences.find(a => a.code === 'KALOUM').position.lat, 9.5092, 'les bonnes positions ne bougent pas');
   await mongoose.disconnect();
 });

@@ -10,7 +10,8 @@
 // ─────────────────────────────────────────────────────────────
 const Colis = require('../models/Colis');
 const Config = require('../models/Config');
-const { calculerCourse, distanceKm, pointValide } = require('../utils/tarif');
+const { calculerCourse, distanceKm, pointValide, agenceBienPlacee } = require('../utils/tarif');
+const { distanceRoute } = require('./geoService');
 const { notifier } = require('../utils/sms');
 const { STATUTS, STATUTS_COURSE, MOMENTS, APP_NOM_COURT } = require('../config/constants');
 const svc = require('./colisService');
@@ -105,6 +106,18 @@ function nettoyerPoint(p) {
   return point;
 }
 
+/**
+ * Prix d'une course avec la distance par la route (itinéraire réel) quand elle est
+ * disponible, sinon l'estimation. Les contrôles (agence bien placée, client dans le
+ * bon pays, rayon maximum) sont ceux de calculerCourse.
+ */
+async function devisCourse(config, agence, point, { taux } = {}) {
+  const prealable = calculerCourse(config, agence, point, { taux });
+  if (!prealable.ok && prealable.raison !== 'trop_loin') return prealable;
+  const routeKm = agenceBienPlacee(agence) ? await distanceRoute(agence.position, point) : null;
+  return routeKm ? calculerCourse(config, agence, point, { taux, routeKm }) : prealable;
+}
+
 // ── Demande de course (réservation, guichet, suivi) ─────────
 /**
  * Remplit colis[type] à partir de la demande. Le prix est calculé dès que la
@@ -151,12 +164,12 @@ async function demanderCourse(colis, type, data) {
 
   let prix = {};
   if (adresse.position) {
-    const c = calculerCourse(config, agence, adresse.position, { taux: colis.tarif?.taux });
+    const c = await devisCourse(config, agence, adresse.position, { taux: colis.tarif?.taux });
     if (!c.ok) throw new ErreurMetier(c.message);
     prix = { distanceKm: c.distanceKm, prix: c.prix, devise: c.devise, prixGnf: c.prixGnf };
   } else {
     const dispo = calculerCourse(config, agence, { lat: 1, lng: 1 }); // vérifie seulement que le service existe
-    if (!dispo.ok && dispo.raison !== 'trop_loin') throw new ErreurMetier(dispo.message);
+    if (!dispo.ok && ['indisponible', 'agence_sans_position'].includes(dispo.raison)) throw new ErreurMetier(dispo.message);
     prix = { distanceKm: undefined, prix: undefined, devise: agence.pays === 'FR' ? 'EUR' : 'GNF', prixGnf: 0 };
   }
   const moment = MOMENTS.some(m => m.key === data.moment) ? data.moment : undefined;
@@ -355,6 +368,7 @@ async function echec(numero, type, livreur, motif) {
 }
 
 module.exports = {
+  devisCourse,
   COURSES, OUVERTES, positionDepuisTexte, positionDepuisLien, demanderCourse, vueCourse, coursesOuvertes,
   assigner, ramasser, partirLivrer, livrer, echec,
 };

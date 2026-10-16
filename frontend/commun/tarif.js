@@ -120,30 +120,58 @@ function distanceKm(a, b) {
   return 2 * RAYON_TERRE_KM * Math.asin(Math.sqrt(h));
 }
 
+// Zones des pays desservis (rectangles larges autour du territoire). Sert à refuser une
+// position manifestement fausse : une agence de Conakry placée en France, un client en
+// Guinée pointé à Paris, un GPS qui renvoie la position de l'ordinateur de bureau…
+const ZONES_PAYS = {
+  GN: { latMin: 7.0, latMax: 12.8, lngMin: -15.4, lngMax: -7.5, nom: 'Guinée', centre: { lat: 9.5370, lng: -13.6773 } },
+  FR: { latMin: 41.2, latMax: 51.2, lngMin: -5.4, lngMax: 9.8, nom: 'France', centre: { lat: 48.8566, lng: 2.3522 } },
+};
+const pointDansPays = (p, pays) => {
+  const z = ZONES_PAYS[pays];
+  return !!(z && pointValide(p) && +p.lat >= z.latMin && +p.lat <= z.latMax && +p.lng >= z.lngMin && +p.lng <= z.lngMax);
+};
+const paysDuPoint = (p) => Object.keys(ZONES_PAYS).find(k => pointDansPays(p, k)) || null;
+const nomPays = (k) => ZONES_PAYS[k]?.nom || 'un autre pays';
+// Position d'agence utilisable : valide ET dans le pays de l'agence
+const agenceBienPlacee = (agence) => pointDansPays(agence?.position, agence?.pays);
+
 /**
  * Prix d'une course (ramassage ou livraison) entre une agence et le client.
- * Prix = base + parKm × distance par la route (vol d'oiseau × majoration),
- * arrondi au millier de GNF ou au demi-euro supérieur, plafond facultatif.
- * @returns { ok, distanceKm, prix, devise, prixGnf } ou { ok:false, raison }
+ * Prix = base + parKm × distance par la route, arrondi au millier de GNF ou au
+ * demi-euro supérieur, plafond facultatif.
+ * Distance : celle de l'itinéraire routier si le serveur l'a calculée (routeKm),
+ * sinon une estimation (vol d'oiseau × majoration, 1,3 par défaut).
+ * @returns { ok, distanceKm, methode, prix, devise, prixGnf } ou { ok:false, raison, message }
  */
-function calculerCourse(config, agence, point, { taux } = {}) {
+function calculerCourse(config, agence, point, { taux, routeKm } = {}) {
   const dom = config.domicile || {};
   const pays = agence?.pays;
   const bareme = dom[pays];
   const devise = pays === 'FR' ? 'EUR' : 'GNF';
+  const nomAg = agence?.nom || 'cette agence';
   if (!bareme || bareme.actif === false) return { ok: false, raison: 'indisponible', message: 'Service à domicile pas encore proposé dans ce pays.' };
-  if (!pointValide(agence?.position)) return { ok: false, raison: 'agence_sans_position', message: `Service à domicile pas encore proposé par ${agence?.nom || 'cette agence'}.` };
+  if (!pointValide(agence?.position)) return { ok: false, raison: 'agence_sans_position', message: `Service à domicile pas encore proposé par ${nomAg}.` };
+  if (!agenceBienPlacee(agence)) {
+    return { ok: false, raison: 'agence_mal_placee', message: `Service à domicile momentanément indisponible depuis ${nomAg} : la position de l'agence (hors de ${nomPays(pays)}) doit être corrigée par l'équipe.` };
+  }
   if (!pointValide(point)) return { ok: false, raison: 'sans_position', message: 'Position du client nécessaire pour calculer le prix.' };
-  const route = distanceKm(agence.position, point) * (dom.majoration || 1.3);
-  const km = Math.round(route * 10) / 10;
+  if (!pointDansPays(point, pays)) {
+    const ou = paysDuPoint(point);
+    return { ok: false, raison: 'hors_pays', message: `Cette position est ${ou ? `en ${nomPays(ou)}` : 'hors de la zone desservie'}, pas en ${nomPays(pays)}. Placez l'épingle sur l'adresse en ${nomPays(pays)}, ou écrivez l'adresse.` };
+  }
+  const volOiseau = distanceKm(agence.position, point);
+  const route = Number.isFinite(+routeKm) && +routeKm > 0 ? +routeKm : null;
+  const km = Math.max(0.1, Math.round((route ?? volOiseau * (dom.majoration || 1.3)) * 10) / 10);
+  const methode = route ? 'route' : 'estimation';
   if (bareme.rayonMaxKm && km > bareme.rayonMaxKm) {
-    return { ok: false, raison: 'trop_loin', distanceKm: km, message: `Trop loin de ${agence.nom} (${km.toLocaleString('fr-FR')} km, maximum ${bareme.rayonMaxKm} km).` };
+    return { ok: false, raison: 'trop_loin', distanceKm: km, methode, message: `Trop loin de ${nomAg} (${km.toLocaleString('fr-FR')} km par la route, maximum ${bareme.rayonMaxKm} km).` };
   }
   let prix = (bareme.base || 0) + (bareme.parKm || 0) * km;
   if (bareme.plafond > 0) prix = Math.min(prix, bareme.plafond);
   prix = devise === 'GNF' ? Math.ceil(prix / 1000) * 1000 : Math.ceil(prix * 2) / 2;
   const t = taux || config.tauxEurGnf;
-  return { ok: true, distanceKm: km, prix, devise, prixGnf: enGnf(prix, devise, t) };
+  return { ok: true, distanceKm: km, volOiseauKm: Math.round(volOiseau * 10) / 10, methode, prix, devise, prixGnf: enGnf(prix, devise, t) };
 }
 
 const courseActive = (c) => !!(c?.demande && c.statut !== 'annulee');
@@ -202,7 +230,7 @@ function calculerSolde(colis, config, maintenant = new Date()) {
   };
 }
 
-const api = { calculerTarif, chiffrerArticles, domicileAPayerGnf, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee, distanceKm, calculerCourse, fraisDomicileGnf, pointValide };
+const api = { ZONES_PAYS, pointDansPays, paysDuPoint, agenceBienPlacee, calculerTarif, chiffrerArticles, domicileAPayerGnf, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee, distanceKm, calculerCourse, fraisDomicileGnf, pointValide };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else racine.KolisTarif = api;
 })(typeof window !== 'undefined' ? window : globalThis);
