@@ -230,7 +230,7 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
   const avertissements = [];
   if (Array.isArray(b.agences)) {
     const { positionDepuisLien } = require('../services/domicileService');
-    const { pointDansPays, paysDuPoint } = require('../utils/tarif');
+    const { pointDansPays, paysDuPoint, distanceKm } = require('../utils/tarif');
     const { placerAgence } = require('../scripts/corriger-agences');
     for (const a of b.agences) {
       // Position : { lat, lng } ou lien Google Maps collé par l'admin
@@ -252,6 +252,15 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
         }
         a.position = { lat: p.lat, lng: p.lng };
         avertissements.push(`${a.nom || a.code} : la position donnée était ${ou ? `en ${PAYS[ou].nom}` : 'hors zone'}, l'agence a été replacée d'après son adresse (${p.trouve || 'à vérifier'}). Vérifiez avec « Placer sur la carte ».`);
+      } else if (a.position && String(a.adresse || '').trim().length >= 6) {
+        // Bon pays, mais la position est-elle cohérente avec l'adresse écrite ?
+        const ancien = (actuel.agences || []).find(x => x.code === a.code);
+        const change = !ancien?.position || ancien.position.lat !== a.position.lat || ancien.position.lng !== a.position.lng || ancien.adresse !== a.adresse;
+        if (change) {
+          const p = await placerAgence(a);
+          const ecart = p ? distanceKm(a.position, p) : 0;
+          if (ecart > 25) avertissements.push(`${a.nom || a.code} : la position enregistrée est à ${Math.round(ecart)} km de l'adresse « ${a.adresse} ». Vérifiez avec « Placer sur la carte » : les prix à domicile partent de cette position.`);
+        }
       }
     }
     const agences = b.agences
