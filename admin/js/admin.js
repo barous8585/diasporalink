@@ -1156,7 +1156,9 @@
         <label class="champ">Téléphone / WhatsApp <input class="saisie" name="telephone" value="${esc(a.telephone || '')}"></label>
         <label class="champ">Horaires <input class="saisie" name="horaires" value="${esc(a.horaires || '')}" placeholder="Lun–sam 9 h – 18 h"></label>
         <div class="champ" style="grid-column:1/-1">Position de l'agence <span class="tres-petit muet">(l'adresse écrite suffit : elle est placée sur la carte automatiquement)</span>
-          <span class="petit" data-etat-pos>${a.position?.lat ? `<span class="vert">${ic('ok', 'ic-sm')} ${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)}</span>` : '<span class="rouge">Non renseignée : écrivez l\'adresse ou placez l\'agence sur la carte (sinon pas de ramassage ni de livraison)</span>'}</span>
+          <span class="petit" data-etat-pos>${!a.position?.lat ? '<span class="rouge">Non renseignée : écrivez l\'adresse ou placez l\'agence sur la carte (sinon pas de ramassage ni de livraison)</span>'
+            : KolisTarif.pointDansPays(a.position, a.pays) ? `<span class="vert">${ic('ok', 'ic-sm')} ${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)}</span> · <a href="https://www.google.com/maps/search/?api=1&query=${a.position.lat},${a.position.lng}" target="_blank" rel="noopener">voir sur Google Maps</a>`
+            : `<span class="rouge">${ic('alerte', 'ic-sm')} Position fausse : elle est ${KolisTarif.paysDuPoint(a.position) === 'FR' ? 'en France' : KolisTarif.paysDuPoint(a.position) === 'GN' ? 'en Guinée' : 'hors zone'}, pas dans le pays de l'agence. Les prix à domicile sont bloqués : placez l'agence sur la carte.</span>`}</span>
           <span class="ligne" style="--gap:8px;flex-wrap:wrap">
             <button type="button" class="btn btn-petit" data-placer>${ic('lieu', 'ic-sm')} Placer sur la carte</button>
             <button type="button" class="btn btn-petit" data-ici>${ic('gps', 'ic-sm')} Je suis à l'agence</button>
@@ -1253,7 +1255,7 @@
             <label class="champ">Délai pour un colis abîmé ou incomplet (jours après la remise) <input class="saisie" name="lit_abime" type="number" min="0" value="${c.litiges?.delaiAbimeJours ?? ''}"></label>
             <label class="champ">Délai pour un colis perdu ou en retard (jours) <input class="saisie" name="lit_perdu" type="number" min="0" value="${c.litiges?.delaiPerduJours ?? ''}"></label>
           </div></section>
-        <section class="panneau"><div class="panneau-tete"><div><h2>Ramassage et livraison à domicile</h2><p class="petit muet" style="margin-top:4px">Prix = base + prix par km × distance entre l'agence et le client (vol d'oiseau + ${Math.round(((c.domicile?.majoration || 1.3) - 1) * 100)} % pour suivre les routes). L'agence doit avoir sa position GPS.</p></div></div>
+        <section class="panneau"><div class="panneau-tete"><div><h2>Ramassage et livraison à domicile</h2><p class="petit muet" style="margin-top:4px">Prix = base + prix par km × distance par la route entre l'agence et le client (itinéraire calculé sur la carte ; si le calcul est indisponible, vol d'oiseau + ${Math.round(((c.domicile?.majoration || 1.3) - 1) * 100)} %). L'agence doit être placée sur la carte, dans son pays.</p></div></div>
           <div class="panneau-corps pile" style="--gap:14px">
             ${Object.values(CONFIG.pays).map(p => { const d = c.domicile?.[p.code] || {}; const u = p.devise === 'EUR' ? '€' : 'GNF'; return `
             <div class="formulaire-grille" data-domicile="${p.code}">
@@ -1295,7 +1297,7 @@
       bloc.querySelector('[name=positionLng]').value = p.lng;
       bloc.querySelector('[name=lienPosition]').value = '';
       bloc.dataset.posAuto = auto ? '1' : '';
-      bloc.querySelector('[data-etat-pos]').innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} ${auto ? 'Trouvée d\'après l\'adresse' : `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`}</span> <span class="muet">(${auto ? 'vérifiez avec « Placer sur la carte », puis ' : ''}pensez à enregistrer)</span>`;
+      bloc.querySelector('[data-etat-pos]').innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} ${auto ? `Trouvée d'après l'adresse${p.trouve ? ` : ${esc(p.trouve)}` : ''}` : `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`}</span> <span class="muet">(${auto ? 'vérifiez avec « Placer sur la carte », puis ' : ''}pensez à enregistrer)</span>`;
     };
     // Adresse de l'agence écrite : placée sur la carte toute seule (si aucune position exacte n'a été posée)
     let minuteurAg;
@@ -1308,7 +1310,7 @@
         const v = (k) => bloc.querySelector(`[name=${k}]`).value.trim();
         if (!v('adresse') && !v('commune')) return;
         try {
-          const p = await K.adresseVersPosition({ rue: v('adresse'), quartier: v('commune'), ville: v('ville') }, bloc.querySelector('[name=pays]').value);
+          const p = await K.adresseVersPosition({ rue: v('adresse'), quartier: v('commune') || v('nom').replace(/^agence\s+/i, ''), ville: v('ville') }, bloc.querySelector('[name=pays]').value);
           if (p) poserPosition(bloc, p, { auto: true });
           else bloc.querySelector('[data-etat-pos]').innerHTML = '<span class="rouge">Adresse introuvable sur la carte : placez l\'agence à la main.</span>';
         } catch {}
@@ -1327,6 +1329,10 @@
         } else {
           b.disabled = true;
           const p = await K.gpsActuel();
+          if (!KolisTarif.pointDansPays(p, pays)) {
+            toast(`Vous n'êtes pas ${pays === 'FR' ? 'en France' : 'en Guinée'} : votre position ne peut pas être celle de cette agence. Utilisez « Placer sur la carte » ou collez un lien Google Maps.`, 'erreur');
+            return;
+          }
           poserPosition(bloc, p);
           if (p.precision > 60) toast(`Position à ± ${p.precision} m : vérifiez-la avec « Placer sur la carte ».`);
         }
@@ -1391,10 +1397,11 @@
         agences,
       };
       try {
-        await api.patch('/config/admin', corps);
+        const r = await api.patch('/config/admin', corps);
         CONFIG = await K.config({ forcer: true });
         majEncartTaux();
         toast('Réglages enregistrés. Les nouveaux prix s\'appliquent aux prochaines pesées.', 'ok');
+        (r?.avertissements || []).forEach(m => toast(m));
         reglages();
       } catch (err) { toast(err.message, 'erreur'); }
     });

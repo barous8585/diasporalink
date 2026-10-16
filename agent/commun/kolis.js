@@ -632,9 +632,13 @@
           </div>
         </div>`;
       document.body.appendChild(fond);
-      const depart = position?.lat ? position : centre?.lat ? centre : CENTRES[pays] || CENTRES.GN;
+      // Point de départ : seulement s'il est dans le bon pays (jamais une agence de Conakry « placée » en France)
+      const dansPays = (p) => p?.lat && (!pays || KolisTarif.pointDansPays(p, pays));
+      const posOk = dansPays(position) ? position : null;
+      const centreOk = dansPays(centre) ? centre : null;
+      const depart = posOk || centreOk || CENTRES[pays] || CENTRES.GN;
       const carte = window.L.map(fond.querySelector('[data-carte]'), { zoomControl: true, attributionControl: true })
-        .setView([depart.lat, depart.lng], position?.lat ? 17 : centre?.lat ? 14 : depart.zoom || 12);
+        .setView([depart.lat, depart.lng], posOk ? 17 : centreOk ? 14 : depart.zoom || 12);
       carte.attributionControl.setPrefix(false);
       window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(carte);
       setTimeout(() => carte.invalidateSize(), 60);
@@ -643,7 +647,12 @@
       fond.querySelector('[data-annuler]').addEventListener('click', () => fermer(null));
       fond.querySelector('[data-valider]').addEventListener('click', () => {
         const c = carte.getCenter();
-        fermer({ lat: Math.round(c.lat * 1e6) / 1e6, lng: Math.round(c.lng * 1e6) / 1e6 });
+        const p = { lat: Math.round(c.lat * 1e6) / 1e6, lng: Math.round(c.lng * 1e6) / 1e6 };
+        if (pays && !KolisTarif.pointDansPays(p, pays)) {
+          aide.innerHTML = `<span class="rouge">Cet endroit n'est pas en ${pays === 'FR' ? 'France' : 'Guinée'}. Déplacez la carte jusqu'à la bonne adresse.</span>`;
+          return;
+        }
+        fermer(p);
       });
       fond.querySelector('[data-gps]').addEventListener('click', async (e) => {
         const b = e.currentTarget; b.disabled = true; aide.textContent = 'Recherche de votre position…';
@@ -659,12 +668,10 @@
         const q = e.target.q.value.trim(); if (!q) return;
         aide.textContent = 'Recherche…';
         try {
-          const ville = pays === 'FR' ? 'France' : 'Guinée';
-          const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=fr&countrycodes=gn,fr&q=${encodeURIComponent(`${q}, ${ville}`)}`);
-          const [lieu] = await r.json();
+          const lieu = await adresseVersPosition({ quartier: q }, pays || 'GN', { pres: centreOk });
           if (!lieu) { aide.textContent = 'Lieu introuvable : déplacez la carte à la main.'; return; }
-          carte.setView([parseFloat(lieu.lat), parseFloat(lieu.lon)], 16);
-          aide.textContent = 'Affinez : mettez l\'épingle sur l\'entrée exacte.';
+          carte.setView([lieu.lat, lieu.lng], 16);
+          aide.textContent = `${lieu.trouve ? `${lieu.trouve}. ` : ''}Affinez : mettez l'épingle sur l'entrée exacte.`;
         } catch { aide.textContent = 'Recherche impossible sans réseau.'; }
       });
     });
@@ -723,15 +730,13 @@
   }
 
   // Place une adresse écrite sur la carte (OpenStreetMap) : position approximative
-  async function adresseVersPosition({ rue, quartier, ville }, pays) {
-    const q = [rue, quartier, ville || (pays === 'FR' ? '' : 'Conakry'), pays === 'FR' ? 'France' : 'Guinée'].filter(Boolean).join(', ');
-    const essai = async (texte) => {
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=fr&countrycodes=${pays === 'FR' ? 'fr' : 'gn'}&q=${encodeURIComponent(texte)}`);
-      const [lieu] = await r.json();
-      return lieu ? { lat: Math.round(parseFloat(lieu.lat) * 1e6) / 1e6, lng: Math.round(parseFloat(lieu.lon) * 1e6) / 1e6, precision: 300, source: 'adresse' } : null;
-    };
-    // Rue introuvable (fréquent à Conakry) : on se rabat sur le quartier
-    return (await essai(q)) || (rue && quartier ? await essai([quartier, ville || (pays === 'FR' ? '' : 'Conakry'), pays === 'FR' ? 'France' : 'Guinée'].filter(Boolean).join(', ')) : null);
+  // Adresse écrite → position, cherchée par le serveur dans le pays de l'agence et autour
+  // d'elle (un « Kipé » ou un « Matoto » ailleurs dans le pays n'est pas pris par erreur).
+  // Renvoie { lat, lng, precision, source: 'adresse', trouve } ou null.
+  async function adresseVersPosition({ rue, quartier, ville }, pays, { agence } = {}) {
+    const q = new URLSearchParams({ pays: pays || 'GN', ...(agence ? { agence } : {}), rue: rue || '', quartier: quartier || '', ville: ville || '' });
+    const r = await api.get(`/config/adresse?${q}`, { delai: 12000 });
+    return r.position || null;
   }
 
   /** Branche le bloc : calcule la course à chaque changement de position ou d'adresse. */
@@ -748,15 +753,36 @@
       bloc.querySelector('[data-zone-position]').classList.toggle('cache', m !== 'position');
       bloc.querySelector('[data-zone-ecrire]').classList.toggle('cache', m !== 'ecrire');
     };
+    // Prix : estimation immédiate sur le téléphone, puis distance exacte par la route
+    // demandée au serveur (le même calcul que celui enregistré à la réservation)
+    let numDevis = 0;
+    const afficher = (ag) => {
+      const approx = position?.source === 'adresse';
+      if (!position) { etat.innerHTML = ''; return; }
+      if (course && !course.ok) { etat.innerHTML = `<span class="rouge">${esc(course.message)}</span>`; return; }
+      const dist = course ? `${esc(course.distanceKm.toLocaleString('fr-FR'))} km ${course.methode === 'route' ? 'par la route' : 'environ'} depuis ${esc(ag.nom)}` : '';
+      etat.innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} ${approx ? `Adresse trouvée${position.trouve ? ` : ${esc(position.trouve)}` : ' sur la carte'}` : 'Position reçue'}</span>${course ? ` · ${dist} · <b>${esc(montant(course.prix, course.devise))}</b>${course.local ? ' <span class="muet">(calcul en cours…)</span>' : ''}` : ''} · <button type="button" class="btn-lien" data-ajuster>${approx ? 'vérifier sur la carte' : 'voir / ajuster'}</button>`;
+    };
     const majEtat = (message, type, { silencieux = false } = {}) => {
       const ag = agence?.();
       course = position && ag ? KolisTarif.calculerCourse(config.regles || config, ag, position) : null;
-      const approx = position?.source === 'adresse';
+      if (course?.ok) course.local = true;
       if (message) etat.innerHTML = `<span class="${type === 'erreur' ? 'rouge' : 'muet'}">${esc(message)}</span>`;
-      else if (!position) etat.innerHTML = '';
-      else if (course && !course.ok) etat.innerHTML = `<span class="rouge">${esc(course.message)}</span>`;
-      else etat.innerHTML = `<span class="vert">${ic('ok', 'ic-sm')} ${approx ? 'Adresse trouvée sur la carte' : 'Position reçue'}</span>${course ? ` · ${esc(course.distanceKm.toLocaleString('fr-FR'))} km de ${esc(ag.nom)} · <b>${esc(montant(course.prix, course.devise))}</b>` : ''} · <button type="button" class="btn-lien" data-ajuster>${approx ? 'vérifier sur la carte' : 'voir / ajuster'}</button>`;
+      else afficher(ag);
       if (!silencieux) surChange?.();
+      // Distance par la route (si l'estimation est valable ou juste au-dessus du rayon)
+      if (!message && position && ag && course && (course.ok || course.raison === 'trop_loin')) {
+        const n = ++numDevis;
+        const p = position;
+        api.get(`/config/course?agence=${encodeURIComponent(ag.code)}&lat=${p.lat}&lng=${p.lng}`, { delai: 10000 })
+          .then(r => {
+            if (n !== numDevis || p !== position || !r.course) return;
+            course = r.course;
+            afficher(ag);
+            surChange?.();
+          })
+          .catch(() => { if (n === numDevis && course?.ok) { course = { ...course, local: false }; afficher(ag); } });
+      }
     };
     bloc.querySelectorAll('[data-mode-adresse]').forEach(b => b.addEventListener('click', () => choisirMode(b.dataset.modeAdresse)));
     choisirMode(mode());
@@ -804,7 +830,7 @@
         const n = ++demande;
         majEtat('Recherche de l\'adresse sur la carte…', null, { silencieux: true });
         try {
-          const p = await adresseVersPosition(a, agence?.()?.pays);
+          const p = await adresseVersPosition(a, agence?.()?.pays, { agence: agence?.()?.code });
           if (n !== demande) return;
           if (p) { position = p; majEtat(); }
           else { position = null; majEtat('Adresse enregistrée. Le livreur vous appellera pour la trouver ; le prix sera confirmé à ce moment-là.', null); }

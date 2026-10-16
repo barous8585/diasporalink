@@ -57,6 +57,33 @@ router.get('/position', positionLimiter, ah(async (req, res) => {
   res.json({ succes: true, position });
 }));
 
+// ── GET /api/config/course?agence=KALOUM&lat=9.6&lng=-13.6 ── prix d'une course à domicile
+// avec la distance par la route (le même calcul que celui enregistré sur le colis)
+const geoLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, message: { succes: false, message: 'Trop de demandes, patientez une minute.' } });
+router.get('/course', geoLimiter, ah(async (req, res) => {
+  const config = await Config.get();
+  const agence = (config.agences || []).find(a => a.code === String(req.query.agence || '').toUpperCase());
+  if (!agence) return res.status(404).json({ succes: false, message: 'Agence inconnue.' });
+  const point = { lat: parseFloat(req.query.lat), lng: parseFloat(req.query.lng) };
+  const c = await require('../services/domicileService').devisCourse(config, agence, point);
+  res.json({ succes: true, course: c });
+}));
+
+// ── GET /api/config/adresse?agence=KALOUM&rue=&quartier=&ville= ── adresse écrite → position,
+// cherchée dans le pays de l'agence et autour d'elle (évite un homonyme à l'autre bout du pays)
+router.get('/adresse', geoLimiter, ah(async (req, res) => {
+  const config = await Config.get();
+  const t = (k) => String(req.query[k] || '').trim().slice(0, 200);
+  const agence = (config.agences || []).find(a => a.code === t('agence').toUpperCase());
+  const pays = agence?.pays || (['FR', 'GN'].includes(t('pays')) ? t('pays') : null);
+  if (!pays) return res.status(400).json({ succes: false, message: 'Pays inconnu.' });
+  if (!t('rue') && !t('quartier')) return res.status(400).json({ succes: false, message: 'Écrivez au moins le quartier ou la rue.' });
+  const { pointDansPays } = require('../utils/tarif');
+  const pres = agence && pointDansPays(agence.position, pays) ? agence.position : null;
+  const position = await require('../services/geoService').geocoder({ rue: t('rue'), quartier: t('quartier'), ville: t('ville'), pays, pres });
+  res.json({ succes: true, position });
+}));
+
 // ── GET /api/config/admin ── config complète (agences fermées comprises)
 router.get('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
   res.json({ succes: true, config: await Config.get() });
@@ -200,8 +227,11 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
     doc.litiges = l;
     doc.markModified('litiges');
   }
+  const avertissements = [];
   if (Array.isArray(b.agences)) {
     const { positionDepuisLien } = require('../services/domicileService');
+    const { pointDansPays, paysDuPoint } = require('../utils/tarif');
+    const { placerAgence } = require('../scripts/corriger-agences');
     for (const a of b.agences) {
       // Position : { lat, lng } ou lien Google Maps collé par l'admin
       if (a.lienPosition && String(a.lienPosition).trim()) {
@@ -212,6 +242,17 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
       const lat = parseFloat(a.position?.lat), lng = parseFloat(a.position?.lng);
       a.position = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : undefined;
       delete a.lienPosition;
+      // Position hors du pays de l'agence (ex. GPS pris en France pour une agence de Conakry) :
+      // on la replace d'après l'adresse écrite, sinon on refuse avec une explication
+      if (a.position && PAYS[a.pays] && !pointDansPays(a.position, a.pays)) {
+        const ou = paysDuPoint(a.position);
+        const p = await placerAgence(a);
+        if (!p) {
+          return res.status(400).json({ succes: false, message: `La position de ${a.nom || a.code} est ${ou ? `en ${PAYS[ou].nom}` : 'hors de la zone desservie'}, pas en ${PAYS[a.pays].nom}. Utilisez « Placer sur la carte » ou collez un lien Google Maps de l'agence.` });
+        }
+        a.position = { lat: p.lat, lng: p.lng };
+        avertissements.push(`${a.nom || a.code} : la position donnée était ${ou ? `en ${PAYS[ou].nom}` : 'hors zone'}, l'agence a été replacée d'après son adresse (${p.trouve || 'à vérifier'}). Vérifiez avec « Placer sur la carte ».`);
+      }
     }
     const agences = b.agences
       .map(a => ({ ...a, code: String(a.code || '').toUpperCase().trim(), plateforme: !!a.plateforme, actif: a.actif !== false }))
@@ -234,7 +275,7 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
   }
   await doc.save();
   Config.invalider();
-  res.json({ succes: true, config: await Config.get(), message: 'Configuration enregistrée.' });
+  res.json({ succes: true, config: await Config.get(), message: 'Configuration enregistrée.', avertissements });
 }));
 
 module.exports = router;

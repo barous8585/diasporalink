@@ -11,6 +11,8 @@ const connectDB = async () => {
     } catch (e) {
       console.error('❌ Purge des données de test :', e.message);
     }
+    // Agences placées hors de leur pays : replacées d'après leur adresse (sans bloquer le démarrage)
+    require('../scripts/corriger-agences').corrigerAgences().catch(e => console.error('❌ Agences :', e.message));
     require('../scripts/retention').planifierRetention();
   } catch (err) {
     console.error('❌ Erreur MongoDB :', err.message);

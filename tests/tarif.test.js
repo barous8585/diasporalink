@@ -154,3 +154,82 @@ test('courses à domicile payées d\'avance : restent dues si annulées, prix mo
   assert.strictEqual(domicileAPayerGnf({ livraison: { ...liv, prixGnf: 40000 } }), 10000);
   assert.strictEqual(fraisDomicileGnf({ livraison: { ...liv, prixGnf: 20000 } }), 30000, 'adresse plus proche : pas de remboursement');
 });
+
+// ── Courses à domicile : distances, pays, positions ──────────
+const { pointDansPays, paysDuPoint } = require('../utils/tarif');
+const { positionDepuisTexte } = require('../services/domicileService');
+const KALOUM = { code: 'KALOUM', nom: 'Agence Kaloum', pays: 'GN', position: { lat: 9.5092, lng: -13.7122 } };
+const PARIS = { code: 'PARIS', nom: 'Agence Paris 18e', pays: 'FR', position: { lat: 48.8925, lng: 2.3484 } };
+const confDom = { ...config, domicile: { majoration: 1.3, GN: { actif: true, base: 10000, parKm: 2000, plafond: 0, rayonMaxKm: 40 }, FR: { actif: true, base: 8, parKm: 1, plafond: 0, rayonMaxKm: 60 } } };
+
+test('distance à vol d\'oiseau : valeurs connues', () => {
+  // 0,045° de latitude ≈ 5,0 km
+  assert.ok(Math.abs(distanceKm({ lat: 9.5092, lng: -13.7122 }, { lat: 9.5542, lng: -13.7122 }) - 5.004) < 0.01);
+  // Paris centre → Saint-Denis ≈ 8,9 km
+  assert.ok(Math.abs(distanceKm({ lat: 48.8566, lng: 2.3522 }, { lat: 48.9362, lng: 2.3574 }) - 8.86) < 0.05);
+  // Paris → Conakry ≈ 4 600 km
+  const pc = distanceKm({ lat: 48.8566, lng: 2.3522 }, { lat: 9.537, lng: -13.677 });
+  assert.ok(pc > 4500 && pc < 4700, String(pc));
+});
+
+test('positions : dans quel pays ?', () => {
+  assert.strictEqual(paysDuPoint({ lat: 9.537, lng: -13.677 }), 'GN');   // Conakry
+  assert.strictEqual(paysDuPoint({ lat: 11.318, lng: -12.283 }), 'GN');  // Labé
+  assert.strictEqual(paysDuPoint({ lat: 10.386, lng: -9.305 }), 'GN');   // Kankan
+  assert.strictEqual(paysDuPoint({ lat: 47.4614, lng: -0.5473 }), 'FR'); // Angers
+  assert.strictEqual(paysDuPoint({ lat: 43.2965, lng: 5.3698 }), 'FR');  // Marseille
+  assert.strictEqual(paysDuPoint({ lat: 14.69, lng: -17.44 }), null);    // Dakar
+  assert.strictEqual(paysDuPoint({ lat: 0, lng: 0 }), null);
+  assert.ok(!pointDansPays({ lat: 47.4614, lng: -0.5473 }, 'GN'));
+});
+
+test('course : agence de Conakry placée en France → pas de prix faux', () => {
+  const r = calculerCourse(confDom, { ...KALOUM, position: { lat: 47.461403, lng: -0.547412 } }, { lat: 9.55, lng: -13.65 });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.raison, 'agence_mal_placee');
+});
+
+test('course : client pointé dans le mauvais pays', () => {
+  const r = calculerCourse(confDom, KALOUM, { lat: 48.85, lng: 2.35 });
+  assert.strictEqual(r.raison, 'hors_pays');
+  assert.match(r.message, /en France, pas en Guinée/);
+  assert.strictEqual(calculerCourse(confDom, PARIS, { lat: 9.55, lng: -13.65 }).raison, 'hors_pays');
+});
+
+test('course : distance par la route prioritaire, sinon estimation × 1,3, arrondis', () => {
+  const client = { lat: 9.5542, lng: -13.7122 }; // 5,0 km à vol d'oiseau
+  const est = calculerCourse(confDom, KALOUM, client);
+  assert.strictEqual(est.ok, true);
+  assert.strictEqual(est.methode, 'estimation');
+  assert.strictEqual(est.distanceKm, 6.5);                 // 5,0 × 1,3
+  assert.strictEqual(est.prix, 23000);                    // 10 000 + 2 000 × 6,5, au millier supérieur
+  const route = calculerCourse(confDom, KALOUM, client, { routeKm: 7.84 });
+  assert.strictEqual(route.methode, 'route');
+  assert.strictEqual(route.distanceKm, 7.8);
+  assert.strictEqual(route.prix, 26000);                  // 10 000 + 15 600 → 26 000
+  assert.strictEqual(route.volOiseauKm, 5);
+  // France : demi-euro supérieur
+  const fr = calculerCourse(confDom, PARIS, { lat: 48.9362, lng: 2.3574 }, { routeKm: 6.3 });
+  assert.strictEqual(fr.prix, 14.5);                      // 8 + 6,3 = 14,3 → 14,5
+  assert.strictEqual(fr.devise, 'EUR');
+  // Même point que l'agence : distance minimale, pas zéro
+  assert.strictEqual(calculerCourse(confDom, KALOUM, KALOUM.position).distanceKm, 0.1);
+});
+
+test('course : rayon maximum et plafond', () => {
+  const loin = calculerCourse(confDom, KALOUM, { lat: 10.05, lng: -13.7 }); // ~60 km
+  assert.strictEqual(loin.raison, 'trop_loin');
+  assert.match(loin.message, /maximum 40 km/);
+  const plaf = calculerCourse({ ...confDom, domicile: { ...confDom.domicile, GN: { ...confDom.domicile.GN, plafond: 30000 } } }, KALOUM, { lat: 9.6, lng: -13.65 }, { routeKm: 25 });
+  assert.strictEqual(plaf.prix, 30000);
+});
+
+test('liens de position : Google Maps, WhatsApp, coordonnées', () => {
+  const ok = (t, lat, lng) => { const p = positionDepuisTexte(t); assert.ok(p, t); assert.ok(Math.abs(p.lat - lat) < 1e-4 && Math.abs(p.lng - lng) < 1e-4, t); };
+  ok('https://www.google.com/maps/place/Kip%C3%A9/@9.6418,-13.6078,17z', 9.6418, -13.6078);
+  ok('https://www.google.com/maps/place/X/data=!3d9.6411!4d-13.6071', 9.6411, -13.6071);
+  ok('https://maps.google.com/?q=9.5401,-13.6801', 9.5401, -13.6801);
+  ok('9.5401, -13.6801', 9.5401, -13.6801);
+  ok('Ma position : 9.540112,-13.680134 envoyée', 9.540112, -13.680134);
+  assert.strictEqual(positionDepuisTexte('rue sans coordonnées'), null);
+});
