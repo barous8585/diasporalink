@@ -32,6 +32,8 @@ const initSocket = (io) => {
         if (u.role === 'agent' && lieu?.plateforme) socket.join(`pays:${lieu.pays}`);
       }
       socket.join(`user:${u._id}`);
+      // Les avis clients sont communs à tous : chaque app ouverte est prévenue d'un nouvel avis
+      socket.join('avis');
       // Numéro vérifié, ou client : prévenu pour les colis à son numéro (les données restent filtrées par l'API)
       if (u.role === 'client' && u.telephone) socket.join(`tel:${u.telephone}`);
     } catch (e) { console.error('[socket]', e.message); }
