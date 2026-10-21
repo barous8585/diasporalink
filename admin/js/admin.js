@@ -161,13 +161,15 @@
   // ── Rafraîchissement automatique ──
   // En direct dès qu'un colis, un lot, une caisse ou une réclamation change, au retour sur la page,
   // et toutes les 30 s. Jamais pendant une saisie, ni sur les réglages et l'équipe (formulaires).
-  const VIVANTES = new Set(['bord', 'lots', 'courses', 'reclamations', 'colis', 'caisses', 'factures']);
+  const VIVANTES = new Set(['bord', 'lots', 'courses', 'reclamations', 'colis', 'caisses', 'factures', 'avis']);
   let pageActuelle = null;
   K.tempsReel(async () => {
     if (!session.connecte() || session.utilisateur()?.role !== 'admin') return;
     majPastilleRec(); majPastilleAvis();
     if (!VIVANTES.has(pageActuelle)) return;
     if (/^#\/(lots|reclamations)\/./.test(location.hash)) return; // fiche ouverte : on ne bouge pas
+    // Avis : une réponse commencée mais pas encore publiée n'est jamais effacée
+    if (pageActuelle === 'avis' && [...main.querySelectorAll('[data-repondre] textarea')].some(t => t.value !== t.defaultValue)) return;
     // Recherche ou jour choisi à la main : on ne remet pas l'écran à zéro
     if (pageActuelle === 'colis' && [...main.querySelectorAll('[data-filtres] input, [data-filtres] select')].some(i => i.value)) return;
     if (pageActuelle === 'caisses' && main.querySelector('[data-jour]')?.value !== new Date().toISOString().slice(0, 10)) return;

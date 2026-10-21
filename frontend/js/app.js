@@ -82,8 +82,15 @@
   // Les écrans de consultation se mettent à jour seuls : en direct quand un colis change,
   // au retour sur l'app, et toutes les 30 s (jamais pendant une saisie ni sur « Envoyer »)
   const PAGES_VIVANTES = /^#?\/?$|^#\/(suivi\/|mes-colis$|factures$|reclamation\/)/;
-  K.tempsReel(async () => {
+  // Avis clients : communs à tous, mis à jour en direct sur l'écran ouvert (accueil, page des
+  // avis, avis d'un colis) sans recharger toute la page ni effacer un avis en cours d'écriture
+  let rafraichirAvis = null;
+  const avisEnCours = () => !!main.querySelector('[data-form-avis][data-touche]');
+  K.tempsReel(async (types) => {
+    const queDesAvis = types && types.length && types.every(t => t === 'avis');
+    if (queDesAvis || /^#\/avis$/.test(location.hash)) { if (rafraichirAvis && !avisEnCours()) await rafraichirAvis(); return; }
     if (!PAGES_VIVANTES.test(location.hash)) return;
+    if (avisEnCours()) return;
     const y = window.scrollY;
     await router({ silencieux: true });
     window.scrollTo(0, y);
@@ -108,7 +115,7 @@
         document.querySelectorAll('[data-nav]').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === nav) || a.removeAttribute('aria-current'));
         document.querySelectorAll('[data-nav]').forEach(a => { if (a.dataset.nav === nav) a.setAttribute('aria-current', 'page'); });
         main.classList.toggle('entree', !silencieux); // entrée en douceur, sauf rafraîchissement silencieux
-        if (!silencieux) main.innerHTML = '<div class="chargement" aria-label="Chargement"></div>';
+        if (!silencieux) { main.innerHTML = '<div class="chargement" aria-label="Chargement"></div>'; rafraichirAvis = null; }
         try { await vue(...m.slice(1)); } catch (e) { if (!silencieux) main.innerHTML = `<p class="bandeau bandeau-rouge">${esc(e.message)}</p>`; }
         if (!silencieux) { main.focus({ preventScroll: true }); window.scrollTo(0, 0); }
         majBoutonCompte();
@@ -149,10 +156,12 @@
           <a class="tuile" href="#/guichets">${ic('lieu', 'ic-lg')}Nos agences</a>
           <a class="tuile" href="#/mes-colis">${ic('liste', 'ic-lg')}Mes colis</a>
         </div>
-        <div data-autres class="pile" style="--gap:10px"></div>
         <div data-avis-accueil></div>
+        <div data-autres class="pile" style="--gap:10px"></div>
       </div>`;
-    resumeAvisAccueil(main.querySelector('[data-avis-accueil]'));
+    const zoneAvis = main.querySelector('[data-avis-accueil]');
+    resumeAvisAccueil(zoneAvis);
+    rafraichirAvis = () => resumeAvisAccueil(zoneAvis);
     main.querySelector('[data-recherche]').addEventListener('submit', (e) => {
       e.preventDefault();
       const n = new FormData(e.target).get('numero').trim().toUpperCase();
@@ -396,7 +405,11 @@
     main.querySelector('[data-tiers]')?.addEventListener('click', () => autoriserTiers(c));
     main.querySelector('[data-livraison]')?.addEventListener('click', (e) => demanderLivraison(c, liv, e.currentTarget.dataset.livraison));
     if (complet && !['reserve', 'annule'].includes(c.statut) && !horsLigne) chargerFacturesEtReclamations(c);
-    if (complet && c.statut === 'remis' && !horsLigne) blocAvisColis(main.querySelector('[data-avis-colis]'), c);
+    if (complet && c.statut === 'remis' && !horsLigne) {
+      const zoneAvis = main.querySelector('[data-avis-colis]');
+      blocAvisColis(zoneAvis, c);
+      rafraichirAvis = () => blocAvisColis(zoneAvis, c); // réponse de TMS reçue en direct
+    }
     if (complet && !['remis', 'annule'].includes(c.statut)) K.notifications.carte(main.querySelector('[data-notifs-suivi]'), { texte: 'Être prévenu dès que ce colis arrive et recevoir le code ici.' });
     main.querySelector('[data-payer]')?.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'solde', c }));
     main.querySelectorAll('[data-payer-domicile]').forEach(b => b.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c })));
@@ -414,7 +427,7 @@
   const libSensCourt = (sens) => (sens === 'GN-FR' ? 'Guinée → France' : 'France → Guinée');
   function carteAvis(a) {
     return `
-      <article class="carte avis-carte">
+      <article class="carte avis-carte" data-avis-id="${esc(a._id)}">
         <div class="avis-tete">
           <div><span class="gras">${esc(a.auteur || 'Client')}</span> <span class="tres-petit muet">· ${a.role === 'destinataire' ? 'destinataire' : 'expéditeur'} · ${esc(libSensCourt(a.sens))}${a.mode ? ` · ${esc(K.libMode(a.mode))}` : ''}</span></div>
           ${K.etoiles(a.note)}
@@ -432,19 +445,66 @@
         <div class="barres-avis">${[5, 4, 3, 2, 1].map(n => `<div class="barre-ligne"><span>${n} ${ic('etoile', 'ic-sm')}</span><span class="jauge"><span style="width:${Math.round(stats.repartition[n - 1] / max * 100)}%"></span></span><span class="muet">${stats.repartition[n - 1]}</span></div>`).join('')}</div>
       </div>`;
   }
-  // Accueil : note moyenne et derniers avis
+  // Accueil : note moyenne, derniers avis, et tous les avis en déroulant (sans quitter l'accueil).
+  // L'état « déroulé » et le filtre sont gardés quand un nouvel avis arrive en direct.
+  const avisAccueil = { ouvert: false, note: 0, page: 1 };
   async function resumeAvisAccueil(zone) {
     if (!zone) return;
-    try {
-      const { avis, stats } = await api.get('/avis');
-      if (!stats.nb) return;
-      zone.innerHTML = `
-        <section class="pile" style="--gap:12px">
-          <div class="ligne entre"><h2>Avis de nos clients</h2><a class="petit" href="#/avis">Tout voir</a></div>
-          <a class="carte" href="#/avis" style="text-decoration:none;color:inherit">${resumeNote(stats)}</a>
-          ${avis.filter(a => a.commentaire).slice(0, 2).map(carteAvis).join('')}
-        </section>`;
-    } catch {}
+    let r;
+    try { r = await api.get('/avis'); } catch { return; }
+    const { avis, stats } = r;
+    const vus = new Set([...zone.querySelectorAll('[data-avis-id]')].map(x => x.dataset.avisId));
+    const dejaAffiche = zone.childElementCount > 0;
+    zone.innerHTML = `
+      <section class="carte pile bloc-avis-accueil" style="--gap:14px">
+        <h2>Avis de nos clients</h2>
+        ${stats.nb ? `
+          ${resumeNote(stats)}
+          <div class="pile" style="--gap:12px" data-apercu>${avis.slice(0, 3).map(carteAvis).join('')}</div>
+          <button type="button" class="btn btn-plein bouton-derouler" data-derouler aria-expanded="false">
+            <span data-lib-derouler>Voir tous les avis (${stats.nb})</span> <span class="fleche" aria-hidden="true">${ic('suivant', 'ic-sm')}</span>
+          </button>
+          <div class="pile cache" style="--gap:12px" data-tous>
+            <div class="puces" data-filtres-accueil>${[0, 5, 4, 3, 2, 1].map(n => `<button type="button" class="puce" data-filtre="${n}" aria-pressed="${n === avisAccueil.note}">${n ? `${n} ${ic('etoile', 'ic-sm')}` : 'Tous'}</button>`).join('')}</div>
+            <div class="pile" style="--gap:12px" data-liste-tous></div>
+            <button type="button" class="btn btn-plein cache" data-plus-accueil>Voir plus d'avis</button>
+          </div>`
+        : '<p class="petit muet">Pas encore d\'avis. Une fois votre colis remis, vous pourrez noter votre envoi : votre avis apparaîtra ici pour tous les clients.</p>'}
+      </section>`;
+    if (dejaAffiche) zone.querySelectorAll('[data-apercu] [data-avis-id]').forEach(x => { if (!vus.has(x.dataset.avisId)) x.classList.add('avis-nouveau'); });
+    if (!stats.nb) return;
+    const btn = zone.querySelector('[data-derouler]');
+    const tous = zone.querySelector('[data-tous]');
+    const apercu = zone.querySelector('[data-apercu]');
+    const charger = async (ajouter) => {
+      const x = await api.get(`/avis?page=${avisAccueil.page}${avisAccueil.note ? `&note=${avisAccueil.note}` : ''}`);
+      const liste = zone.querySelector('[data-liste-tous]');
+      const html = x.avis.map(carteAvis).join('');
+      if (ajouter) liste.insertAdjacentHTML('beforeend', html);
+      else liste.innerHTML = html || '<p class="petit muet">Aucun avis avec cette note.</p>';
+      zone.querySelector('[data-plus-accueil]').classList.toggle('cache', x.avis.length < x.parPage);
+    };
+    const appliquer = async () => {
+      btn.setAttribute('aria-expanded', String(avisAccueil.ouvert));
+      btn.classList.toggle('ouvert', avisAccueil.ouvert);
+      zone.querySelector('[data-lib-derouler]').textContent = avisAccueil.ouvert ? 'Réduire' : `Voir tous les avis (${stats.nb})`;
+      tous.classList.toggle('cache', !avisAccueil.ouvert);
+      apercu.classList.toggle('cache', avisAccueil.ouvert);
+      if (avisAccueil.ouvert) { avisAccueil.page = 1; await charger(false).catch(() => {}); }
+    };
+    btn.addEventListener('click', async () => {
+      avisAccueil.ouvert = !avisAccueil.ouvert;
+      await appliquer();
+      if (!avisAccueil.ouvert) zone.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    zone.querySelector('[data-filtres-accueil]').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-filtre]'); if (!b) return;
+      avisAccueil.note = +b.dataset.filtre; avisAccueil.page = 1;
+      zone.querySelectorAll('[data-filtres-accueil] [data-filtre]').forEach(x => x.setAttribute('aria-pressed', String(+x.dataset.filtre === avisAccueil.note)));
+      charger(false).catch(err => toast(err.message, 'erreur'));
+    });
+    zone.querySelector('[data-plus-accueil]').addEventListener('click', () => { avisAccueil.page++; charger(true).catch(err => toast(err.message, 'erreur')); });
+    if (avisAccueil.ouvert) await appliquer();
   }
   // Accueil : « Comment s'est passé votre envoi ? » pour un colis remis pas encore noté
   async function invitationAvis(zone, colis) {
@@ -506,7 +566,8 @@
         form.querySelector('[data-lib-note]').textContent = LIB_NOTE[note] || '';
         form.commentaire.placeholder = note && note <= 3 ? 'Qu\'est-ce qui n\'a pas été ? Nous lisons chaque avis.' : 'Délais, accueil à l\'agence, état du colis…';
       };
-      form.querySelectorAll('[data-note]').forEach(b => b.addEventListener('click', () => { note = +b.dataset.note; peindre(); }));
+      form.querySelectorAll('[data-note]').forEach(b => b.addEventListener('click', () => { note = +b.dataset.note; form.dataset.touche = '1'; peindre(); }));
+      form.commentaire.addEventListener('input', () => { form.dataset.touche = '1'; });
       peindre();
       form.querySelector('[data-annuler-avis]')?.addEventListener('click', afficher);
       form.addEventListener('submit', async (e) => {
@@ -554,6 +615,13 @@
     });
     main.querySelector('[data-plus]').addEventListener('click', () => { page++; charger(true).catch(err => toast(err.message, 'erreur')); });
     await charger(false);
+    // En direct : un nouvel avis (ou une réponse de TMS) apparaît chez tout le monde
+    rafraichirAvis = async () => {
+      const vus = new Set([...main.querySelectorAll('[data-avis-id]')].map(x => x.dataset.avisId));
+      page = 1;
+      await charger(false);
+      main.querySelectorAll('[data-avis-id]').forEach(x => { if (!vus.has(x.dataset.avisId)) x.classList.add('avis-nouveau'); });
+    };
   }
 
   // ── Factures et réclamations d'un colis (compte connecté) ──

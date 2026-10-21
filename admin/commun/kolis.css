@@ -462,3 +462,9 @@ form.pile:has(> .bloc-etape) { gap: 20px; }
 .barres-avis .jauge { height: 8px; border-radius: 6px; background: #E8ECF3; overflow: hidden; }
 .barres-avis .jauge span { display: block; height: 100%; background: #E4A72B; border-radius: 6px; }
 .badge-verifie { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: #1F7A4D; }
+.avis-nouveau { animation: avis-arrive 2.4s ease-out; }
+@keyframes avis-arrive { 0% { box-shadow: 0 0 0 3px #E4A72B; transform: translateY(-6px); } 25% { transform: none; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.bouton-derouler { justify-content: center; gap: 8px; }
+.bouton-derouler .fleche { display: inline-flex; transform: rotate(90deg); transition: transform .2s; }
+.bouton-derouler.ouvert .fleche { transform: rotate(-90deg); }
+.bloc-avis-accueil .avis-carte { box-shadow: none; border: 1px solid var(--ligne, #E3E7EF); }

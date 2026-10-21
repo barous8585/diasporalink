@@ -363,14 +363,23 @@
   // sur l'app, au retour du réseau, et toutes les 30 s par sécurité. surMaj() redessine l'écran.
   function tempsReel(surMaj, { intervalle = 30000 } = {}) {
     let attente = null, dernier = Date.now(), enRetard = false, socket = null;
-    const declencher = () => {
+    // Types de changements reçus depuis la dernière mise à jour (« colis », « avis »…) ;
+    // vide = rafraîchissement général (retour sur l'app, minuterie, reconnexion)
+    let types = new Set(), general = false;
+    const planifier = (delai = 700) => {
       clearTimeout(attente);
       attente = setTimeout(async () => {
-        if (document.hidden || !session.connecte()) { enRetard = true; return; }
-        if (saisieEnCours()) { attente = setTimeout(declencher, 5000); return; }
+        if (document.hidden || !session.connecte()) { enRetard = true; general = true; return; }
+        if (saisieEnCours()) { planifier(5000); return; }
         dernier = Date.now(); enRetard = false;
-        try { await surMaj(); } catch {}
-      }, 700);
+        const recus = general ? null : [...types];
+        types = new Set(); general = false;
+        try { await surMaj(recus); } catch {}
+      }, delai);
+    };
+    const declencher = (type) => {
+      if (typeof type === 'string') types.add(type); else general = true;
+      planifier();
     };
     document.addEventListener('visibilitychange', () => { if (!document.hidden && (enRetard || Date.now() - dernier > 10000)) declencher(); });
     window.addEventListener('online', declencher);
@@ -383,7 +392,7 @@
         socket = window.io(API_URL.startsWith('/') ? location.origin : API_URL.replace(/\/api\/?$/, ''), {
           auth: (cb) => cb({ token: stock.lire('jeton') }), transports: ['websocket', 'polling'], reconnectionDelayMax: 30000,
         });
-        socket.on('maj', declencher);
+        socket.on('maj', (m) => declencher(m?.type || undefined));
         socket.on('connect', () => { if (Date.now() - dernier > 5000) declencher(); }); // reconnecté : on rattrape
       } catch { socket = null; }
     };

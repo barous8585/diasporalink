@@ -26,6 +26,6 @@ const avisSchema = new mongoose.Schema({
 
 avisSchema.index({ colis: 1, user: 1 }, { unique: true });
 
-// Prévient l'admin ouvert (rafraîchissement automatique)
-avisSchema.post('save', () => require('../utils/temps-reel').prevenir(['admins'], 'avis'));
+// Avis communs à tous : toutes les apps ouvertes (clients et admin) se mettent à jour en direct
+avisSchema.post('save', () => require('../utils/temps-reel').prevenir(['admins', 'avis'], 'avis'));
 module.exports = mongoose.model('Avis', avisSchema);
