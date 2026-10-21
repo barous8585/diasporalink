@@ -290,6 +290,7 @@ main { padding: 32px 40px 64px; }
 [data-nav="lots"],         body[data-section="lots"]         { --t: #5B3FBF; --t-fonce: #43309A; --t-doux: #EEEAFB; }
 [data-nav="courses"],      body[data-section="courses"]      { --t: #0E8A7E; --t-fonce: #0A665D; --t-doux: #DDF3F0; }
 [data-nav="reclamations"], body[data-section="reclamations"] { --t: #C92A2A; --t-fonce: #9A1F1F; --t-doux: #FBE3E3; }
+[data-nav="avis"],         body[data-section="avis"]         { --t: #D99A06; --t-fonce: #8A5F00; --t-doux: #FDF3D7; }
 [data-nav="caisses"],      body[data-section="caisses"]      { --t: #1F7A4D; --t-fonce: #17603C; --t-doux: #E2F3E9; }
 [data-nav="factures"],     body[data-section="factures"]     { --t: #B4237A; --t-fonce: #8C1A5F; --t-doux: #FBE4F1; }
 [data-nav="reglages"],     body[data-section="reglages"]     { --t: #0B7FAB; --t-fonce: #08617F; --t-doux: #DFF1F8; }

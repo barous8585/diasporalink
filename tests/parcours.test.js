@@ -1362,3 +1362,63 @@ test('livraison : positions dans le bon pays, devis identique au prix enregistr�
   assert.strictEqual((await col.findOne()).agences.find(a => a.code === 'KALOUM').position.lat, 9.5092, 'les bonnes positions ne bougent pas');
   await mongoose.disconnect();
 });
+
+test('avis clients : seulement après la remise, par l\'expéditeur ou le destinataire, réponse de TMS, masquage', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  const agentParis = await connexion('+33600000002');
+  const agentKaloum = await connexion('620000003');
+  const client = await connexion('0655667788', 'Aïssatou', 'Baldé');
+  // Réservation par le client puis dépôt, envoi, remise
+  let r = await appel('POST', '/colis', { cgvAcceptees: true, mode: 'air', typeColis: 'vetements', poidsEstime: 2, depot: 'PARIS', guichet: 'KALOUM', destinataire: { nom: 'Ibrahima Baldé', telephone: '622667788' } }, client);
+  assert.strictEqual(r.status, 201, r.message);
+  const numero = r.colis.numeroSuivi;
+  // Pas avant la remise
+  r = await appel('POST', '/avis', { numero, note: 5, commentaire: 'Super' }, client);
+  assert.strictEqual(r.status, 409);
+  // Un inconnu ne peut pas noter
+  r = await appel('POST', '/avis', { numero, note: 1 }, await connexion('0633445566'));
+  assert.strictEqual(r.status, 403);
+  // Dépôt → lot → arrivée → guichet → remise
+  r = await appel('POST', '/agent/depot', { numeroSuivi: numero, poidsReel: 2, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM', cgvAcceptees: true, expediteur: { nom: 'Aïssatou Baldé', telephone: '0655667788' }, destinataire: { nom: 'Ibrahima Baldé', telephone: '622667788' }, paiement: { montant: 24, devise: 'EUR', methode: 'especes' } }, agentParis);
+  assert.ok([200, 201].includes(r.status), r.message);
+  const lot = (await appel('POST', '/lots', { mode: 'air', reference: 'AF 0999' }, admin)).lot;
+  await appel('POST', '/agent/scans', { scans: [{ opId: 'av1', numero, action: 'charger', lot: lot.code }] }, agentParis);
+  await appel('POST', `/lots/${lot.code}/statut`, { statut: 'parti' }, admin);
+  await appel('POST', '/agent/scans', { scans: [{ opId: 'av2', numero, action: 'arrivee', lot: lot.code }, { opId: 'av3', numero, action: 'guichet', emplacement: 'A1' }] }, agentKaloum);
+  const code = (await appel('GET', `/admin/colis/${numero}`, null, admin)).colis.codeRetrait;
+  r = await appel('POST', '/agent/remise', { numero, code, pieceVerifiee: true }, agentKaloum);
+  assert.strictEqual(r.status, 200, r.message);
+  // Note invalide refusée, puis avis publié
+  assert.strictEqual((await appel('POST', '/avis', { numero, note: 7 }, client)).status, 400);
+  r = await appel('POST', '/avis', { numero, note: 4, commentaire: 'Colis arrivé en bon état, un peu de retard.' }, client);
+  assert.strictEqual(r.status, 201, r.message);
+  assert.strictEqual(r.avis.auteur, 'Aïssatou B.', 'prénom et initiale seulement');
+  // Modifier son avis : toujours un seul avis
+  r = await appel('POST', '/avis', { numero, note: 5, commentaire: 'Finalement très bien.' }, client);
+  assert.strictEqual(r.status, 201);
+  let pub = await appel('GET', '/avis');
+  const mien = pub.avis.filter(a => a.commentaire === 'Finalement très bien.');
+  assert.strictEqual(mien.length, 1);
+  assert.ok(!JSON.stringify(pub).includes('0655667788'), 'pas de téléphone en public');
+  assert.strictEqual(pub.stats.nb, 1);
+  assert.strictEqual(pub.stats.moyenne, 5);
+  // Réponse de TMS, visible par tous
+  const adm = await appel('GET', '/avis/admin?filtre=sans_reponse', null, admin);
+  assert.strictEqual(adm.sansReponse, 1);
+  const id = adm.avis[0]._id;
+  assert.strictEqual((await appel('GET', '/avis/admin', null, client)).status, 403);
+  r = await appel('POST', `/avis/${id}/reponse`, { texte: 'Merci beaucoup !' }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  pub = await appel('GET', '/avis');
+  assert.strictEqual(pub.avis[0].reponse.texte, 'Merci beaucoup !');
+  // Masqué : n'apparaît plus, ne compte plus, ne peut plus être modifié ; motif obligatoire
+  assert.strictEqual((await appel('POST', `/avis/${id}/masquer`, {}, admin)).status, 400);
+  r = await appel('POST', `/avis/${id}/masquer`, { motif: 'Données personnelles' }, admin);
+  assert.strictEqual(r.status, 200);
+  pub = await appel('GET', '/avis');
+  assert.strictEqual(pub.stats.nb, 0);
+  assert.strictEqual((await appel('POST', '/avis', { numero, note: 1 }, client)).status, 409);
+  assert.strictEqual((await appel('POST', `/avis/${id}/afficher`, {}, admin)).status, 200);
+  assert.strictEqual((await appel('GET', '/avis')).stats.nb, 1);
+  assert.strictEqual((await appel('POST', '/avis/pasunid/reponse', { texte: 'x' }, admin)).status, 404);
+});

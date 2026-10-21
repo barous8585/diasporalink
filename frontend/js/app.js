@@ -76,6 +76,7 @@
     [/^\/interdits$/, () => pageLegale('Objets interdits', KolisLegal.listeInterdits()), null],
     [/^\/confidentialite$/, () => pageLegale('Confidentialité', KolisLegal.confidentialite(CONFIG)), null],
     [/^\/reclamation\/([\w-]+)$/, reclamation, null],
+    [/^\/avis$/, pageAvis, null],
   ];
 
   // Les écrans de consultation se mettent à jour seuls : en direct quand un colis change,
@@ -141,6 +142,7 @@
           <button class="btn btn-noir btn-carre" type="submit" aria-label="Rechercher">${ic('suivant')}</button>
         </form>
         <div data-vedette></div>
+        <div data-noter></div>
         <div class="grille-2 tuiles-accueil">
           <a class="tuile ocre" href="#/envoyer">${ic('colis', 'ic-lg')}Envoyer un colis</a>
           <a class="tuile" href="#/envoyer">${ic('prix', 'ic-lg')}Calculer le prix</a>
@@ -148,7 +150,9 @@
           <a class="tuile" href="#/mes-colis">${ic('liste', 'ic-lg')}Mes colis</a>
         </div>
         <div data-autres class="pile" style="--gap:10px"></div>
+        <div data-avis-accueil></div>
       </div>`;
+    resumeAvisAccueil(main.querySelector('[data-avis-accueil]'));
     main.querySelector('[data-recherche]').addEventListener('submit', (e) => {
       e.preventDefault();
       const n = new FormData(e.target).get('numero').trim().toUpperCase();
@@ -165,6 +169,7 @@
       if (mes) bandeauReseau(mes.le);
     }
     if (!mes?.colis?.length) return;
+    invitationAvis(main.querySelector('[data-noter]'), mes.colis);
     const actifs = mes.colis.filter(c => !['remis', 'annule'].includes(c.statut));
     const vedette = actifs.find(c => c.statut === 'pret') || actifs[0];
     if (vedette) main.querySelector('[data-vedette]').innerHTML = carteVedette(vedette);
@@ -359,6 +364,7 @@
 
         <div data-notifs-suivi></div>
 
+        ${complet && c.statut === 'remis' ? '<div data-avis-colis></div>' : ''}
         ${complet && !['reserve', 'annule'].includes(c.statut) ? `
         <div class="carte pile" style="--gap:6px" data-factures><h3>Factures</h3><p class="petit muet">Chargement…</p></div>
         <div data-reclamations></div>` : ''}
@@ -390,6 +396,7 @@
     main.querySelector('[data-tiers]')?.addEventListener('click', () => autoriserTiers(c));
     main.querySelector('[data-livraison]')?.addEventListener('click', (e) => demanderLivraison(c, liv, e.currentTarget.dataset.livraison));
     if (complet && !['reserve', 'annule'].includes(c.statut) && !horsLigne) chargerFacturesEtReclamations(c);
+    if (complet && c.statut === 'remis' && !horsLigne) blocAvisColis(main.querySelector('[data-avis-colis]'), c);
     if (complet && !['remis', 'annule'].includes(c.statut)) K.notifications.carte(main.querySelector('[data-notifs-suivi]'), { texte: 'Être prévenu dès que ce colis arrive et recevoir le code ici.' });
     main.querySelector('[data-payer]')?.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'solde', c }));
     main.querySelectorAll('[data-payer-domicile]').forEach(b => b.addEventListener('click', () => ouvrirPaiement(c.numeroSuivi, { objet: 'domicile', c })));
@@ -398,6 +405,155 @@
       try { await api.del(`/colis/${c.numeroSuivi}`); toast('Réservation annulée.', 'ok'); router(); }
       catch (e) { toast(e.message, 'erreur'); }
     });
+  }
+
+  // ════════════════════════════════════════════════════════
+  //  AVIS CLIENTS
+  // ════════════════════════════════════════════════════════
+  const LIB_NOTE = ['', 'Très décevant', 'Décevant', 'Correct', 'Bien', 'Excellent'];
+  const libSensCourt = (sens) => (sens === 'GN-FR' ? 'Guinée → France' : 'France → Guinée');
+  function carteAvis(a) {
+    return `
+      <article class="carte avis-carte">
+        <div class="avis-tete">
+          <div><span class="gras">${esc(a.auteur || 'Client')}</span> <span class="tres-petit muet">· ${a.role === 'destinataire' ? 'destinataire' : 'expéditeur'} · ${esc(libSensCourt(a.sens))}${a.mode ? ` · ${esc(K.libMode(a.mode))}` : ''}</span></div>
+          ${K.etoiles(a.note)}
+        </div>
+        ${a.commentaire ? `<p style="white-space:pre-line">${esc(a.commentaire)}</p>` : ''}
+        <div class="ligne entre tres-petit muet"><span class="badge-verifie">${ic('ok', 'ic-sm')} Colis livré</span><span>${esc(date(a.le, false))}${a.modifie ? ' · modifié' : ''}</span></div>
+        ${a.reponse?.texte ? `<div class="avis-reponse"><div class="tres-petit gras" style="margin-bottom:4px">Réponse de ${esc(CONFIG?.appCourt || 'TMS')}</div>${esc(a.reponse.texte)}</div>` : ''}
+      </article>`;
+  }
+  function resumeNote(stats) {
+    const max = Math.max(1, ...stats.repartition);
+    return `
+      <div class="avis-resume">
+        <div class="avis-moyenne"><div class="chiffre">${stats.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 1 })}</div>${K.etoiles(stats.moyenne)}<div class="tres-petit muet" style="margin-top:4px">${stats.nb} avis</div></div>
+        <div class="barres-avis">${[5, 4, 3, 2, 1].map(n => `<div class="barre-ligne"><span>${n} ${ic('etoile', 'ic-sm')}</span><span class="jauge"><span style="width:${Math.round(stats.repartition[n - 1] / max * 100)}%"></span></span><span class="muet">${stats.repartition[n - 1]}</span></div>`).join('')}</div>
+      </div>`;
+  }
+  // Accueil : note moyenne et derniers avis
+  async function resumeAvisAccueil(zone) {
+    if (!zone) return;
+    try {
+      const { avis, stats } = await api.get('/avis');
+      if (!stats.nb) return;
+      zone.innerHTML = `
+        <section class="pile" style="--gap:12px">
+          <div class="ligne entre"><h2>Avis de nos clients</h2><a class="petit" href="#/avis">Tout voir</a></div>
+          <a class="carte" href="#/avis" style="text-decoration:none;color:inherit">${resumeNote(stats)}</a>
+          ${avis.filter(a => a.commentaire).slice(0, 2).map(carteAvis).join('')}
+        </section>`;
+    } catch {}
+  }
+  // Accueil : « Comment s'est passé votre envoi ? » pour un colis remis pas encore noté
+  async function invitationAvis(zone, colis) {
+    const remis = colis.filter(c => c.statut === 'remis');
+    if (!zone || !remis.length) return;
+    try {
+      const { avis } = await api.get('/avis/miens');
+      const notes = new Set(avis.map(a => a.numeroSuivi));
+      const recents = remis.filter(c => !notes.has(c.numeroSuivi) && (!c.updatedAt || Date.now() - new Date(c.updatedAt) < 60 * 86400000));
+      const c = recents[0];
+      if (!c) return;
+      zone.innerHTML = `
+        <a class="carte ligne" href="#/suivi/${encodeURIComponent(c.numeroSuivi)}" style="text-decoration:none;color:inherit;--gap:12px">
+          <span class="pastille pret">${ic('etoile')}</span>
+          <span class="grandit"><span class="gras" style="display:block">Comment s'est passé votre envoi ?</span><span class="petit muet">${esc(c.numeroSuivi)} · donnez votre avis en 10 secondes</span></span>
+          ${ic('suivant', 'ic-sm')}
+        </a>`;
+    } catch {}
+  }
+  // Suivi d'un colis remis : donner, voir ou modifier son avis
+  async function blocAvisColis(zone, c) {
+    if (!zone) return;
+    if (c.restreint) {
+      zone.innerHTML = `<section class="carte pile" style="--gap:6px"><h3>Votre avis</h3><p class="petit muet">Pour donner votre avis sur ce colis, faites vérifier votre numéro de téléphone à l'agence (avec votre pièce d'identité).</p></section>`;
+      return;
+    }
+    let mien = null;
+    try { mien = (await api.get('/avis/miens')).avis.find(a => a.numeroSuivi === c.numeroSuivi) || null; } catch {}
+    const afficher = () => {
+      zone.innerHTML = `
+        <section class="carte pile" style="--gap:10px">
+          <div class="ligne entre"><h3>Votre avis</h3>${mien ? K.etoiles(mien.note) : ''}</div>
+          ${mien.commentaire ? `<p style="white-space:pre-line">${esc(mien.commentaire)}</p>` : '<p class="petit muet">Pas de commentaire.</p>'}
+          ${mien.statut === 'masque' ? '<p class="tres-petit muet">Cet avis a été masqué par l\'équipe.</p>' : ''}
+          ${mien.reponse?.texte ? `<div class="avis-reponse"><div class="tres-petit gras" style="margin-bottom:4px">Réponse de ${esc(CONFIG?.appCourt || 'TMS')}</div>${esc(mien.reponse.texte)}</div>` : ''}
+          ${mien.statut === 'masque' ? '' : '<button type="button" class="btn btn-petit" data-modifier-avis style="align-self:flex-start">Modifier mon avis</button>'}
+        </section>`;
+      zone.querySelector('[data-modifier-avis]')?.addEventListener('click', () => formulaire(mien));
+    };
+    const formulaire = (avant) => {
+      let note = avant?.note || 0;
+      zone.innerHTML = `
+        <form class="carte pile" style="--gap:12px" data-form-avis>
+          <div><h3>Comment s'est passé votre envoi ?</h3><p class="petit muet">Votre avis aide les autres clients et nous aide à nous améliorer.</p></div>
+          <div class="choix-etoiles" role="radiogroup" aria-label="Votre note">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" aria-checked="false" aria-label="${n} étoile${n > 1 ? 's' : ''} : ${LIB_NOTE[n]}" data-note="${n}"><svg class="ic etoile" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button>`).join('')}</div>
+          <p class="gras petit" data-lib-note style="min-height:1.2em"></p>
+          <label class="champ">Votre commentaire <span class="tres-petit muet">(facultatif)</span>
+            <textarea class="saisie" name="commentaire" rows="4" maxlength="1000" placeholder="Délais, accueil à l'agence, état du colis…">${esc(avant?.commentaire || '')}</textarea>
+          </label>
+          <p class="tres-petit muet">Publié avec votre prénom et l'initiale de votre nom. Ne mettez ni numéro de téléphone ni adresse.</p>
+          <div class="ligne" style="--gap:10px">
+            <button class="btn btn-principal grandit" type="submit">${avant ? 'Mettre à jour' : 'Publier mon avis'}</button>
+            ${avant ? '<button class="btn" type="button" data-annuler-avis>Annuler</button>' : ''}
+          </div>
+        </form>`;
+      const form = zone.querySelector('[data-form-avis]');
+      const peindre = () => {
+        form.querySelectorAll('[data-note]').forEach(b => { const n = +b.dataset.note; b.classList.toggle('allume', n <= note); b.setAttribute('aria-checked', String(n === note)); });
+        form.querySelector('[data-lib-note]').textContent = LIB_NOTE[note] || '';
+        form.commentaire.placeholder = note && note <= 3 ? 'Qu\'est-ce qui n\'a pas été ? Nous lisons chaque avis.' : 'Délais, accueil à l\'agence, état du colis…';
+      };
+      form.querySelectorAll('[data-note]').forEach(b => b.addEventListener('click', () => { note = +b.dataset.note; peindre(); }));
+      peindre();
+      form.querySelector('[data-annuler-avis]')?.addEventListener('click', afficher);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!note) { toast('Choisissez une note de 1 à 5 étoiles.', 'erreur'); return; }
+        const b = form.querySelector('[type=submit]'); b.disabled = true;
+        try {
+          const r = await api.post('/avis', { numero: c.numeroSuivi, note, commentaire: form.commentaire.value });
+          mien = { ...(mien || {}), ...r.avis, statut: 'publie' };
+          toast(r.message || 'Merci pour votre avis !', 'ok');
+          afficher();
+        } catch (err) { toast(err.message, 'erreur'); b.disabled = false; }
+      });
+    };
+    if (mien) afficher(); else formulaire(null);
+  }
+  // Page de tous les avis
+  async function pageAvis() {
+    let page = 1, filtreNote = 0;
+    main.innerHTML = `
+      <div class="pile" style="--gap:16px">
+        <div class="ligne"><a href="#/" class="btn btn-rond" aria-label="Retour">${ic('retour')}</a><h1 class="grandit" style="font-size:24px">Avis clients</h1></div>
+        <div data-resume></div>
+        <div class="puces" data-filtres></div>
+        <div class="pile" style="--gap:12px" data-liste></div>
+        <button class="btn btn-plein cache" data-plus>Voir plus d'avis</button>
+      </div>`;
+    const charger = async (ajouter) => {
+      const r = await api.get(`/avis?page=${page}${filtreNote ? `&note=${filtreNote}` : ''}`);
+      if (!ajouter) {
+        main.querySelector('[data-resume]').innerHTML = r.stats.nb ? `<section class="carte">${resumeNote(r.stats)}</section>` : '<p class="muet">Pas encore d\'avis. Le vôtre sera le premier une fois votre colis livré.</p>';
+        main.querySelector('[data-filtres]').innerHTML = r.stats.nb ? [0, 5, 4, 3, 2, 1].map(n => `<button type="button" class="puce" data-filtre="${n}" aria-pressed="${n === filtreNote}">${n ? `${n} ${ic('etoile', 'ic-sm')}` : 'Tous'}</button>`).join('') : '';
+      }
+      const liste = main.querySelector('[data-liste]');
+      const html = r.avis.map(carteAvis).join('');
+      if (ajouter) liste.insertAdjacentHTML('beforeend', html);
+      else liste.innerHTML = html || (r.stats.nb ? '<p class="muet">Aucun avis avec cette note.</p>' : '');
+      main.querySelector('[data-plus]').classList.toggle('cache', r.avis.length < r.parPage);
+    };
+    main.querySelector('[data-filtres]').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-filtre]'); if (!b) return;
+      filtreNote = +b.dataset.filtre; page = 1;
+      main.querySelectorAll('[data-filtre]').forEach(x => x.setAttribute('aria-pressed', String(+x.dataset.filtre === filtreNote)));
+      charger(false).catch(err => toast(err.message, 'erreur'));
+    });
+    main.querySelector('[data-plus]').addEventListener('click', () => { page++; charger(true).catch(err => toast(err.message, 'erreur')); });
+    await charger(false);
   }
 
   // ── Factures et réclamations d'un colis (compte connecté) ──

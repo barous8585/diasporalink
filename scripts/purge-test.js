@@ -16,7 +16,7 @@ const mongoose = require('mongoose');
 
 const COLLECTIONS = ['colis', 'messages', 'remboursements', 'lots', 'mouvements', 'clotures', 'operationsyncs', 'courses'];
 
-const COLLECTIONS_TOUT = [...COLLECTIONS, 'users', 'factures', 'reclamations', 'photos', 'pushabonnements'];
+const COLLECTIONS_TOUT = [...COLLECTIONS, 'users', 'factures', 'reclamations', 'photos', 'pushabonnements', 'avis'];
 
 async function purgerSiDemande() {
   const tout = (process.env.PURGE_TOUT || '').trim();

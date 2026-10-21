@@ -27,6 +27,7 @@
     [/^\/courses$/, courses, 'courses'],
     [/^\/reclamations$/, () => reclamations(), 'reclamations'],
     [/^\/reclamations\/([\w-]+)$/, (n) => reclamation(n), 'reclamations'],
+    [/^\/avis$/, avisClients, 'avis'],
     [/^\/factures$/, factures, 'factures'],
     [/^\/reglages$/, reglages, 'reglages'],
     [/^\/equipe$/, equipe, 'equipe'],
@@ -164,7 +165,7 @@
   let pageActuelle = null;
   K.tempsReel(async () => {
     if (!session.connecte() || session.utilisateur()?.role !== 'admin') return;
-    majPastilleRec();
+    majPastilleRec(); majPastilleAvis();
     if (!VIVANTES.has(pageActuelle)) return;
     if (/^#\/(lots|reclamations)\/./.test(location.hash)) return; // fiche ouverte : on ne bouge pas
     // Recherche ou jour choisi à la main : on ne remet pas l'écran à zéro
@@ -186,7 +187,7 @@
       return;
     }
     document.querySelector('[data-menu]').classList.remove('cache'); document.body.classList.remove('hors-session');
-    if (!router.pastille) { router.pastille = true; majPastilleRec(); }
+    if (!router.pastille) { router.pastille = true; majPastilleRec(); majPastilleAvis(); }
     const chemin = location.hash.replace(/^#/, '').split('?')[0] || '/';
     for (const [re, vue, nav] of routes) {
       const m = chemin.match(re);
@@ -958,6 +959,77 @@
     main.querySelector('[data-filtre]').addEventListener('change', (e) => { stock.ecrire('filtre_rec', e.target.value); reclamations(); });
     main.querySelectorAll('tr[data-num]').forEach(tr => tr.addEventListener('click', () => { location.hash = `#/reclamations/${tr.dataset.num}`; }));
     majPastilleRec();
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  AVIS CLIENTS
+  // ══════════════════════════════════════════════════════════
+  async function majPastilleAvis() {
+    try {
+      const { sansReponse } = await api.get('/avis/admin?filtre=sans_reponse');
+      document.querySelectorAll('[data-nb-avis]').forEach(b => { b.textContent = sansReponse; b.classList.toggle('cache', !sansReponse); });
+    } catch {}
+  }
+  async function avisClients() {
+    const filtre = stock.lire('filtre_avis') ?? '';
+    const { avis, stats, sansReponse } = await api.get(`/avis/admin?filtre=${encodeURIComponent(filtre)}`);
+    const nbPos = stats.repartition[3] + stats.repartition[4];
+    const libRole = (r) => (r === 'destinataire' ? 'destinataire' : 'expéditeur');
+    main.innerHTML = `
+      <div class="entete-page"><h1>Avis clients</h1>
+        <select class="saisie" data-filtre style="width:auto">
+          <option value="" ${filtre === '' ? 'selected' : ''}>Tous les avis</option>
+          <option value="sans_reponse" ${filtre === 'sans_reponse' ? 'selected' : ''}>Sans réponse</option>
+          <option value="negatifs" ${filtre === 'negatifs' ? 'selected' : ''}>1 ou 2 étoiles</option>
+          <option value="masques" ${filtre === 'masques' ? 'selected' : ''}>Masqués</option>
+        </select></div>
+      <div class="kpis">
+        <div class="kpi vert"><div class="lib">Note moyenne</div><div class="val">${stats.moyenne === null ? '–' : `${stats.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 1 })} / 5`}</div><div class="sous">${stats.nb} avis publié${stats.nb > 1 ? 's' : ''}</div></div>
+        <div class="kpi"><div class="lib">Clients satisfaits (4 ou 5 étoiles)</div><div class="val">${stats.nb ? Math.round(nbPos / stats.nb * 100) : 0} %</div></div>
+        <div class="kpi ${stats.repartition[0] + stats.repartition[1] ? 'ocre' : ''}"><div class="lib">Avis négatifs (1 ou 2)</div><div class="val">${stats.repartition[0] + stats.repartition[1]}</div></div>
+        <div class="kpi"><div class="lib">En attente de réponse</div><div class="val">${sansReponse}</div></div>
+      </div>
+      <p class="bandeau">Les avis sont publiés tout de suite dans l'espace client. Répondez à chacun, surtout aux avis négatifs : votre réponse est visible par tous. Masquez seulement un avis injurieux ou contenant des données personnelles.</p>
+      <section class="panneau"><div class="panneau-corps pile" style="--gap:14px;padding-top:16px">
+        ${avis.map(a => `
+          <article class="carte avis-carte" data-id="${esc(a._id)}" style="${a.statut === 'masque' ? 'opacity:.65' : ''}">
+            <div class="avis-tete">
+              <div><span class="gras">${esc(a.auteur)}</span> <span class="tres-petit muet">· ${libRole(a.role)} · ${esc(a.user?.telephone || '')} · <a href="#/colis?q=${esc(a.numeroSuivi)}">${esc(a.numeroSuivi)}</a> · ${esc(date(a.createdAt))}${a.modifieLe ? ' · modifié' : ''}</span></div>
+              ${K.etoiles(a.note)}
+            </div>
+            ${a.commentaire ? `<p style="white-space:pre-line">${esc(a.commentaire)}</p>` : '<p class="petit muet">Note sans commentaire.</p>'}
+            ${a.statut === 'masque' ? `<p class="bandeau bandeau-ocre petit">Masqué : ${esc(a.motifMasque || '')}</p>` : ''}
+            <form class="pile" style="--gap:8px" data-repondre>
+              <label class="champ">Réponse publique de TMS
+                <textarea class="saisie" name="texte" rows="2" maxlength="1000" placeholder="Merci pour votre confiance…">${esc(a.reponse?.texte || '')}</textarea></label>
+              <div class="ligne" style="--gap:8px;flex-wrap:wrap">
+                <button class="btn btn-petit btn-principal">${a.reponse?.texte ? 'Modifier la réponse' : 'Répondre'}</button>
+                ${a.statut === 'masque' ? '<button type="button" class="btn btn-petit" data-afficher>Republier</button>' : '<button type="button" class="btn btn-petit" data-masquer>Masquer</button>'}
+                ${a.reponse?.le ? `<span class="tres-petit muet">Répondu le ${esc(date(a.reponse.le))}</span>` : ''}
+              </div>
+            </form>
+          </article>`).join('') || '<p class="muet">Aucun avis pour le moment.</p>'}
+      </div></section>`;
+    main.querySelector('[data-filtre]').addEventListener('change', (e) => { stock.ecrire('filtre_avis', e.target.value); avisClients(); });
+    main.querySelectorAll('[data-id]').forEach(art => {
+      const id = art.dataset.id;
+      art.querySelector('[data-repondre]').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try { await api.post(`/avis/${id}/reponse`, { texte: e.target.texte.value }); toast('Réponse publiée. Le client est prévenu.', 'ok'); avisClients(); majPastilleAvis(); }
+        catch (err) { toast(err.message, 'erreur'); }
+      });
+      art.querySelector('[data-masquer]')?.addEventListener('click', async () => {
+        const motif = prompt('Pourquoi masquer cet avis ? (propos injurieux, données personnelles…)');
+        if (!motif) return;
+        try { await api.post(`/avis/${id}/masquer`, { motif }); toast('Avis masqué.', 'ok'); avisClients(); }
+        catch (err) { toast(err.message, 'erreur'); }
+      });
+      art.querySelector('[data-afficher]')?.addEventListener('click', async () => {
+        try { await api.post(`/avis/${id}/afficher`); toast('Avis republié.', 'ok'); avisClients(); }
+        catch (err) { toast(err.message, 'erreur'); }
+      });
+    });
+    majPastilleAvis();
   }
 
   async function reclamation(numero) {

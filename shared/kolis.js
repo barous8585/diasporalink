@@ -122,6 +122,7 @@
     bateau: '<path d="M3 17l2 4h14l2-4H3z"/><path d="M5 17v-6h14v6"/><path d="M9 11V7h6v4"/><path d="M12 7V3"/>',
     eclair: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
     ok: '<path d="m5 12 5 5 9-10"/>',
+    etoile: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
     horloge: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     copier: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/>',
     maison: '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/>',
@@ -969,8 +970,14 @@
   const libMode = (m) => ({ express: 'express', air: 'avion', mer: 'bateau' })[m] || 'avion';
   const icMode = (m, cls) => ic(m === 'mer' ? 'bateau' : m === 'express' ? 'eclair' : 'avion', cls);
 
+  // Étoiles d'une note (1 à 5, demi-étoile arrondie à l'entier le plus proche pour l'affichage)
+  const etoiles = (note, cls = '') => {
+    const n = Math.round(+note || 0);
+    return `<span class="etoiles ${cls}" role="img" aria-label="${n} étoile${n > 1 ? 's' : ''} sur 5">${[1, 2, 3, 4, 5].map(k => `<svg class="ic etoile ${k <= n ? 'pleine' : ''}" viewBox="0 0 24 24" aria-hidden="true">${TRACES.etoile}</svg>`).join('')}</span>`;
+  };
+
   window.K = {
-    libMode, icMode,
+    libMode, icMode, etoiles,
     API_URL, api, session, stock, config, ErreurReseau,
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
     positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse, choisirSurCarte, chargerLeaflet,
