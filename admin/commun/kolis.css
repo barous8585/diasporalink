@@ -436,3 +436,29 @@ form.pile:has(> .bloc-etape) { gap: 20px; }
 .details-adresse summary::-webkit-details-marker { display: none; }
 .details-adresse summary::before { content: '+ '; font-weight: 800; }
 .details-adresse[open] summary::before { content: '− '; }
+
+/* ── Avis clients : étoiles ── */
+.etoiles { display: inline-flex; gap: 2px; vertical-align: middle; }
+.etoiles .etoile { width: 18px; height: 18px; fill: none; stroke: #C9CFDA; stroke-width: 1.6; }
+.etoiles .etoile.pleine { fill: #E4A72B; stroke: #E4A72B; }
+.etoiles.grandes .etoile { width: 26px; height: 26px; }
+.choix-etoiles { display: flex; gap: 6px; }
+.choix-etoiles button { background: none; border: 0; padding: 4px; cursor: pointer; border-radius: 10px; min-width: 48px; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; }
+.choix-etoiles button:focus-visible { outline: 3px solid var(--or); }
+.choix-etoiles .etoile { width: 36px; height: 36px; fill: none; stroke: #B7BFCD; stroke-width: 1.5; transition: transform .12s; }
+.choix-etoiles button.allume .etoile { fill: #E4A72B; stroke: #E4A72B; }
+.choix-etoiles button:active .etoile { transform: scale(.9); }
+.avis-carte { display: flex; flex-direction: column; gap: 8px; }
+.avis-carte .avis-tete { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.avis-reponse { background: var(--surface-2, #F2F4F8); border-left: 3px solid var(--or); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.avis-resume { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
+.avis-moyenne { text-align: center; }
+.avis-moyenne .chiffre { font-family: var(--police-titre); font-size: 44px; font-weight: 800; line-height: 1; }
+.barres-avis { display: flex; flex-direction: column; gap: 5px; }
+.barres-avis .barre-ligne { display: grid; grid-template-columns: 34px 1fr 26px; gap: 8px; align-items: center; font-size: 13px; }
+.barres-avis .barre-ligne > span:first-child { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.barres-avis .ic, [data-filtre] .ic { width: 14px; height: 14px; fill: #E4A72B; stroke: #E4A72B; }
+[data-filtre] { display: inline-flex; align-items: center; gap: 4px; }
+.barres-avis .jauge { height: 8px; border-radius: 6px; background: #E8ECF3; overflow: hidden; }
+.barres-avis .jauge span { display: block; height: 100%; background: #E4A72B; border-radius: 6px; }
+.badge-verifie { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: #1F7A4D; }

@@ -119,6 +119,7 @@ app.use('/api/livreur',      require('./routes/livreur'));
 app.use('/api/push',         require('./routes/push'));
 app.use('/api/factures',     require('./routes/factures'));
 app.use('/api/reclamations', require('./routes/reclamations'));
+app.use('/api/avis',         require('./routes/avis'));
 app.use('/api/photos',       require('./routes/photos'));
 app.use('/api/lots',         require('./routes/lots'));
 app.use('/api/caisse',       require('./routes/caisse'));
