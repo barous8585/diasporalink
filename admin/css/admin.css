@@ -283,39 +283,32 @@ main { padding: 32px 40px 64px; }
   .entete-page select.saisie { width: auto; max-width: 100%; min-width: 0; }
 }
 
-/* ══ Couleurs par rubrique : chaque onglet a sa teinte (menu, titre, panneaux, chiffres) ══ */
+/* ══ Couleurs de la marque partout : bleu marine et or du logo, les mêmes pour tous les onglets ══ */
 :root { --t: var(--or); --t-fonce: var(--marine); --t-doux: #F6F8FC; }
-[data-nav="bord"],         body[data-section="bord"]         { --t: #C8982B; --t-fonce: #7A5713; --t-doux: #F8F1E1; }
-[data-nav="colis"],        body[data-section="colis"]        { --t: #1F5FBF; --t-fonce: #17488F; --t-doux: #E4EDFB; }
-[data-nav="lots"],         body[data-section="lots"]         { --t: #5B3FBF; --t-fonce: #43309A; --t-doux: #EEEAFB; }
-[data-nav="courses"],      body[data-section="courses"]      { --t: #0E8A7E; --t-fonce: #0A665D; --t-doux: #DDF3F0; }
-[data-nav="reclamations"], body[data-section="reclamations"] { --t: #C92A2A; --t-fonce: #9A1F1F; --t-doux: #FBE3E3; }
-[data-nav="avis"],         body[data-section="avis"]         { --t: #D99A06; --t-fonce: #8A5F00; --t-doux: #FDF3D7; }
-[data-nav="caisses"],      body[data-section="caisses"]      { --t: #1F7A4D; --t-fonce: #17603C; --t-doux: #E2F3E9; }
-[data-nav="factures"],     body[data-section="factures"]     { --t: #B4237A; --t-fonce: #8C1A5F; --t-doux: #FBE4F1; }
-[data-nav="reglages"],     body[data-section="reglages"]     { --t: #0B7FAB; --t-fonce: #08617F; --t-doux: #DFF1F8; }
-[data-nav="equipe"],       body[data-section="equipe"]       { --t: #E8590C; --t-fonce: #A63F08; --t-doux: #FDEBDD; }
 
-/* Menu : une pastille de couleur par onglet, l'onglet ouvert souligné de sa couleur */
-.menu nav a .ic { width: 30px; height: 30px; padding: 6px; border-radius: 9px; background: var(--t); color: #fff; flex-shrink: 0; box-sizing: border-box; }
-.menu nav a[aria-current="page"] { box-shadow: inset 4px 0 0 var(--t); color: var(--t-fonce); }
-.menu nav a[aria-current="page"] .ic { box-shadow: 0 0 0 3px var(--t-doux); }
+/* Menu : icônes or sur pastille discrète ; l'onglet ouvert en blanc, trait or */
+.menu nav a .ic { width: 30px; height: 30px; padding: 6px; border-radius: 9px; background: rgba(255, 255, 255, .08); color: var(--or); flex-shrink: 0; box-sizing: border-box; }
+.menu nav a[aria-current="page"] { box-shadow: inset 4px 0 0 var(--or); color: var(--marine); }
+.menu nav a[aria-current="page"] .ic { background: var(--marine); color: var(--or); }
 
-/* Barre du haut (téléphone) : liseré de la rubrique */
-.barre-mobile { box-shadow: inset 0 -4px 0 var(--t); }
+/* Barre du haut (téléphone) : liseré or */
+.barre-mobile { box-shadow: inset 0 -3px 0 var(--or); }
 
-/* Titre de page souligné de la couleur de la rubrique */
+/* Titre de page souligné d'or */
 .entete-page h1 { position: relative; padding-bottom: 10px; }
-.entete-page h1::after { content: ""; position: absolute; left: 0; bottom: 0; width: 48px; height: 4px; border-radius: 4px; background: var(--t); }
+.entete-page h1::after { content: ""; position: absolute; left: 0; bottom: 0; width: 48px; height: 4px; border-radius: 4px; background: var(--or); }
 
-/* Panneaux, tableaux, chiffres clés et puces dans la teinte de la rubrique */
-.panneau-tete:not([class*="teinte-"]) { background: var(--t-doux); box-shadow: inset 4px 0 0 var(--t); }
-.tableau thead th { background: var(--t-doux); color: var(--t-fonce); }
-.kpi:not(.vert):not(.ocre):not([class*="c-"]) { border-top: 4px solid var(--t); }
-.kpi.vert { background: var(--t-fonce); border-color: var(--t-fonce); }
-.puce[aria-pressed="true"], .puce[aria-current="page"] { background: var(--t); border-color: var(--t); }
-.tableau td a:not(.btn) { color: var(--t-fonce); }
-@media (max-width: 760px) { .tableau tbody tr { border-left: 4px solid var(--t); } }
+/* Panneaux, tableaux, chiffres clés : fond clair, accents or, textes marine */
+.panneau-tete, .panneau-tete[class*="teinte-"] { background: #F6F8FC; box-shadow: inset 4px 0 0 var(--or); }
+.tableau thead th { background: #F4F7FB; color: var(--marine); }
+.kpi:not(.vert):not(.ocre) { border-top: 4px solid var(--or); }
+.kpi.vert { background: var(--marine); border-color: var(--marine); }
+.kpi[class*="c-"]:not(.c-marine) { background: #fff !important; border: 1px solid var(--ligne); border-top: 4px solid var(--or); }
+.kpi[class*="c-"]:not(.c-marine) .kpi-ic { background: var(--marine) !important; color: var(--or) !important; }
+.kpi[class*="c-"]:not(.c-marine) .kpi-tete, .kpi[class*="c-"]:not(.c-marine) .val { color: var(--marine) !important; }
+.puce[aria-pressed="true"], .puce[aria-current="page"] { background: var(--marine); border-color: var(--marine); color: #fff; }
+.tableau td a:not(.btn) { color: var(--marine); }
+@media (max-width: 760px) { .tableau tbody tr { border-left: 4px solid var(--or); } }
 @media (min-width: 761px) { .tableau td.chiffres, .tableau td.n, .tableau th.n { white-space: nowrap; } }
 
 /* ══ Espacement : chaque bloc respire, sur téléphone surtout ══ */
