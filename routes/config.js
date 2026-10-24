@@ -16,7 +16,9 @@ router.get('/', ah(async (req, res) => {
     authMode: require('../controllers/authController').modeAuth(),
     entreprise: ENTREPRISE,
     pays: PAYS,
-    sens: SENS.map(s => ({ ...s, devise: c.tarifs?.[s.key]?.devise || PAYS[s.depart].devise })),
+    // « ouvert » : une agence ouverte de chaque côté (la Belgique n'apparaît qu'avec une agence belge)
+    sens: SENS.map(s => ({ ...s, devise: c.tarifs?.[s.key]?.devise || PAYS[s.depart].devise,
+      ouvert: [s.depart, s.arrivee].every(p => (c.agences || []).some(a => a.pays === p && a.actif !== false)) })),
     modes: MODES_INFO,
     tarifs: c.tarifs,
     articles: (c.articles || []).filter(a => a.actif !== false),
@@ -75,7 +77,7 @@ router.get('/adresse', geoLimiter, ah(async (req, res) => {
   const config = await Config.get();
   const t = (k) => String(req.query[k] || '').trim().slice(0, 200);
   const agence = (config.agences || []).find(a => a.code === t('agence').toUpperCase());
-  const pays = agence?.pays || (['FR', 'GN'].includes(t('pays')) ? t('pays') : null);
+  const pays = agence?.pays || (PAYS[t('pays')] ? t('pays') : null);
   if (!pays) return res.status(400).json({ succes: false, message: 'Pays inconnu.' });
   if (!t('rue') && !t('quartier')) return res.status(400).json({ succes: false, message: 'Écrivez au moins le quartier ou la rue.' });
   const { pointDansPays } = require('../utils/tarif');
@@ -154,7 +156,7 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
   }
   if (b.paiements && typeof b.paiements === 'object') {
     const pa = JSON.parse(JSON.stringify(actuel.paiements || {}));
-    for (const [pays, cles] of [['FR', ['carte', 'orange_money', 'mtn_momo']], ['GN', ['orange_money', 'mtn_momo', 'carte']]]) {
+    for (const [pays, cles] of [['FR', ['carte', 'orange_money', 'mtn_momo']], ['BE', ['carte', 'orange_money', 'mtn_momo']], ['GN', ['orange_money', 'mtn_momo', 'carte']]]) {
       if (!b.paiements[pays]) continue;
       pa[pays] = pa[pays] || {};
       for (const k of cles) if (typeof b.paiements[pays][k] === 'boolean') pa[pays][k] = b.paiements[pays][k];
@@ -268,11 +270,10 @@ router.patch('/admin', auth, role(ROLES.ADMIN), ah(async (req, res) => {
       .filter(a => codeValide(a.code) && a.nom && PAYS[a.pays]);
     const codes = new Set(agences.map(a => a.code));
     if (codes.size !== agences.length) return res.status(400).json({ succes: false, message: 'Deux agences ont le même code.' });
-    for (const p of Object.keys(PAYS)) {
-      if (!agences.some(a => a.pays === p && a.actif)) {
-        return res.status(400).json({ succes: false, message: `Il faut au moins une agence ouverte en ${PAYS[p].nom}.` });
-      }
-    }
+    // Guinée obligatoire, et au moins une agence en Europe (France ou Belgique) ;
+    // un pays sans agence ouverte n'est simplement pas proposé aux clients
+    if (!agences.some(a => a.pays === 'GN' && a.actif)) return res.status(400).json({ succes: false, message: 'Il faut au moins une agence ouverte en Guinée.' });
+    if (!agences.some(a => a.pays !== 'GN' && a.actif)) return res.status(400).json({ succes: false, message: 'Il faut au moins une agence ouverte en France ou en Belgique.' });
     // Une agence fermée garde son historique ; on interdit seulement de supprimer une agence encore utilisée
     const supprimees = (actuel.agences || []).filter(a => !codes.has(a.code)).map(a => a.code);
     if (supprimees.length) {

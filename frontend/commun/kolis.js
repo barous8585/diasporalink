@@ -98,11 +98,15 @@
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
   // Téléphone : même règle que le serveur
-  function normTel(tel) {
+  // Numéro au format international. pays = pays probable du numéro (celui de la personne) :
+  // en Belgique, un mobile 04XX XX XX XX devient +32 ; sinon un 0X XX XX XX XX est français.
+  function normTel(tel, pays) {
     let t = String(tel || '').replace(/[\s.\-()]/g, '');
     if (t.startsWith('00')) t = '+' + t.slice(2);
     if (/^6\d{8}$/.test(t)) t = '+224' + t;
+    if (pays === 'BE' && /^04\d{8}$/.test(t)) t = '+32' + t.slice(1);
     if (/^0[1-9]\d{8}$/.test(t)) t = '+33' + t.slice(1);
+    if (/^0[1-9]\d{7}$/.test(t)) t = '+32' + t.slice(1); // fixe belge (9 chiffres)
     return t;
   }
 
@@ -606,7 +610,7 @@
   }
 
   // ── Carte : placer une épingle (Leaflet + OpenStreetMap, hébergés avec l'app) ──
-  const CENTRES = { GN: { lat: 9.5370, lng: -13.6773, zoom: 12 }, FR: { lat: 48.8566, lng: 2.3522, zoom: 11 } };
+  const CENTRES = { GN: { lat: 9.5370, lng: -13.6773, zoom: 12 }, FR: { lat: 48.8566, lng: 2.3522, zoom: 11 }, BE: { lat: 50.8503, lng: 4.3517, zoom: 12 } };
   let leaflet;
   function chargerLeaflet() {
     if (window.L) return Promise.resolve();
@@ -659,7 +663,7 @@
         const c = carte.getCenter();
         const p = { lat: Math.round(c.lat * 1e6) / 1e6, lng: Math.round(c.lng * 1e6) / 1e6 };
         if (pays && !KolisTarif.pointDansPays(p, pays)) {
-          aide.innerHTML = `<span class="rouge">Cet endroit n'est pas en ${pays === 'FR' ? 'France' : 'Guinée'}. Déplacez la carte jusqu'à la bonne adresse.</span>`;
+          aide.innerHTML = `<span class="rouge">Cet endroit n'est pas en ${KolisTarif.ZONES_PAYS[pays]?.nom || 'Guinée'}. Déplacez la carte jusqu'à la bonne adresse.</span>`;
           return;
         }
         fermer(p);

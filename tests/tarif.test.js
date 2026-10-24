@@ -233,3 +233,47 @@ test('liens de position : Google Maps, WhatsApp, coordonnées', () => {
   ok('Ma position : 9.540112,-13.680134 envoyée', 9.540112, -13.680134);
   assert.strictEqual(positionDepuisTexte('rue sans coordonnées'), null);
 });
+
+// ── Belgique ⇄ Guinée ──
+const tarifs = require('../utils/tarif');
+test('Belgique → Guinée : prix en €, articles repris de la France tant qu\'ils ne sont pas fixés', () => {
+  const t = calculerTarif(config, { sens: 'BE-GN', mode: 'air', poidsKg: 5, typeColis: 'vetements', articles: [{ cle: 'chaussures', quantite: 2 }] });
+  assert.strictEqual(t.devise, 'EUR');
+  assert.strictEqual(t.sens, 'BE-GN');
+  assert.strictEqual(t.articlesTotal, 30);       // 2 × 15 € (prix France → Guinée)
+  const g = calculerTarif(config, { sens: 'GN-BE', mode: 'air', poidsKg: 3, typeColis: 'alimentaire' });
+  assert.strictEqual(g.devise, 'GNF');
+  assert.strictEqual(g.totalGnf, 360000);
+  // Prix belge propre : il remplace celui de la France
+  const art = { cle: 'x', prix: { 'FR-GN': { air: 15 }, 'BE-GN': { air: 18 } } };
+  assert.strictEqual(tarifs.prixArticle(art, 'BE-GN', 'air'), 18);
+  assert.strictEqual(tarifs.prixArticle({ prix: { 'FR-GN': { air: 15 } } }, 'BE-GN', 'air'), 15);
+  assert.strictEqual(tarifs.prixArticle({ prix: { 'FR-GN': { air: 15 } } }, 'BE-GN', 'express'), 15, 'express : prix avion');
+});
+
+test('Belgique : garde en €, monnaie, zone sur la carte, courses à domicile', () => {
+  const m = calculerMagasinage({ ...config, magasinage: { joursGratuits: 10, fraisJourEur: 1 } }, new Date('2026-10-01'), new Date('2026-10-14'), { pays: 'BE', taux: 10000 });
+  assert.strictEqual(m.fraisGnf, 30000); // 3 jours × 1 € au taux 10 000
+  assert.strictEqual(tarifs.devisePays('BE'), 'EUR');
+  assert.strictEqual(tarifs.paysDuPoint({ lat: 50.8503, lng: 4.3517 }), 'BE'); // Bruxelles
+  assert.strictEqual(tarifs.paysDuPoint({ lat: 51.2194, lng: 4.4025 }), 'BE'); // Anvers
+  assert.strictEqual(tarifs.paysDuPoint({ lat: 48.8566, lng: 2.3522 }), 'FR'); // Paris
+  const BXL = { code: 'BRUXELLES', nom: 'Agence Bruxelles', pays: 'BE', position: { lat: 50.8467, lng: 4.3525 } };
+  const dom = { ...confDom, domicile: { ...confDom.domicile, BE: { actif: true, base: 8, parKm: 1, plafond: 0, rayonMaxKm: 60 } } };
+  const c = calculerCourse(dom, BXL, { lat: 50.8333, lng: 4.3667 }, { routeKm: 3.2 });
+  assert.strictEqual(c.ok, true);
+  assert.strictEqual(c.devise, 'EUR');
+  assert.strictEqual(c.prix, 11.5); // 8 + 3,2 → 11,2 → 11,5
+  assert.strictEqual(calculerCourse(dom, BXL, { lat: 9.55, lng: -13.65 }).raison, 'hors_pays');
+});
+
+test('téléphones belges', () => {
+  const { normTel } = require('../services/colisService');
+  assert.strictEqual(normTel('0478 12 34 56', 'BE'), '+32478123456');
+  assert.strictEqual(normTel('0478123456'), '+33478123456', 'sans pays : numéro français');
+  assert.strictEqual(normTel('+32 478 12 34 56'), '+32478123456');
+  assert.strictEqual(normTel('0032478123456'), '+32478123456');
+  assert.strictEqual(normTel('02 123 45 67'), '+3221234567', 'fixe belge à 9 chiffres');
+  assert.strictEqual(normTel('06 12 34 56 78', 'BE'), '+33612345678', 'mobile français reste français');
+  assert.strictEqual(normTel('622 11 22 33', 'BE'), '+224622112233');
+});

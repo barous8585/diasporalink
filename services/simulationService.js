@@ -40,10 +40,10 @@ function hasard(graine = 20261015) {
 const PRENOMS_H = ['Mamadou', 'Ibrahima', 'Alpha', 'Thierno', 'Abdoulaye', 'Ousmane', 'Sekou', 'Lamine', 'Boubacar', 'Mohamed', 'Elhadj', 'Moussa', 'Amadou', 'Souleymane', 'Aboubacar', 'Cheick', 'Mamoudou', 'Oumar', 'Saïdou', 'Kerfala', 'Fodé', 'Ismaël', 'Karim', 'Youssouf'];
 const PRENOMS_F = ['Fatoumata', 'Aïssatou', 'Mariama', 'Oumou', 'Kadiatou', 'Hawa', 'Binta', 'Nènè', 'Aminata', 'Saran', 'Djenabou', 'Hadja', 'Fanta', 'Mabinty', 'Ramatoulaye', 'Kadija', 'Bountouraby', 'Néné Oumou', 'Hadiatou', 'Safiatou', 'Assiatou', 'Maïmouna', 'Rouguiatou', 'Djariou'];
 const NOMS = ['Diallo', 'Barry', 'Bah', 'Camara', 'Sow', 'Condé', 'Touré', 'Keïta', 'Sylla', 'Soumah', 'Kouyaté', 'Baldé', 'Cissé', 'Fofana', 'Traoré', 'Konaté', 'Kaba', 'Doumbouya', 'Kanté', 'Bangoura', 'Diakité', 'Sacko', 'Kourouma', 'Haïdara', 'Dramé', 'Savané', 'Yansané', 'Kamano', 'Millimono', 'Loua'];
-const QUARTIERS = { GN: ['Kipé', 'Ratoma', 'Lambanyi', 'Kaloum', 'Dixinn', 'Matam', 'Cosa', 'Taouyah', 'Hamdallaye', 'Bambeto', 'Sonfonia', 'Koloma', 'Nongo', 'Kagbélén', 'Simbaya'], FR: ['Château-Rouge', 'Barbès', 'Saint-Denis', 'Aubervilliers', 'Montreuil', 'Bobigny', 'La Courneuve', 'Sarcelles', 'Créteil', 'Évry'] };
+const QUARTIERS = { GN: ['Kipé', 'Ratoma', 'Lambanyi', 'Kaloum', 'Dixinn', 'Matam', 'Cosa', 'Taouyah', 'Hamdallaye', 'Bambeto', 'Sonfonia', 'Koloma', 'Nongo', 'Kagbélén', 'Simbaya'], FR: ['Château-Rouge', 'Barbès', 'Saint-Denis', 'Aubervilliers', 'Montreuil', 'Bobigny', 'La Courneuve', 'Sarcelles', 'Créteil', 'Évry'], BE: ['Matonge', 'Ixelles', 'Schaerbeek', 'Anderlecht', 'Molenbeek', 'Saint-Gilles', 'Etterbeek', 'Laeken'] };
 const DESCRIPTIONS = { vetements: ['vêtements et pagnes', 'habits pour la famille', 'tissus et basins', 'vêtements enfants'], alimentaire: ['riz, huile et lait', 'épices et condiments', 'café, sucre, conserves'], documents: ['papiers administratifs', 'diplômes et dossiers'], mixte: ['vêtements et cosmétiques', 'affaires diverses', 'cadeaux pour la famille'], fragile: ['vaisselle', 'miroir et cadres'], electronique: ['téléphone et accessoires', 'ordinateur portable', 'télévision'] };
 const TRANSPORTEURS = { air: ['Air France', 'Royal Air Maroc', 'Brussels Airlines', 'Air Sénégal'], express: ['Air France Cargo', 'DHL Aviation'], mer: ['CMA CGM', 'MSC', 'Maersk', 'Grimaldi'] };
-const CENTRE = { GN: { lat: 9.5370, lng: -13.6773 }, FR: { lat: 48.8566, lng: 2.3522 } };
+const CENTRE = { GN: { lat: 9.5370, lng: -13.6773 }, FR: { lat: 48.8566, lng: 2.3522 }, BE: { lat: 50.8503, lng: 4.3517 } };
 
 let enCours = null;      // { debut, etape, fait, total }
 let dernierResultat = null;
@@ -108,7 +108,7 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
   // ── Équipe fictive : 2 agents et 2 livreurs par agence ──
   enCours.etape = 'Équipe';
   let numTel = 0;
-  const tel = (pays) => { numTel++; return pays === 'FR' ? `+3378${String(10000000 + numTel).slice(-7)}` : `+22462${String(9000000 + numTel).slice(-7)}`; };
+  const tel = (pays) => { numTel++; return pays === 'FR' ? `+3378${String(10000000 + numTel).slice(-7)}` : pays === 'BE' ? `+32478${String(1000000 + numTel).slice(-6)}` : `+22462${String(9000000 + numTel).slice(-7)}`; };
   const equipe = {};
   for (const a of agences) {
     equipe[a.code] = { agents: [], livreurs: [] };
@@ -126,6 +126,9 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
   const personne = (pays) => { const f = R.proba(0.5); return { nom: `${R.un(f ? PRENOMS_F : PRENOMS_H)} ${R.un(NOMS)}`, telephone: tel(pays), pays }; };
   const clientsFR = Array.from({ length: 420 }, () => personne('FR'));
   const clientsGN = Array.from({ length: 300 }, () => personne('GN'));
+  const clientsBE = Array.from({ length: 120 }, () => personne('BE'));
+  const clientsDe = (p) => (p === 'FR' ? clientsFR : p === 'BE' ? clientsBE : clientsGN);
+  const avecBelgique = parPays('BE').length > 0;
   const comptes = new Map();
   const avecCompte = [...clientsFR, ...clientsGN].filter(() => R.proba(0.4));
   const docs = await User.insertMany(avecCompte.map(p => ({ demo: true, telephone: p.telephone, prenom: p.nom.split(' ')[0], nom: p.nom.split(' ').slice(1).join(' '), role: 'client', verifie: true })));
@@ -185,20 +188,22 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
   const remisesPourReclamations = [];
   let facRemise;
   for (const creeLe of plans) {
-    const sens = R.proba(0.68) ? 'FR-GN' : 'GN-FR';
+    // Europe : la France surtout, la Belgique pour une part si une agence belge existe
+    const europe = avecBelgique && R.proba(0.2) ? 'BE' : 'FR';
+    const sens = R.proba(0.68) ? `${europe}-GN` : `GN-${europe}`;
     const [pd, pa] = sens.split('-');
     const mode = R.pondere([['air', 52], ['mer', 30], ['express', 18]]);
-    const depot = pd === 'FR' ? R.pondere(parPays('FR').map(a => [a, a.plateforme ? 3 : 1])) : R.pondere(parPays('GN').map(a => [a, a.plateforme ? 3 : 2]));
+    const depot = pd !== 'GN' ? R.pondere(parPays(pd).map(a => [a, a.plateforme ? 3 : 1])) : R.pondere(parPays('GN').map(a => [a, a.plateforme ? 3 : 2]));
     const guichet = R.pondere(parPays(pa).map(a => [a, a.plateforme ? 3 : 2]));
-    const exp = choisir(pd === 'FR' ? clientsFR : clientsGN);
-    const dest = choisir(pa === 'FR' ? clientsFR : clientsGN);
+    const exp = choisir(clientsDe(pd));
+    const dest = choisir(clientsDe(pa));
     const enLigne = R.proba(0.45);
     const typeColis = R.pondere(typesPoids);
     const poids = Math.round((mode === 'mer' ? R.entre(8, 60) : mode === 'express' ? R.entre(0.8, 8) : R.entre(2.5, 28)) * 10) / 10;
     const dispo = articlesDispo(sens, mode);
     const articles = dispo.length && R.proba(0.15) ? [{ cle: R.un(dispo).cle, quantite: R.ent(1, 3) }] : [];
     const assurance = typeColis === 'electronique' || R.proba(0.08);
-    const valeur = assurance ? R.ent(15, 120) * (pd === 'FR' ? 10 : 100000) : 0;
+    const valeur = assurance ? R.ent(15, 120) * (pd !== 'GN' ? 10 : 100000) : 0;
     const tarif = calculerTarif(config, { sens, mode, poidsKg: poids, typeColis, valeurDeclaree: valeur, assurance, articles: articles.map(a => ({ ...a, ...dispo.find(x => x.cle === a.cle) })) });
     const agentDepot = R.un(equipe[depot.code].agents);
     const agentGuichet = R.un(equipe[guichet.code].agents);
@@ -224,7 +229,7 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
       colis.paiements.push({ montant, devise, methode, objet, lieu: enLigneP ? 'EN_LIGNE' : lieu, agent: enLigneP ? undefined : agent?._id, reference: ref, le: new Date(le) });
       if (!enLigneP && agent) mouvements.push({ demo: true, agent: agent._id, lieu, numeroSuivi: null, colisRef: colis, montant, devise, methode, objet, reference: ref, le: new Date(le) });
     };
-    const moyen = (pays) => (pays === 'FR' ? R.pondere([['especes', 35], ['carte', 40], ['orange_money', 10], ['virement', 5]]) : R.pondere([['especes', 55], ['orange_money', 30], ['mtn_momo', 15]]));
+    const moyen = (pays) => (pays !== 'GN' ? R.pondere([['especes', 35], ['carte', 40], ['orange_money', 10], ['virement', 5]]) : R.pondere([['especes', 55], ['orange_money', 30], ['mtn_momo', 15]]));
 
     // Réservation en ligne
     colis.statut = STATUTS.RESERVE;
@@ -241,7 +246,7 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
       const faite = faiteLe && faiteLe <= maintenant;
       return {
         demande: true, agence: agence.code, statut: faite ? STATUTS_COURSE.FAITE : (quand <= maintenant ? STATUTS_COURSE.ASSIGNEE : STATUTS_COURSE.A_PLANIFIER),
-        adresse: { quartier: R.un(QUARTIERS[agence.pays]), ville: agence.pays === 'FR' ? 'Île-de-France' : 'Conakry', rue: R.proba(0.5) ? `${R.ent(1, 120)} rue ${R.ent(100, 999)}` : undefined, repere: R.proba(0.4) ? R.un(['derrière la mosquée', 'portail bleu', 'à côté de la pharmacie', 'immeuble jaune, 2e étage', 'face au marché']) : undefined, position: p },
+        adresse: { quartier: R.un(QUARTIERS[agence.pays]), ville: agence.pays === 'FR' ? 'Île-de-France' : agence.pays === 'BE' ? 'Bruxelles' : 'Conakry', rue: R.proba(0.5) ? `${R.ent(1, 120)} rue ${R.ent(100, 999)}` : undefined, repere: R.proba(0.4) ? R.un(['derrière la mosquée', 'portail bleu', 'à côté de la pharmacie', 'immeuble jaune, 2e étage', 'face au marché']) : undefined, position: p },
         distanceKm: c.distanceKm, prix: c.prix, devise: c.devise, prixGnf: c.prixGnf,
         livreur: quand <= maintenant ? livreur._id : undefined, livreurNom: quand <= maintenant ? `${livreur.prenom} ${livreur.nom}` : undefined,
         assigneeLe: quand <= maintenant ? new Date(quand) : undefined, faiteLe: faite ? new Date(faiteLe) : undefined,
@@ -252,7 +257,7 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
     // Paiement d'avance en ligne (une partie des réservations)
     const dueDepot = () => tarif.totalGnf + (colis.ramassage?.prixGnf || 0) + (colis.livraison?.prixGnf || 0);
     if (enLigne && !payeurArrivee && R.proba(0.3)) {
-      const m = pd === 'FR' ? R.pondere([['carte', 7], ['orange_money', 3]]) : R.pondere([['orange_money', 6], ['carte', 2], ['mtn_momo', 2]]);
+      const m = pd !== 'GN' ? R.pondere([['carte', 7], ['orange_money', 3]]) : R.pondere([['orange_money', 6], ['carte', 2], ['mtn_momo', 2]]);
       const montant = m === 'carte' ? Math.round(tarif.totalGnf / taux * 100) / 100 : tarif.totalGnf;
       payer(montant, m === 'carte' ? 'EUR' : 'GNF', m, creeLe + R.entre(0.1, 1) * H, { enLigneP: true });
     }
@@ -270,7 +275,7 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
       const deja = colis.paiements.reduce((s, p) => s + enGnf(p.montant, p.devise, taux), 0);
       const reste = Math.max(0, dueDepot() - deja);
       const m = moyen(pd);
-      const enEur = pd === 'FR' && m !== 'orange_money';
+      const enEur = pd !== 'GN' && m !== 'orange_money';
       if (reste > 0 && R.proba(0.94)) payer(enEur ? Math.round(reste / taux * 100) / 100 : reste, enEur ? 'EUR' : 'GNF', m, deposeLe + 5 * 60000, { lieu: depot.code, agent: agentDepot });
     }
     const facDepot = !payeurArrivee && { moment: 'depot', date: deposeLe + 6 * 60000, agent: agentDepot };
@@ -304,12 +309,12 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
         ev(STATUTS.EN_LIVRAISON, remisLe - R.entre(1, 4) * H, colis.livraison?.livreurNom, guichet.code);
       }
       // Encaissement du reste au retrait (destinataire qui paie, douane, garde)
-      const garde = Math.max(0, Math.floor(attente) - (config.magasinage?.joursGratuits ?? 10)) * (pa === 'FR' ? Math.round((config.magasinage?.fraisJourEur || 1) * taux) : (config.magasinage?.fraisJourGnf || 5000));
+      const garde = Math.max(0, Math.floor(attente) - (config.magasinage?.joursGratuits ?? 10)) * (pa !== 'GN' ? Math.round((config.magasinage?.fraisJourEur || 1) * taux) : (config.magasinage?.fraisJourGnf || 5000));
       const deja = colis.paiements.reduce((s, p) => s + enGnf(p.montant, p.devise, taux), 0);
       const du = tarif.totalGnf + (colis.ramassage?.prixGnf || 0) + (colis.livraison?.prixGnf || 0) + (colis.fraisDouaneGnf || 0) + garde;
       const reste = Math.max(0, du - deja);
       const agentRemise = aDomicile ? R.un(equipe[guichet.code].livreurs) : agentGuichet;
-      if (reste > 0) { const m = moyen(pa); const enEur = pa === 'FR' && m !== 'orange_money'; payer(enEur ? Math.round(reste / taux * 100) / 100 : reste, enEur ? 'EUR' : 'GNF', m, remisLe - 10 * 60000, { lieu: guichet.code, agent: agentRemise }); }
+      if (reste > 0) { const m = moyen(pa); const enEur = pa !== 'GN' && m !== 'orange_money'; payer(enEur ? Math.round(reste / taux * 100) / 100 : reste, enEur ? 'EUR' : 'GNF', m, remisLe - 10 * 60000, { lieu: guichet.code, agent: agentRemise }); }
       const tiers = R.proba(0.08);
       colis.remise = { le: new Date(remisLe), agent: agentRemise._id, retirePar: tiers ? 'tiers' : 'destinataire', nomRetrait: tiers ? `${R.un(PRENOMS_H)} ${R.un(NOMS)}` : dest.nom, pieceVerifiee: true, aDomicile };
       ev(STATUTS.REMIS, remisLe, `Remis à ${colis.remise.nomRetrait}${aDomicile ? ' à domicile' : ''}`, guichet.code, agentRemise);
@@ -392,7 +397,7 @@ async function generer({ jours = 30, parJour = 55 } = {}) {
   }
 
   // ── Quelques paiements mobile money à vérifier (récents) ──
-  const recents = await Colis.find({ demo: true, statut: { $in: [STATUTS.DEPOSE, STATUTS.CHARGE, STATUTS.EN_TRANSIT] }, sens: 'GN-FR' }).limit(6);
+  const recents = await Colis.find({ demo: true, statut: { $in: [STATUTS.DEPOSE, STATUTS.CHARGE, STATUTS.EN_TRANSIT] }, sens: { $in: ['GN-FR', 'GN-BE'] } }).limit(6);
   for (const c of recents) {
     c.declarations = [{ methode: R.proba(0.7) ? 'orange_money' : 'mtn_momo', objet: 'global', montantGnf: R.ent(5, 40) * 10000, reference: `PP${R.ent(100000, 999999)}.${R.ent(1000, 9999)}`, telephone: c.expediteur.telephone, le: new Date(maintenant - R.entre(1, 20) * H) }];
     await c.save();

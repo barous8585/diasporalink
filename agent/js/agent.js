@@ -607,14 +607,18 @@
       articles: Object.fromEntries((r.articles || []).map(a => [a.cle, a.quantite])),
     };
     const paysDepart = () => agenceDe(etat.depot)?.pays || 'FR';
-    const paysDest = () => (paysDepart() === 'FR' ? 'GN' : 'FR');
+    // Pays d'arrivée possibles depuis cette agence (Guinée → France ou Belgique ; Europe → Guinée),
+    // le pays retenu est celui de l'agence de retrait choisie
+    const paysPossibles = () => CONFIG.sens.filter(s => s.depart === paysDepart() && s.ouvert !== false).map(s => s.arrivee);
+    const paysDest = () => { const p = agenceDe(etat.guichet)?.pays; const ok = paysPossibles(); return ok.includes(p) ? p : (ok[0] || (paysDepart() === 'GN' ? 'FR' : 'GN')); };
     const sens = () => `${paysDepart()}-${paysDest()}`;
-    const articlesDispo = () => (CONFIG.articles || []).filter(a => Number.isFinite(parseFloat(a.prix?.[sens()]?.[etat.mode])));
+    const articlesDispo = () => (CONFIG.articles || []).filter(a => Number.isFinite(KolisTarif.prixArticle(a, sens(), etat.mode)));
     const articlesChoisis = () => articlesDispo().filter(a => etat.articles[a.cle] > 0).map(a => ({ cle: a.cle, quantite: etat.articles[a.cle] }));
     const devisePaie = () => CONFIG.pays[paysDepart()]?.devise || 'EUR'; // on paie dans la devise du pays de dépôt
     const optionsRetrait = () => {
       const parVille = {};
-      CONFIG.agences.filter(a => a.pays === paysDest()).forEach(a => { (parVille[a.ville || 'Autres'] = parVille[a.ville || 'Autres'] || []).push(a); });
+      const plusieurs = paysPossibles().length > 1;
+      CONFIG.agences.filter(a => paysPossibles().includes(a.pays)).forEach(a => { const g = `${plusieurs ? `${CONFIG.pays[a.pays]?.nom || a.pays} · ` : ''}${a.ville || 'Autres'}`; (parVille[g] = parVille[g] || []).push(a); });
       return Object.entries(parVille).map(([v, l]) => `<optgroup label="${esc(v)}">${l.map(a => `<option value="${esc(a.code)}" ${a.code === etat.guichet ? 'selected' : ''}>${esc(a.nom)}${a.commune ? ` (${esc(a.commune)})` : ''}</option>`).join('')}</optgroup>`).join('');
     };
     main.innerHTML = `
@@ -747,11 +751,11 @@
     const majPays = () => {
       if (paysAffiche === paysDepart()) return;
       paysAffiche = paysDepart();
-      if (!CONFIG.agences.some(a => a.code === etat.guichet && a.pays === paysDest())) etat.guichet = '';
+      if (!CONFIG.agences.some(a => a.code === etat.guichet && paysPossibles().includes(a.pays))) etat.guichet = '';
       $('[data-retrait]').innerHTML = optionsRetrait();
       if (etat.guichet) $('[data-retrait]').value = etat.guichet;
-      $('[data-lib-retrait]').textContent = `Agence de retrait en ${CONFIG.pays[paysDest()]?.nom}`;
-      form.destTel.placeholder = paysDest() === 'GN' ? '6XX XX XX XX' : '06 XX XX XX XX';
+      $('[data-lib-retrait]').textContent = `Agence de retrait en ${paysPossibles().map(p => CONFIG.pays[p]?.nom).join(' ou ')}`;
+      form.destTel.placeholder = paysDest() === 'GN' ? '6XX XX XX XX' : paysPossibles().includes('BE') ? '+33… ou +32…' : '06 XX XX XX XX';
       const methodes = methodesDe(devisePaie());
       if (!methodes.some(([k]) => k === etat.methode)) etat.methode = 'especes';
       $('[data-methodes]').innerHTML = methodes.map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${etat.methode === k}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('');
@@ -784,13 +788,13 @@
       $('[data-bloc-articles]').classList.toggle('cache', !dispo.length);
       // La liste n'est reconstruite que si les articles ou leurs prix changent : sinon un clic
       // sur « + » juste après la saisie du poids serait perdu (la liste changerait sous le doigt)
-      const signature = JSON.stringify(dispo.map(a => [a.cle, a.label, a.prix[sens()][etat.mode]]));
+      const signature = JSON.stringify(dispo.map(a => [a.cle, a.label, KolisTarif.prixArticle(a, sens(), etat.mode)]));
       if ($('[data-articles]').dataset.signature !== signature) {
         $('[data-articles]').dataset.signature = signature;
         $('[data-articles]').innerHTML = dispo.map(a => {
         const q = etat.articles[a.cle] || 0;
         return `<div class="ligne-article${q ? ' choisi' : ''}">
-          <div><div class="nom">${esc(a.label)}</div><div class="tres-petit muet">${esc(montant(parseFloat(a.prix[sens()][etat.mode]), deviseTarif))} la pièce · compte ${esc(String(a.poids || 0).replace('.', ','))} kg</div></div>
+          <div><div class="nom">${esc(a.label)}</div><div class="tres-petit muet">${esc(montant(KolisTarif.prixArticle(a, sens(), etat.mode), deviseTarif))} la pièce · compte ${esc(String(a.poids || 0).replace('.', ','))} kg</div></div>
           <div class="compteur">
             <button type="button" class="btn btn-rond" data-art-moins="${esc(a.cle)}" aria-label="Retirer : ${esc(a.label)}" ${q ? '' : 'disabled'}>−</button>
             <span class="gras">${q}</span>
@@ -879,8 +883,8 @@
           articles: articlesChoisis(),
           description: form.description.value, assurance: form.assurance.checked,
           valeurDeclaree: parseFloat(form.valeurDeclaree.value) || 0, payeurArrivee: form.payeurArrivee.checked,
-          expediteur: { nom: form.expNom.value.trim(), telephone: normTel(form.expTel.value) },
-          destinataire: { nom: form.destNom.value.trim(), telephone: normTel(form.destTel.value) },
+          expediteur: { nom: form.expNom.value.trim(), telephone: normTel(form.expTel.value, paysDepart()) },
+          destinataire: { nom: form.destNom.value.trim(), telephone: normTel(form.destTel.value, paysDest()) },
           livraison,
           paiement,
           cgvAcceptees: form.cgvAcceptees ? form.cgvAcceptees.checked : undefined,
@@ -1060,7 +1064,7 @@
           </div>
           <div class="pile cache" style="--gap:8px" data-zone-sans-code>
             <p class="bandeau bandeau-ocre petit">${ic('alerte', 'ic-sm')}<span>Retrait sans code : demandez le <b>numéro de téléphone du destinataire</b> (sans le lui montrer), vérifiez la pièce d'identité et notez son numéro. L'administrateur est prévenu.</span></p>
-            <label class="champ">Téléphone du destinataire, donné par la personne <input class="saisie" name="telConfirme" type="tel" inputmode="tel" autocomplete="off" placeholder="${paysAgent() === 'GN' ? '6XX XX XX XX' : '06 XX XX XX XX'}"></label>
+            <label class="champ">Téléphone du destinataire, donné par la personne <input class="saisie" name="telConfirme" type="tel" inputmode="tel" autocomplete="off" placeholder="${paysAgent() === 'GN' ? '6XX XX XX XX' : paysAgent() === 'BE' ? '04XX XX XX XX ou +32…' : '06 XX XX XX XX'}"></label>
             <label class="champ">N° de la pièce d'identité <input class="saisie" name="pieceNumero" autocomplete="off" autocapitalize="characters"></label>
             <button type="button" class="btn btn-petit" data-avec-code-retour>J'ai le code finalement</button>
           </div>
@@ -1193,7 +1197,7 @@
       if (sig.vide()) { toast('Faites signer la personne.', 'erreur'); return; }
       const payload = {
         opId, numero: c.numeroSuivi, pieceVerifiee: true,
-        ...(etat.sansCode ? { sansCode: true, telephoneConfirme: normTel(form.telConfirme.value), pieceNumero: form.pieceNumero.value.trim() } : { code: etat.code }),
+        ...(etat.sansCode ? { sansCode: true, telephoneConfirme: normTel(form.telConfirme.value, paysAgent()), pieceNumero: form.pieceNumero.value.trim() } : { code: etat.code }),
         retirePar: etat.retirePar, nomRetrait: etat.retirePar === 'tiers' ? form.nomRetrait.value.trim() : undefined,
         paiement: solde > 0 && !parCarte ? { montant: duSaisie, devise: deviseSaisie(), methode: etat.methode, objet: 'global', reference: form.reference?.value || undefined } : undefined,
         signature: sig.image(),

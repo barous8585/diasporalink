@@ -21,6 +21,9 @@
   const nomGuichet = (code) => agence(code)?.nom || code;
   const agencesDe = (pays) => (CONFIG?.agences || []).filter(a => a.pays === pays);
   const nomPays = (code) => CONFIG?.pays?.[code]?.nom || code;
+  // « la France », « la Belgique », « la Guinée » ; « en France »…
+  const lePays = (code) => `la ${nomPays(code)}`;
+  const enPays = (code) => `en ${nomPays(code)}`;
   const paysArrivee = (c) => String(c.sens || 'FR-GN').split('-')[1];
   // Montant dans la devise du pays où l'on paie, avec l'autre devise entre parenthèses
   const deviseDe = (pays) => CONFIG?.pays?.[pays]?.devise || 'GNF';
@@ -269,7 +272,7 @@
     const devisePaiement = deviseVue(c);
     const principal = (g2, e2) => devisePaiement === 'EUR' ? eur(e2) : gnf(g2);
     const secondaire = (g2, e2) => devisePaiement === 'EUR' ? gnf(g2) : eur(e2);
-    const fraisJour = paysArrivee(c) === 'FR' ? eur(CONFIG?.magasinage?.fraisJourEur) : gnf(CONFIG?.magasinage?.fraisJourGnf);
+    const fraisJour = paysArrivee(c) !== 'GN' ? eur(CONFIG?.magasinage?.fraisJourEur) : gnf(CONFIG?.magasinage?.fraisJourGnf);
     const depart = complet ? agence(c.depot) : null;
     const joursRestants = mag?.gratuitJusquau ? Math.ceil((new Date(mag.gratuitJusquau) - Date.now()) / 86400000) : null;
 
@@ -424,7 +427,7 @@
   //  AVIS CLIENTS
   // ════════════════════════════════════════════════════════
   const LIB_NOTE = ['', 'Très décevant', 'Décevant', 'Correct', 'Bien', 'Excellent'];
-  const libSensCourt = (sens) => (sens === 'GN-FR' ? 'Guinée → France' : 'France → Guinée');
+  const libSensCourt = (sens) => CONFIG.sens.find(x => x.key === sens)?.label || 'France → Guinée';
   function carteAvis(a) {
     return `
       <article class="carte avis-carte" data-avis-id="${esc(a._id)}">
@@ -804,7 +807,7 @@
     el.querySelector('[data-annuler-liv]')?.addEventListener('click', () => {
       const tel = el.querySelector('[name=telephone]').value;
       if (!tel) { toast('Indiquez votre numéro.', 'erreur'); return; }
-      envoyer({ telephone: normTel(tel), demande: false });
+      envoyer({ telephone: normTel(tel, paysArrivee(c)), demande: false });
     });
     el.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -816,21 +819,21 @@
       const course = adr.course();
       if (course && !course.ok) { toast(course.message, 'erreur'); return; }
       if (course && !confirm(`Livraison : ${montant(course.prix, course.devise)} (${course.distanceKm.toLocaleString('fr-FR')} km), à payer en ligne maintenant. Une livraison payée n'est pas remboursée si vous l'annulez. Continuer ?`)) return;
-      envoyer({ telephone: normTel(tel), demande: true, adresse: a }, true);
+      envoyer({ telephone: normTel(tel, paysArrivee(c)), demande: true, adresse: a }, true);
     });
   }
 
   function titreStatut(c, g) {
     const nom = g?.nom || 'votre agence';
     const pays = nomPays(paysArrivee(c));
-    const en = paysArrivee(c) === 'FR' ? 'en France' : 'en Guinée';
+    const en = enPays(paysArrivee(c));
     switch (c.statut) {
       case 'reserve': return c.ramassage && c.ramassage.statut !== 'annulee' && c.ramassage.demande !== false
         ? (c.ramassage.statut === 'faite' ? 'Ramassé, en route vers l\'agence' : 'Réservé : un livreur vient le chercher')
         : 'Réservé : à déposer en agence';
       case 'depose': return 'Reçu en agence, bientôt en route';
       case 'charge': return `Chargé, départ ${c.mode === 'mer' ? 'en bateau' : c.mode === 'express' ? 'en express' : 'en avion'} prochainement`;
-      case 'en_transit': return `En route vers ${pays === 'France' ? 'la France' : 'la Guinée'} ${c.mode === 'mer' ? 'par bateau' : c.mode === 'express' ? 'en express' : 'par avion'}`;
+      case 'en_transit': return `En route vers ${lePays(paysArrivee(c))} ${c.mode === 'mer' ? 'par bateau' : c.mode === 'express' ? 'en express' : 'par avion'}`;
       case 'arrive': return `Arrivé ${en}, en cours de dédouanement`;
       case 'acheminement': return `En route vers ${nom}${g?.ville ? ` (${g.ville})` : ''}`;
       case 'pret': return c.livraison && c.livraison.statut !== 'annulee' && c.livraison.demande !== false ? `Arrivé à ${nom}, bientôt livré chez vous` : `Votre colis vous attend à ${nom}`;
@@ -853,7 +856,7 @@
       e.preventDefault();
       const f = new FormData(e.target);
       try {
-        await api.patch(`/colis/${c.numeroSuivi}/tiers`, { nom: f.get('nom'), telephone: normTel(f.get('telephone')) });
+        await api.patch(`/colis/${c.numeroSuivi}/tiers`, { nom: f.get('nom'), telephone: normTel(f.get('telephone'), paysArrivee(c)) });
         fermer(); toast('Personne autorisée. Elle va recevoir un SMS.', 'ok'); router();
       } catch (err) { toast(err.message, 'erreur'); }
     });
@@ -862,7 +865,6 @@
   // ── Paiement en ligne : solde du colis, ou courses à domicile payées d'avance ──
   // Moyens proposés selon le pays d'où l'on paie : carte (Stripe) en France,
   // Orange Money / MTN MoMo (et carte) en Guinée, réglés dans le back-office.
-  const PAYS_DRAPEAU = { FR: 'France', GN: 'Guinée' };
   async function ouvrirPaiement(numero, { objet, c } = {}) {
     let r;
     try { r = await api.get(`/paiements/a-payer/${encodeURIComponent(numero)}`); }
@@ -885,7 +887,7 @@
       const liste = (r.moyens[p] || []).filter(m => !dejaVus.has(m.key) && dejaVus.add(m.key));
       if (!liste.length) return '';
       return `<div class="pile" style="--gap:8px">
-        <div class="tres-petit gras muet">Je paie depuis ${p === 'FR' ? 'la France' : 'la Guinée'}</div>
+        <div class="tres-petit gras muet">Je paie depuis ${lePays(p)}</div>
         ${liste.map(m => `<button type="button" class="moyen-paiement" data-moyen="${m.key}">
           <span class="logo-moyen ${m.key}" aria-hidden="true">${m.key === 'carte' ? ic('carte') : m.key === 'orange_money' ? 'OM' : 'MoMo'}</span>
           <span class="grandit"><span class="gras" style="display:block">${esc(m.label)}</span><span class="petit muet">${m.devise === 'EUR' ? `${eur(du.eur)} · paiement sécurisé` : `${gnf(du.gnf)} · validé sous 24 h`}</span></span>
@@ -964,11 +966,12 @@
     const etat = { ...defaut, ...(stock.lire('brouillon_envoi') || {}) };
     if (!etat.articles || typeof etat.articles !== 'object') etat.articles = {};
     // Articles à la pièce proposés pour ce sens et ce mode (ceux qui ont un prix)
-    const articlesDispo = () => (CONFIG.articles || []).filter(a => Number.isFinite(parseFloat(a.prix?.[etat.sens]?.[etat.mode])));
+    const articlesDispo = () => (CONFIG.articles || []).filter(a => Number.isFinite(KolisTarif.prixArticle(a, etat.sens, etat.mode)));
     const articlesChoisis = () => articlesDispo().filter(a => etat.articles[a.cle] > 0).map(a => ({ cle: a.cle, quantite: etat.articles[a.cle] }));
     const poidsArticles = () => articlesDispo().reduce((s, a) => s + (etat.articles[a.cle] || 0) * (parseFloat(a.poids) || 0), 0);
     const nombreFr = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
-    if (!CONFIG.sens.some(s => s.key === etat.sens)) etat.sens = 'FR-GN';
+    const sensOuverts = CONFIG.sens.filter(s => s.ouvert !== false);
+    if (!sensOuverts.some(s => s.key === etat.sens)) etat.sens = sensOuverts[0]?.key || 'FR-GN';
     const types = CONFIG.typesColis;
     const sensInfo = () => CONFIG.sens.find(s => s.key === etat.sens);
     const brouillonAdr = stock.lire('brouillon_adresses') || {};
@@ -984,7 +987,7 @@
 
         <section class="pile" style="--gap:8px" aria-labelledby="q0">
           <h3 id="q0">1. Dans quel sens ?</h3>
-          <div class="grille-2">${CONFIG.sens.map(s => `
+          <div class="grille-2">${sensOuverts.map(s => `
             <button type="button" class="choix choix-noir" style="min-height:72px" data-sens="${s.key}" aria-pressed="${etat.sens === s.key}">
               <span class="nom" style="font-size:16px">${esc(nomPays(s.depart))}</span>
               <span class="sous">vers ${esc(nomPays(s.arrivee))}</span>
@@ -1117,7 +1120,7 @@
       zone.innerHTML = lignes.join('<br>');
     }
     // Moyens de paiement selon le pays de la personne qui paie (expéditeur, ou destinataire à l'arrivée)
-    const AU_COMPTOIR = { FR: ['Espèces', 'Carte bancaire', 'Virement'], GN: ['Espèces', 'Orange Money', 'MTN MoMo'] };
+    const AU_COMPTOIR = { FR: ['Espèces', 'Carte bancaire', 'Virement'], BE: ['Espèces', 'Carte bancaire', 'Virement'], GN: ['Espèces', 'Orange Money', 'MTN MoMo'] };
     const majMoyens = () => {
       const zone = $('[data-moyens-envoi]');
       if (!zone) return;
@@ -1126,7 +1129,7 @@
       const enLigne = (CONFIG.moyensPaiement?.[pays] || []).map(m => m.label);
       zone.innerHTML = `<div class="moyens-envoi">
         <div class="tres-petit gras">Paiement ${pays === pd ? `en ${nomPays(pd)}` : `par le destinataire en ${nomPays(pa)}`} · en ${deviseDe(pays) === 'EUR' ? 'euros' : 'francs guinéens'}</div>
-        <div class="puces-moyens">${[...new Set([...enLigne.map(l => `${l} en ligne`), ...AU_COMPTOIR[pays].map(l => `${l} à l'agence`)])].map(l => `<span>${esc(l)}</span>`).join('')}</div>
+        <div class="puces-moyens">${[...new Set([...enLigne.map(l => `${l} en ligne`), ...(AU_COMPTOIR[pays] || AU_COMPTOIR.FR).map(l => `${l} à l'agence`)])].map(l => `<span>${esc(l)}</span>`).join('')}</div>
       </div>`;
     };
     const majDomicile = () => {
@@ -1153,7 +1156,7 @@
       $('[data-select-depot]').innerHTML = optionsAgences(si.depart);
       $('[data-select-retrait]').innerHTML = optionsAgences(si.arrivee);
       $('[data-lib-tel]').textContent = `Son téléphone en ${nomPays(si.arrivee)}`;
-      $('[name=telephone]').placeholder = si.arrivee === 'GN' ? '6XX XX XX XX' : '06 XX XX XX XX';
+      $('[name=telephone]').placeholder = si.arrivee === 'GN' ? '6XX XX XX XX' : si.arrivee === 'BE' ? '04XX XX XX XX ou +32…' : '06 XX XX XX XX';
     };
     const maj = () => {
       stock.ecrire('brouillon_envoi', etat);
@@ -1175,13 +1178,13 @@
       $('[data-bloc-articles]').classList.toggle('cache', !dispo.length);
       // La liste n'est reconstruite que si les articles ou leurs prix changent : sinon un clic
       // sur « + » juste après la saisie du poids serait perdu (la liste changerait sous le doigt)
-      const signature = JSON.stringify(dispo.map(a => [a.cle, a.label, a.prix[etat.sens][etat.mode]]));
+      const signature = JSON.stringify(dispo.map(a => [a.cle, a.label, KolisTarif.prixArticle(a, etat.sens, etat.mode)]));
       if ($('[data-articles]').dataset.signature !== signature) {
         $('[data-articles]').dataset.signature = signature;
         $('[data-articles]').innerHTML = dispo.map(a => {
         const q = etat.articles[a.cle] || 0;
         return `<div class="ligne-article${q ? ' choisi' : ''}">
-          <div><div class="nom">${esc(a.label)}</div><div class="tres-petit muet">${esc(montant(parseFloat(a.prix[etat.sens][etat.mode]), devise))} la pièce</div></div>
+          <div><div class="nom">${esc(a.label)}</div><div class="tres-petit muet">${esc(montant(KolisTarif.prixArticle(a, etat.sens, etat.mode), devise))} la pièce</div></div>
           <div class="compteur">
             <button type="button" class="btn btn-rond" data-art-moins="${esc(a.cle)}" aria-label="Retirer : ${esc(a.label)}" ${q ? '' : 'disabled'}>−</button>
             <span class="gras" aria-live="polite">${q}</span>
@@ -1288,7 +1291,7 @@
           assurance: etat.assurance, valeurDeclaree: parseFloat(etat.valeur) || 0,
           depot: f.get('depot'), guichet: f.get('guichet'),
           description: f.get('description'), payeurArrivee: f.get('payeurArrivee') === 'on', cgvAcceptees: true,
-          destinataire: { nom: f.get('nom'), telephone: normTel(f.get('telephone')) },
+          destinataire: { nom: f.get('nom'), telephone: normTel(f.get('telephone'), sensInfo().arrivee) },
           ramassage: ram ? { demande: true, adresse: ram, jour: f.get('ram_jour') || undefined, moment: f.get('ram_moment') } : undefined,
           livraison: liv ? { demande: true, adresse: liv } : undefined,
         });
@@ -1531,7 +1534,7 @@
       <div class="pile">
         <h1>Nos agences</h1>
         <p class="muet petit">Chaque agence prend les colis à envoyer et remet les colis arrivés.</p>
-        ${Object.keys(CONFIG.pays).map(blocPays).join('')}
+        ${Object.keys(CONFIG.pays).filter(p => agencesDe(p).length).map(blocPays).join('')}
         ${mentions()}
       </div>`;
   }

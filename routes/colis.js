@@ -105,7 +105,7 @@ router.post('/', auth, [
   const colis = new Colis({
     client: req.user._id,
     expediteur: { nom: `${req.user.prenom} ${req.user.nom}`, telephone: req.user.telephone },
-    destinataire: { nom: b.destinataire.nom, telephone: normTel(b.destinataire.telephone) },
+    destinataire: { nom: b.destinataire.nom, telephone: normTel(b.destinataire.telephone, sens.split('-')[1]) },
     sens, mode: b.mode, typeColis: b.typeColis, depot: b.depot, guichet: b.guichet,
     description: b.description, nbCartons: b.nbCartons || 1, articles,
     poidsEstime: parseFloat(b.poidsEstime),
@@ -133,8 +133,9 @@ const livraisonLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message:
 router.post('/:numero/livraison', livraisonLimiter, ah(async (req, res) => {
   const colis = await Colis.findOne({ numeroSuivi: req.params.numero.trim().toUpperCase() });
   if (!colis) return res.status(404).json({ succes: false, message: 'Colis introuvable.' });
-  const tel = normTel(req.body.telephone);
-  const autorise = tel && [colis.destinataire?.telephone, colis.expediteur?.telephone, colis.tiersAutorise?.telephone].includes(tel);
+  // Numéro tapé en local : essayé comme numéro du pays d'arrivée et du pays de départ
+  const connus = [colis.destinataire?.telephone, colis.expediteur?.telephone, colis.tiersAutorise?.telephone];
+  const autorise = req.body.telephone && String(colis.sens || 'FR-GN').split('-').some(p => connus.includes(normTel(req.body.telephone, p)));
   if (!autorise) return res.status(403).json({ succes: false, message: 'Ce numéro ne correspond pas à ce colis.' });
   if ([STATUTS.REMIS, STATUTS.ANNULE, STATUTS.EN_LIVRAISON].includes(colis.statut)) {
     return res.status(409).json({ succes: false, message: colis.statut === STATUTS.EN_LIVRAISON ? 'Le livreur est déjà en route.' : 'Ce colis n\'est plus modifiable.' });
@@ -157,7 +158,7 @@ router.patch('/:numero/tiers', auth, [
   if (!autorise) return res.status(403).json({ succes: false, message: 'Seuls l\'expéditeur et le destinataire peuvent faire cela.' });
   if ([STATUTS.REMIS, STATUTS.ANNULE].includes(colis.statut)) return res.status(409).json({ succes: false, message: 'Colis déjà remis.' });
 
-  colis.tiersAutorise = { nom: req.body.nom, telephone: normTel(req.body.telephone), autoriseLe: new Date() };
+  colis.tiersAutorise = { nom: req.body.nom, telephone: normTel(req.body.telephone, String(colis.sens || 'FR-GN').split('-')[1]), autoriseLe: new Date() };
   colis.historique.push({ label: 'Personne autorisée à retirer', detail: req.body.nom, le: new Date() });
   await colis.save();
   const msg = MESSAGES.tiers(colis, req.body.nom);

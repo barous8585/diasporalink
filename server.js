@@ -103,7 +103,7 @@ const limiter = rateLimit({
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: parseInt(process.env.AUTH_LIMITE, 10) || 50, // relevé seulement pour les tests automatiques
   message: { succes: false, message: 'Trop de tentatives. Réessayez dans 15 minutes.' },
 });
 app.use('/api/', limiter);
