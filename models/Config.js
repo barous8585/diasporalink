@@ -54,13 +54,20 @@ configSchema.statics.get = async function () {
   for (const k of Object.keys(CONFIG_DEFAUT.tarifs)) {
     if (config.tarifs[k] && !config.tarifs[k].express) config.tarifs[k] = { ...config.tarifs[k], express: CONFIG_DEFAUT.tarifs[k].express };
   }
+  // Sens ajoutés après coup (Belgique) : prix de départ repris des valeurs par défaut
+  for (const k of Object.keys(CONFIG_DEFAUT.tarifs)) {
+    if (!config.tarifs[k]) config.tarifs = { ...config.tarifs, [k]: CONFIG_DEFAUT.tarifs[k] };
+  }
   if (!config.domicile) config.domicile = CONFIG_DEFAUT.domicile;
+  for (const p of Object.keys(CONFIG_DEFAUT.domicile)) {
+    if (p !== 'majoration' && !config.domicile[p]) config.domicile = { ...config.domicile, [p]: CONFIG_DEFAUT.domicile[p] };
+  }
   if (!Array.isArray(config.articles)) config.articles = CONFIG_DEFAUT.articles;
   config.facturation = { ...CONFIG_DEFAUT.facturation, ...(config.facturation || {}), tva: { ...CONFIG_DEFAUT.facturation.tva, ...(config.facturation?.tva || {}) } };
   config.litiges = { ...CONFIG_DEFAUT.litiges, ...(config.litiges || {}) };
   const pd = CONFIG_DEFAUT.paiements, pc = config.paiements || {};
   config.paiements = {
-    FR: { ...pd.FR, ...(pc.FR || {}) }, GN: { ...pd.GN, ...(pc.GN || {}) },
+    FR: { ...pd.FR, ...(pc.FR || {}) }, BE: { ...pd.BE, ...(pc.BE || {}) }, GN: { ...pd.GN, ...(pc.GN || {}) },
     comptes: {
       orange_money: { ...pd.comptes.orange_money, ...(pc.comptes?.orange_money || {}) },
       mtn_momo: { ...pd.comptes.mtn_momo, ...(pc.comptes?.mtn_momo || {}) },

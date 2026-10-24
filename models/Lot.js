@@ -25,9 +25,10 @@ lotSchema.pre('validate', async function (next) {
   try {
     if (!this.code) {
       const info = MODES_INFO.find(m => m.key === this.mode);
-      const retour = this.sens === 'GN-FR';
-      const n = await Compteur.suivant(`lot-${this.mode}${retour ? '-gf' : ''}${this.demo ? '-demo' : ''}`);
-      this.code = `${this.demo ? 'DEMO-' : ''}${info?.prefixeLot || 'LOT'}${retour ? '-GF' : ''}-${String(n).padStart(4, '0')}`;
+      // AIR-0001 (France → Guinée), AIR-GF-0001 (Guinée → France), AIR-BG-0001 (Belgique → Guinée), AIR-GB-0001 (Guinée → Belgique)
+      const suffixe = SENS.find(s => s.key === (this.sens || 'FR-GN'))?.suffixeLot || '';
+      const n = await Compteur.suivant(`lot-${this.mode}${suffixe.toLowerCase()}${this.demo ? '-demo' : ''}`);
+      this.code = `${this.demo ? 'DEMO-' : ''}${info?.prefixeLot || 'LOT'}${suffixe}-${String(n).padStart(4, '0')}`;
     }
     next();
   } catch (e) { next(e); }

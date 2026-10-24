@@ -47,7 +47,7 @@ test.before(async () => {
   await mongoose.disconnect();
   serveur = spawn('node', ['server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT, MONGODB_URI: uri, JWT_SECRET: 'test', NODE_ENV: 'development', ADMIN_TELEPHONES: ADMIN_TEL, ADMIN_MOT_DE_PASSE: ADMIN_MDP, AUTH_MODE: '', ITINERAIRE_URL: '', GEOCODAGE_URL: '',
+    env: { ...process.env, PORT, MONGODB_URI: uri, JWT_SECRET: 'test', NODE_ENV: 'development', ADMIN_TELEPHONES: ADMIN_TEL, ADMIN_MOT_DE_PASSE: ADMIN_MDP, AUTH_MODE: '', AUTH_LIMITE: '1000', ITINERAIRE_URL: '', GEOCODAGE_URL: '',
       VAPID_PUBLIC_KEY: VAPID.publicKey, VAPID_PRIVATE_KEY: VAPID.privateKey, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -1421,4 +1421,61 @@ test('avis clients : seulement après la remise, par l\'expéditeur ou le destin
   assert.strictEqual((await appel('POST', `/avis/${id}/afficher`, {}, admin)).status, 200);
   assert.strictEqual((await appel('GET', '/avis')).stats.nb, 1);
   assert.strictEqual((await appel('POST', '/avis/pasunid/reponse', { texte: 'x' }, admin)).status, 404);
+});
+
+test('Belgique ⇄ Guinée : agence belge, réservation, dépôt, lots à part, téléphones +32', async () => {
+  const admin = await connexion(ADMIN_TEL);
+  // Sans agence en Belgique, les sens belges ne sont pas proposés
+  let pub = await appel('GET', '/config');
+  assert.strictEqual(pub.sens.find(s => s.key === 'BE-GN').ouvert, false);
+  assert.strictEqual(pub.sens.find(s => s.key === 'FR-GN').ouvert, true);
+  // Ajout de l'agence de Bruxelles
+  const cfg = (await appel('GET', '/config/admin', null, admin)).config;
+  let r = await appel('PATCH', '/config/admin', { agences: [...cfg.agences, { code: 'BRUXELLES', nom: 'Agence Bruxelles', pays: 'BE', ville: 'Bruxelles', commune: 'Matonge', adresse: '', position: { lat: 50.8337, lng: 4.3664 }, plateforme: true }] }, admin);
+  assert.strictEqual(r.status, 200, r.message);
+  pub = await appel('GET', '/config');
+  assert.ok(pub.sens.find(s => s.key === 'BE-GN').ouvert && pub.sens.find(s => s.key === 'GN-BE').ouvert);
+  assert.strictEqual(pub.pays.BE.devise, 'EUR');
+  // Une agence belge placée en Guinée est refusée
+  r = await appel('PATCH', '/config/admin', { agences: [...cfg.agences, { code: 'BRUXELLES', nom: 'Agence Bruxelles', pays: 'BE', ville: 'Bruxelles', position: { lat: 9.55, lng: -13.65 } }] }, admin);
+  assert.strictEqual(r.status, 400);
+  // Paris → Bruxelles impossible (un des deux pays doit être la Guinée)
+  const client = await connexion('0633445566');
+  r = await appel('POST', '/colis', { cgvAcceptees: true, mode: 'air', typeColis: 'vetements', poidsEstime: 3, depot: 'PARIS', guichet: 'BRUXELLES', destinataire: { nom: 'X', telephone: '0478123456' } }, client);
+  assert.strictEqual(r.status, 400);
+  assert.match(r.message, /Guinée/);
+  // Réservation Belgique → Guinée : prix en €
+  r = await appel('POST', '/colis', { cgvAcceptees: true, mode: 'air', typeColis: 'vetements', poidsEstime: 4, depot: 'BRUXELLES', guichet: 'KALOUM', destinataire: { nom: 'Hawa Bah', telephone: '622334455' } }, client);
+  assert.strictEqual(r.status, 201, r.message);
+  assert.strictEqual(r.colis.sens, 'BE-GN');
+  assert.strictEqual(r.colis.tarif.devise, 'EUR');
+  // Agent à Bruxelles : dépôt d'un colis Belgique → Guinée, numéro belge reconnu
+  r = await appel('POST', '/utilisateurs/equipe', { telephone: '+32470000001', prenom: 'Aminata', nom: 'Bxl', role: 'agent', lieu: 'BRUXELLES', motDePasse: MDP }, admin);
+  assert.strictEqual(r.status, 201, r.message);
+  const agentBxl = await connexion('+32470000001');
+  r = await appel('POST', '/agent/depot', { poidsReel: 6, mode: 'air', typeColis: 'vetements', guichet: 'KALOUM', cgvAcceptees: true,
+    expediteur: { nom: 'Ousmane Diallo', telephone: '0478 12 34 56' }, destinataire: { nom: 'Fanta Diallo', telephone: '621 00 11 22' } }, agentBxl);
+  assert.strictEqual(r.status, 201, r.message);
+  const bg = r.colis;
+  assert.strictEqual(bg.sens, 'BE-GN');
+  assert.strictEqual(bg.expediteur.telephone, '+32478123456');
+  // Guinée → Belgique depuis Kaloum : destinataire belge en 04…
+  const agentKaloum = await connexion('620000003');
+  r = await appel('POST', '/agent/depot', { poidsReel: 2, mode: 'air', typeColis: 'alimentaire', guichet: 'BRUXELLES', cgvAcceptees: true,
+    expediteur: { nom: 'Saran Condé', telephone: '622 99 88 77' }, destinataire: { nom: 'Ibrahima Condé', telephone: '0485 11 22 33' } }, agentKaloum);
+  assert.strictEqual(r.status, 201, r.message);
+  assert.strictEqual(r.colis.sens, 'GN-BE');
+  assert.strictEqual(r.colis.destinataire.telephone, '+32485112233');
+  assert.strictEqual(r.colis.tarif.devise, 'GNF');
+  // Lots à part, numérotés par sens
+  r = await appel('POST', '/lots', { mode: 'air', sens: 'BE-GN', reference: 'SN 202' }, admin);
+  assert.strictEqual(r.status, 201, r.message);
+  assert.match(r.lot.code, /^AIR-BG-\d{4}$/);
+  assert.strictEqual(r.lot.depot, 'BRUXELLES');
+  r = await appel('POST', '/lots', { mode: 'air', sens: 'GN-BE' }, admin);
+  assert.match(r.lot.code, /^AIR-GB-\d{4}$/);
+  // Un colis Belgique → Guinée ne peut pas aller dans un lot France → Guinée
+  const lotFr = (await appel('POST', '/lots', { mode: 'air', sens: 'FR-GN' }, admin)).lot;
+  r = await appel('POST', '/agent/scans', { scans: [{ opId: 'be1', numero: bg.numeroSuivi, action: 'charger', lot: lotFr.code }] }, agentBxl);
+  assert.strictEqual(r.resultats[0].ok, false);
 });

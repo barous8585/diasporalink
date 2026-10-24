@@ -9,7 +9,7 @@ const Config = require('../models/Config');
 const { auth, role } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
 const { calculerSolde } = require('../utils/tarif');
-const { ROLES, MODES, STATUTS, STATUTS_LOT, SENS } = require('../config/constants');
+const { ROLES, MODES, STATUTS, STATUTS_LOT, SENS, PAYS } = require('../config/constants');
 const { changerStatutMasse } = require('../services/colisService');
 
 router.use(auth);
@@ -57,6 +57,7 @@ router.post('/', role(ROLES.ADMIN), [
   const { mode, reference, transporteur, dateDepartPrevue, dateArriveePrevue, notes } = req.body;
   const sens = SENS.find(s => s.key === (req.body.sens || 'FR-GN'));
   const [depart, arrivee] = await Promise.all([Config.plateforme(sens.depart), Config.plateforme(sens.arrivee)]);
+  if (!depart || !arrivee) return res.status(400).json({ succes: false, message: `Pas d'agence ouverte en ${!depart ? PAYS[sens.depart].nom : PAYS[sens.arrivee].nom} : ajoutez-en une dans Tarifs et agences.` });
   const lot = await Lot.create({
     sens: sens.key, depot: depart?.code, destination: arrivee?.code,
     mode, reference, transporteur, notes, creePar: req.user._id,

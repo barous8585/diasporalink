@@ -58,7 +58,7 @@
     return `
       <p class="petit muet">Version du ${e(new Date(c.cgvVersion || Date.now()).toLocaleDateString('fr-FR'))}</p>
       <h2>1. Qui sommes-nous ?</h2>
-      <p>Le service est assuré par ${ident(c)} (« TMS »). TMS transporte des colis entre la France et la Guinée, dans les deux sens, à partir de ses agences.</p>
+      <p>Le service est assuré par ${ident(c)} (« TMS »). TMS transporte des colis entre la Guinée et l'Europe (France, Belgique), dans les deux sens, à partir de ses agences.</p>
       <p>En réservant en ligne ou en déposant un colis en agence, l'expéditeur accepte les présentes conditions et la liste des objets interdits.</p>
 
       <h2>2. Réservation, dépôt et pesée</h2>
@@ -70,7 +70,7 @@
 
       <h2>4. Prix et paiement</h2>
       <p>Les prix sont indiqués toutes taxes comprises. Le transport est payé au dépôt par l'expéditeur, ou à l'arrivée par le destinataire si cette option a été choisie. Les droits et taxes de douane du pays d'arrivée sont refacturés à l'identique au destinataire.</p>
-      <p>Le colis est gardé gratuitement ${nb(m.joursGratuits)} jours à l'agence de retrait. Ensuite, des frais de garde s'appliquent : ${nb(m.fraisJourGnf)} GNF par jour en Guinée, ${nb(m.fraisJourEur)} € par jour en France.</p>
+      <p>Le colis est gardé gratuitement ${nb(m.joursGratuits)} jours à l'agence de retrait. Ensuite, des frais de garde s'appliquent : ${nb(m.fraisJourGnf)} GNF par jour en Guinée, ${nb(m.fraisJourEur)} € par jour en France et en Belgique.</p>
       <p>Le ramassage et la livraison à domicile sont facultatifs. Leur prix dépend de la distance entre l'agence et l'adresse ; il est affiché avant validation. Il se paie en ligne, d'avance (carte bancaire, Orange Money ou MTN MoMo selon le pays) : la course est programmée dès le paiement reçu. Une course payée n'est pas remboursée si le client l'annule ou change d'avis ; si elle est redemandée pour le même colis, le paiement déjà fait est conservé. Un paiement Orange Money ou MTN MoMo est validé après vérification de sa réception par TMS.</p>
       <p>Le colis n'est remis qu'une fois toutes les sommes payées. Une facture est délivrée pour chaque paiement.</p>
 
@@ -130,7 +130,7 @@
       <p>Vos données ne sont jamais vendues ni utilisées pour de la publicité.</p>
 
       <h2>Qui y a accès ?</h2>
-      <p>Les agents et livreurs de TMS qui traitent votre colis, en France et en Guinée ; les administrations des douanes si elles le demandent ; nos prestataires techniques : hébergement de l'application et de la base de données (Render, MongoDB Atlas, Netlify), paiement par carte (Stripe) et, le cas échéant, envoi de SMS ou de messages WhatsApp. Certains de ces prestataires sont situés hors de l'Union européenne ; les transferts sont encadrés par les clauses contractuelles types de la Commission européenne. L'envoi vers la Guinée des données nécessaires à la remise du colis est indispensable au service que vous demandez.</p>
+      <p>Les agents et livreurs de TMS qui traitent votre colis, en Europe (France, Belgique) et en Guinée ; les administrations des douanes si elles le demandent ; nos prestataires techniques : hébergement de l'application et de la base de données (Render, MongoDB Atlas, Netlify), paiement par carte (Stripe) et, le cas échéant, envoi de SMS ou de messages WhatsApp. Certains de ces prestataires sont situés hors de l'Union européenne ; les transferts sont encadrés par les clauses contractuelles types de la Commission européenne. L'envoi vers la Guinée des données nécessaires à la remise du colis est indispensable au service que vous demandez.</p>
 
       <h2>Combien de temps ?</h2>
       <ul class="liste-legale">

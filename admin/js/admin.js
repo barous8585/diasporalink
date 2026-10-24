@@ -532,7 +532,7 @@
     const { el, fermer } = modale(`
       <form class="pile" style="--gap:12px">
         <div class="ligne entre"><h2>Nouveau lot</h2><button type="button" class="btn btn-rond" data-fermer aria-label="Fermer">${ic('fermer')}</button></div>
-        <div class="grille-2">${CONFIG.sens.map((x, i) => `<label class="case" style="border:1px solid var(--ligne-2);border-radius:12px;padding:0 12px;background:#fff"><input type="radio" name="sens" value="${x.key}" ${i === 0 ? 'checked' : ''}> ${esc(x.label)}</label>`).join('')}</div>
+        <div class="grille-2">${CONFIG.sens.filter(x => x.ouvert !== false).map((x, i) => `<label class="case" style="border:1px solid var(--ligne-2);border-radius:12px;padding:0 12px;background:#fff"><input type="radio" name="sens" value="${x.key}" ${i === 0 ? 'checked' : ''}> ${esc(x.label)}</label>`).join('')}</div>
         <div class="grille-3">${CONFIG.modes.map((m, i) => `<label class="case" style="border:1px solid var(--ligne-2);border-radius:12px;padding:0 12px;background:#fff"><input type="radio" name="mode" value="${m.key}" ${i === 0 ? 'checked' : ''}> ${esc(m.label)}</label>`).join('')}</div>
         <label class="champ">Référence (n° de vol, de conteneur, LTA…) <input class="saisie" name="reference"></label>
         <label class="champ">Transporteur <input class="saisie" name="transporteur"></label>
@@ -581,7 +581,7 @@
           <div>
             <h2 style="font-size:24px">Lot ${esc(lot.code)} · ${K.libMode(lot.mode)}</h2>
             <p class="petit muet" style="margin-top:4px">${[lot.reference, lot.transporteur].filter(Boolean).map(esc).join(' · ') || 'Sans référence'} ·
-              ${stats.nb} colis · ${kg(stats.poids)}${lot.statut !== 'preparation' ? ` · reçus en ${lot.sens === 'GN-FR' ? 'France' : 'Guinée'} : ${stats.scannesArrivee} / ${stats.nb}` : ''}
+              ${stats.nb} colis · ${kg(stats.poids)}${lot.statut !== 'preparation' ? ` · reçus en ${esc(CONFIG.pays[String(lot.sens || 'FR-GN').split('-')[1]]?.nom || 'Guinée')} : ${stats.scannesArrivee} / ${stats.nb}` : ''}
               ${lot.departLe ? ` · parti le ${esc(date(lot.departLe, false))}` : lot.dateDepartPrevue ? ` · départ prévu ${esc(date(lot.dateDepartPrevue, false))}` : ''}</p>
           </div>
           <div class="ligne" style="--gap:8px">
@@ -595,7 +595,7 @@
           <span class="gras grandit" data-nb-choisis></span>
           ${lot.statut === 'preparation' ? `<button class="btn btn-contour" data-retirer>Retirer du lot</button>` : `
           <button class="btn btn-ocre" data-masse-statut="pret">Passer à « Prêt au guichet »</button>
-          ${lot.statut === 'parti' ? `<button class="btn btn-contour" data-masse-statut="arrive">Arrivé en ${lot.sens === 'GN-FR' ? 'France' : 'Guinée'}</button>` : ''}`}
+          ${lot.statut === 'parti' ? `<button class="btn btn-contour" data-masse-statut="arrive">Arrivé en ${esc(CONFIG.pays[String(lot.sens || 'FR-GN').split('-')[1]]?.nom || 'Guinée')}</button>` : ''}`}
           <button class="btn btn-contour" data-etiquettes>Imprimer étiquettes</button>
         </div>
         <div class="defile"><table class="tableau">
@@ -1232,7 +1232,7 @@
         <div class="champ" style="grid-column:1/-1">Position de l'agence <span class="tres-petit muet">(l'adresse écrite suffit : elle est placée sur la carte automatiquement)</span>
           <span class="petit" data-etat-pos>${!a.position?.lat ? '<span class="rouge">Non renseignée : écrivez l\'adresse ou placez l\'agence sur la carte (sinon pas de ramassage ni de livraison)</span>'
             : KolisTarif.pointDansPays(a.position, a.pays) ? `<span class="vert">${ic('ok', 'ic-sm')} ${a.position.lat.toFixed(5)}, ${a.position.lng.toFixed(5)}</span> · <a href="https://www.google.com/maps/search/?api=1&query=${a.position.lat},${a.position.lng}" target="_blank" rel="noopener">voir sur Google Maps</a>`
-            : `<span class="rouge">${ic('alerte', 'ic-sm')} Position fausse : elle est ${KolisTarif.paysDuPoint(a.position) === 'FR' ? 'en France' : KolisTarif.paysDuPoint(a.position) === 'GN' ? 'en Guinée' : 'hors zone'}, pas dans le pays de l'agence. Les prix à domicile sont bloqués : placez l'agence sur la carte.</span>`}</span>
+            : `<span class="rouge">${ic('alerte', 'ic-sm')} Position fausse : elle est ${KolisTarif.paysDuPoint(a.position) ? `en ${esc(CONFIG.pays[KolisTarif.paysDuPoint(a.position)]?.nom || '')}` : 'hors zone'}, pas dans le pays de l'agence. Les prix à domicile sont bloqués : placez l'agence sur la carte.</span>`}</span>
           <span class="ligne" style="--gap:8px;flex-wrap:wrap">
             <button type="button" class="btn btn-petit" data-placer>${ic('lieu', 'ic-sm')} Placer sur la carte</button>
             <button type="button" class="btn btn-petit" data-ici>${ic('gps', 'ic-sm')} Je suis à l'agence</button>
@@ -1261,7 +1261,7 @@
       <div class="carte formulaire-grille" data-article data-cle="${esc(a.cle || '')}" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr))">
         <label class="champ" style="grid-column:span 2">Article <input class="saisie" name="art_label" value="${esc(a.label || '')}" placeholder="ex. Paire de chaussures"></label>
         <label class="champ">Compte (kg) <input class="saisie" name="art_poids" type="number" min="0" step="0.1" value="${a.poids ?? ''}"></label>
-        ${CONFIG.sens.map(x => ['air', 'mer'].map(m => `<label class="champ" title="${esc(x.label)}">${esc(x.depart)} → ${esc(x.arrivee)} ${m === 'air' ? 'avion' : 'bateau'} (${symbole(x.key)}) <input class="saisie" name="art_${x.key}_${m}" type="number" min="0" step="${symbole(x.key) === '€' ? '0.5' : '1000'}" value="${a.prix?.[x.key]?.[m] ?? ''}" placeholder="non proposé"></label>`).join('')).join('')}
+        ${CONFIG.sens.map(x => ['air', 'mer'].map(m => `<label class="champ" title="${esc(x.label)}">${esc(x.depart)} → ${esc(x.arrivee)} ${m === 'air' ? 'avion' : 'bateau'} (${symbole(x.key)}) <input class="saisie" name="art_${x.key}_${m}" type="number" min="0" step="${symbole(x.key) === '€' ? '0.5' : '1000'}" value="${a.prix?.[x.key]?.[m] ?? ''}" placeholder="${x.equivalent ? `comme ${esc(CONFIG.sens.find(y => y.key === x.equivalent)?.depart || '')} → ${esc(CONFIG.sens.find(y => y.key === x.equivalent)?.arrivee || '')}` : 'non proposé'}"></label>`).join('')).join('')}
         <div class="ligne entre" style="grid-column:1/-1">
           <label class="case"><input type="checkbox" name="art_actif" ${a.actif !== false ? 'checked' : ''}> Proposé aux clients</label>
           <button type="button" class="btn btn-petit" data-suppr-article>${ic('fermer', 'ic-sm')} Retirer</button>
@@ -1287,7 +1287,7 @@
           <div class="panneau-corps formulaire-grille">
             <label class="champ">Jours gratuits <input class="saisie" name="joursGratuits" type="number" min="0" value="${c.magasinage.joursGratuits}"></label>
             <label class="champ">Ensuite, par jour en Guinée (GNF) <input class="saisie" name="fraisJourGnf" type="number" min="0" step="500" value="${c.magasinage.fraisJourGnf}"></label>
-            <label class="champ">Ensuite, par jour en France (€) <input class="saisie" name="fraisJourEur" type="number" min="0" step="0.5" value="${c.magasinage.fraisJourEur ?? 0}"></label>
+            <label class="champ">Ensuite, par jour en France et en Belgique (€) <input class="saisie" name="fraisJourEur" type="number" min="0" step="0.5" value="${c.magasinage.fraisJourEur ?? 0}"></label>
           </div></section>
         <section class="panneau"><div class="panneau-tete"><div><h2>Facturation</h2><p class="petit muet" style="margin-top:4px">Ces informations s'impriment sur chaque facture. Le régime de TVA est à faire valider par votre expert-comptable.</p></div></div>
           <div class="panneau-corps formulaire-grille">
@@ -1308,6 +1308,12 @@
               <label class="case"><input type="checkbox" name="pay_FR_carte" ${c.paiements?.FR?.carte ? 'checked' : ''}> Carte bancaire</label>
               <label class="case"><input type="checkbox" name="pay_FR_orange_money" ${c.paiements?.FR?.orange_money ? 'checked' : ''}> Orange Money</label>
               <label class="case"><input type="checkbox" name="pay_FR_mtn_momo" ${c.paiements?.FR?.mtn_momo ? 'checked' : ''}> MTN MoMo</label>
+            </div>
+            <div class="ligne" style="--gap:18px;flex-wrap:wrap">
+              <span class="gras">Depuis la Belgique :</span>
+              <label class="case"><input type="checkbox" name="pay_BE_carte" ${c.paiements?.BE?.carte ? 'checked' : ''}> Carte bancaire</label>
+              <label class="case"><input type="checkbox" name="pay_BE_orange_money" ${c.paiements?.BE?.orange_money ? 'checked' : ''}> Orange Money</label>
+              <label class="case"><input type="checkbox" name="pay_BE_mtn_momo" ${c.paiements?.BE?.mtn_momo ? 'checked' : ''}> MTN MoMo</label>
             </div>
             <div class="ligne" style="--gap:18px;flex-wrap:wrap">
               <span class="gras">Depuis la Guinée :</span>
@@ -1404,7 +1410,7 @@
           b.disabled = true;
           const p = await K.gpsActuel();
           if (!KolisTarif.pointDansPays(p, pays)) {
-            toast(`Vous n'êtes pas ${pays === 'FR' ? 'en France' : 'en Guinée'} : votre position ne peut pas être celle de cette agence. Utilisez « Placer sur la carte » ou collez un lien Google Maps.`, 'erreur');
+            toast(`Vous n'êtes pas en ${CONFIG.pays[pays]?.nom || pays} : votre position ne peut pas être celle de cette agence. Utilisez « Placer sur la carte » ou collez un lien Google Maps.`, 'erreur');
             return;
           }
           poserPosition(bloc, p);
@@ -1460,6 +1466,7 @@
         },
         paiements: {
           FR: { carte: form.querySelector('[name=pay_FR_carte]').checked, orange_money: form.querySelector('[name=pay_FR_orange_money]').checked, mtn_momo: form.querySelector('[name=pay_FR_mtn_momo]').checked },
+          BE: { carte: form.querySelector('[name=pay_BE_carte]').checked, orange_money: form.querySelector('[name=pay_BE_orange_money]').checked, mtn_momo: form.querySelector('[name=pay_BE_mtn_momo]').checked },
           GN: { orange_money: form.querySelector('[name=pay_GN_orange_money]').checked, mtn_momo: form.querySelector('[name=pay_GN_mtn_momo]').checked, carte: form.querySelector('[name=pay_GN_carte]').checked },
           comptes: { orange_money: { numero: v('pay_om_numero'), titulaire: v('pay_om_titulaire') }, mtn_momo: { numero: v('pay_mtn_numero'), titulaire: v('pay_mtn_titulaire') } },
         },

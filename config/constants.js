@@ -51,11 +51,17 @@ const TYPES_COLIS = [
 // ── PAYS ET SENS D'ENVOI ──────────────────
 const PAYS = {
   FR: { code: 'FR', nom: 'France', devise: 'EUR', indicatif: '+33' },
+  BE: { code: 'BE', nom: 'Belgique', devise: 'EUR', indicatif: '+32' },
   GN: { code: 'GN', nom: 'Guinée', devise: 'GNF', indicatif: '+224' },
 };
+// Sens d'envoi. « suffixeLot » distingue les numéros de lot (AIR-0001, AIR-GF-0001, AIR-BG-0001…).
+// « equivalent » : sens dont on reprend les prix tant que l'admin n'en a pas fixé
+// (la Belgique démarre aux prix de la France).
 const SENS = [
-  { key: 'FR-GN', depart: 'FR', arrivee: 'GN', label: 'France → Guinée' },
-  { key: 'GN-FR', depart: 'GN', arrivee: 'FR', label: 'Guinée → France' },
+  { key: 'FR-GN', depart: 'FR', arrivee: 'GN', label: 'France → Guinée', suffixeLot: '' },
+  { key: 'GN-FR', depart: 'GN', arrivee: 'FR', label: 'Guinée → France', suffixeLot: '-GF' },
+  { key: 'BE-GN', depart: 'BE', arrivee: 'GN', label: 'Belgique → Guinée', suffixeLot: '-BG', equivalent: 'FR-GN' },
+  { key: 'GN-BE', depart: 'GN', arrivee: 'BE', label: 'Guinée → Belgique', suffixeLot: '-GB', equivalent: 'GN-FR' },
 ];
 const sensEntre = (paysDepart, paysArrivee) => SENS.find(s => s.depart === paysDepart && s.arrivee === paysArrivee) || null;
 
@@ -66,6 +72,8 @@ const CONFIG_DEFAUT = {
   tarifs: {
     'FR-GN': { devise: 'EUR', express: { prixKg: 20, poidsMin: 1 }, air: { prixKg: 12, poidsMin: 1 }, mer: { prixKg: 4, poidsMin: 10 } },
     'GN-FR': { devise: 'GNF', express: { prixKg: 200000, poidsMin: 1 }, air: { prixKg: 120000, poidsMin: 1 }, mer: { prixKg: 40000, poidsMin: 10 } },
+    'BE-GN': { devise: 'EUR', express: { prixKg: 20, poidsMin: 1 }, air: { prixKg: 12, poidsMin: 1 }, mer: { prixKg: 4, poidsMin: 10 } },
+    'GN-BE': { devise: 'GNF', express: { prixKg: 200000, poidsMin: 1 }, air: { prixKg: 120000, poidsMin: 1 }, mer: { prixKg: 40000, poidsMin: 10 } },
   },
   surcharges: Object.fromEntries(TYPES_COLIS.map(t => [t.key, t.surcharge])),
   // Articles facturés à la pièce plutôt qu'au kilo. Prix par sens et par mode, dans la
@@ -84,7 +92,7 @@ const CONFIG_DEFAUT = {
   magasinage: {
     joursGratuits: 10,       // jours gratuits à l'agence de retrait
     fraisJourGnf: 5000,      // frais par jour au-delà, agences en Guinée
-    fraisJourEur: 1,         // frais par jour au-delà, agences en France
+    fraisJourEur: 1,         // frais par jour au-delà, agences en France et en Belgique
   },
   // Agences TMS : chacune reçoit les colis à envoyer, remet les colis arrivés et encaisse.
   // « plateforme » = l'agence où arrivent les lots dans ce pays, d'où les colis
@@ -100,6 +108,7 @@ const CONFIG_DEFAUT = {
   domicile: {
     majoration: 1.3,
     FR: { actif: true, base: 8,     parKm: 1,    plafond: 0, rayonMaxKm: 60 },
+    BE: { actif: true, base: 8,     parKm: 1,    plafond: 0, rayonMaxKm: 60 },
     GN: { actif: true, base: 10000, parKm: 2000, plafond: 0, rayonMaxKm: 40 },
   },
   // Facturation : complète les mentions légales (ENTREPRISE). Prix affichés TTC.
@@ -111,6 +120,7 @@ const CONFIG_DEFAUT = {
     site: '',
     tva: {
       FR: { taux: 0.20, mention: '' },
+      BE: { taux: 0.21, mention: '' },
       GN: { taux: 0, mention: 'TVA non applicable' },
     },
     conditionsPaiement: 'Payable comptant au dépôt ou à la remise du colis. Pas d\'escompte pour paiement anticipé.',
@@ -121,6 +131,7 @@ const CONFIG_DEFAUT = {
   // l'équipe vérifie la réception puis valide (en attendant un agrégateur automatique).
   paiements: {
     FR: { carte: true, orange_money: true },
+    BE: { carte: true, orange_money: true },
     GN: { orange_money: true, mtn_momo: true, carte: true },
     comptes: {
       orange_money: { numero: '', titulaire: 'Talib Multi Services' },

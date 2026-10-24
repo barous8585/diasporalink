@@ -11,6 +11,11 @@ const arrondiGnf = (n) => Math.ceil(n / 500) * 500;
 
 // Pays d'arrivée d'un sens « FR-GN » → « GN »
 const paysArrivee = (sens) => String(sens || 'FR-GN').split('-')[1];
+const paysDepart = (sens) => String(sens || 'FR-GN').split('-')[0];
+// Monnaie d'un pays : le franc guinéen en Guinée, l'euro en France et en Belgique
+const devisePays = (pays) => (pays === 'GN' ? 'GNF' : 'EUR');
+// Sens dont un nouveau sens reprend les prix tant que l'admin n'en a pas fixé (Belgique ← France)
+const SENS_EQUIVALENT = { 'BE-GN': 'FR-GN', 'GN-BE': 'GN-FR' };
 
 /**
  * Articles facturés à la pièce (chaussures, téléphone…) : prix fixe par sens et par mode,
@@ -18,6 +23,16 @@ const paysArrivee = (sens) => String(sens || 'FR-GN').split('-')[1];
  * du poids pesé : le reste (vêtements, vivres…) est facturé au kilo.
  * @param articles [{ cle, quantite }] ; les articles inconnus ou fermés sont ignorés.
  */
+/**
+ * Prix à la pièce d'un article pour un sens et un mode (NaN s'il n'est pas proposé).
+ * Sens sans prix fixé : celui du sens équivalent (Belgique ← France). Express sans prix : celui de l'avion.
+ */
+function prixArticle(art, sens, mode) {
+  const rempli = (g) => g && Object.values(g).some(v => v !== null && v !== '' && v !== undefined);
+  const grille = rempli(art?.prix?.[sens]) ? art.prix[sens] : art?.prix?.[SENS_EQUIVALENT[sens]];
+  return parseFloat(grille?.[mode] ?? (mode === 'express' ? grille?.air : undefined));
+}
+
 function chiffrerArticles(config, sens, mode, articles) {
   const catalogue = config.articles || [];
   const lignes = [];
@@ -25,7 +40,7 @@ function chiffrerArticles(config, sens, mode, articles) {
     const quantite = Math.min(Math.max(parseInt(a?.quantite, 10) || 0, 0), 99);
     const art = catalogue.find(x => x.cle === a?.cle && x.actif !== false);
     // Express sans prix propre : même prix à la pièce que l'avion
-    const prix = parseFloat(art?.prix?.[sens]?.[mode] ?? (mode === 'express' ? art?.prix?.[sens]?.air : undefined));
+    const prix = prixArticle(art, sens, mode);
     if (!quantite || !art || !(prix >= 0)) continue;
     const exist = lignes.find(l => l.cle === art.cle);
     if (exist) { exist.quantite += quantite; exist.montant = exist.quantite * prix; exist.poids = exist.quantite * (art.poids || 0); continue; }
@@ -44,7 +59,7 @@ function chiffrerArticles(config, sens, mode, articles) {
  *                         valeurDeclaree est dans la devise du sens.
  */
 function calculerTarif(config, { sens = 'FR-GN', mode, poidsKg, typeColis, valeurDeclaree = 0, assurance = false, articles = [] }) {
-  const grille = config.tarifs?.[sens];
+  const grille = config.tarifs?.[sens] || config.tarifs?.[SENS_EQUIVALENT[sens]];
   if (!grille) throw new Error(`Sens d'envoi inconnu : ${sens}`);
   const t = grille[mode];
   if (!t) throw new Error(`Mode de transport inconnu : ${mode}`);
@@ -103,7 +118,7 @@ function calculerMagasinage(config, arriveGuichetLe, maintenant = new Date(), { 
   const jours  = Math.max(0, Math.floor((maintenant - debut) / 86400000));
   const joursFactures = Math.max(0, jours - joursGratuits);
   const gratuitJusquau = new Date(debut.getTime() + joursGratuits * 86400000);
-  const parJourGnf = pays === 'FR' ? arrondiGnf(fraisJourEur * (taux || config.tauxEurGnf)) : fraisJourGnf;
+  const parJourGnf = pays !== 'GN' ? arrondiGnf(fraisJourEur * (taux || config.tauxEurGnf)) : fraisJourGnf;
   return { jours, joursFactures, fraisGnf: joursFactures * parJourGnf, gratuitJusquau };
 }
 
@@ -125,6 +140,8 @@ function distanceKm(a, b) {
 // Guinée pointé à Paris, un GPS qui renvoie la position de l'ordinateur de bureau…
 const ZONES_PAYS = {
   GN: { latMin: 7.0, latMax: 12.8, lngMin: -15.4, lngMax: -7.5, nom: 'Guinée', centre: { lat: 9.5370, lng: -13.6773 } },
+  // Belgique avant la France : un point à Bruxelles est dit « en Belgique » (les rectangles se recouvrent)
+  BE: { latMin: 49.45, latMax: 51.55, lngMin: 2.5, lngMax: 6.45, nom: 'Belgique', centre: { lat: 50.8503, lng: 4.3517 } },
   FR: { latMin: 41.2, latMax: 51.2, lngMin: -5.4, lngMax: 9.8, nom: 'France', centre: { lat: 48.8566, lng: 2.3522 } },
 };
 const pointDansPays = (p, pays) => {
@@ -148,7 +165,7 @@ function calculerCourse(config, agence, point, { taux, routeKm } = {}) {
   const dom = config.domicile || {};
   const pays = agence?.pays;
   const bareme = dom[pays];
-  const devise = pays === 'FR' ? 'EUR' : 'GNF';
+  const devise = devisePays(pays);
   const nomAg = agence?.nom || 'cette agence';
   if (!bareme || bareme.actif === false) return { ok: false, raison: 'indisponible', message: 'Service à domicile pas encore proposé dans ce pays.' };
   if (!pointValide(agence?.position)) return { ok: false, raison: 'agence_sans_position', message: `Service à domicile pas encore proposé par ${nomAg}.` };
@@ -230,7 +247,7 @@ function calculerSolde(colis, config, maintenant = new Date()) {
   };
 }
 
-const api = { ZONES_PAYS, pointDansPays, paysDuPoint, agenceBienPlacee, calculerTarif, chiffrerArticles, domicileAPayerGnf, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee, distanceKm, calculerCourse, fraisDomicileGnf, pointValide };
+const api = { prixArticle, paysDepart, devisePays, SENS_EQUIVALENT, ZONES_PAYS, pointDansPays, paysDuPoint, agenceBienPlacee, calculerTarif, chiffrerArticles, domicileAPayerGnf, calculerMagasinage, calculerSolde, enGnf, arrondiGnf, arrondi2, paysArrivee, distanceKm, calculerCourse, fraisDomicileGnf, pointValide };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else racine.KolisTarif = api;
 })(typeof window !== 'undefined' ? window : globalThis);

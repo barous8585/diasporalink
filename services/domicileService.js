@@ -170,7 +170,7 @@ async function demanderCourse(colis, type, data) {
   } else {
     const dispo = calculerCourse(config, agence, { lat: 1, lng: 1 }); // vérifie seulement que le service existe
     if (!dispo.ok && ['indisponible', 'agence_sans_position'].includes(dispo.raison)) throw new ErreurMetier(dispo.message);
-    prix = { distanceKm: undefined, prix: undefined, devise: agence.pays === 'FR' ? 'EUR' : 'GNF', prixGnf: 0 };
+    prix = { distanceKm: undefined, prix: undefined, devise: agence.pays === 'GN' ? 'GNF' : 'EUR', prixGnf: 0 };
   }
   const moment = MOMENTS.some(m => m.key === data.moment) ? data.moment : undefined;
   const jour = data.jour ? new Date(data.jour) : undefined;

@@ -10,7 +10,7 @@ const Lot = require('../models/Lot');
 const Config = require('../models/Config');
 const { auth, role } = require('../middleware/auth');
 const { ah, valider } = require('../utils/http');
-const { ROLES, STATUTS, STATUTS_LOT, TYPES_COLIS, MODES, SENS, libMode } = require('../config/constants');
+const { ROLES, STATUTS, STATUTS_LOT, TYPES_COLIS, MODES, SENS, PAYS, libMode } = require('../config/constants');
 const { enGnf } = require('../utils/tarif');
 const svc = require('../services/colisService');
 
@@ -96,7 +96,7 @@ router.get('/aujourdhui', ah(async (req, res) => {
   }
   if (prets.length) taches.push({ cle: 'remettre', nb: prets.length, titre: `${prets.length} colis prêt(s) à remettre`, aide: aLivrer ? `Dont ${aLivrer} à livrer à domicile par un livreur.` : 'Les destinataires ont reçu leur code.', onglet: 'remise' });
   if (maCaisse.length) taches.push({ cle: 'caisse', nb: maCaisse.length, titre: caisseAncienne ? 'Caisse d\'un jour précédent à fermer' : 'Fermer la caisse en fin de journée', aide: Object.entries(totaux).map(([d, v]) => `${Math.round(v * 100) / 100} ${d === 'EUR' ? '€' : 'GNF'}`).join(' · '), onglet: 'caisse', urgent: caisseAncienne });
-  if (aRecevoir && !lotsAttendus.length) taches.push({ cle: 'transit', nb: aRecevoir, titre: `${aRecevoir} colis en route vers ${lieu.pays === 'GN' ? 'la Guinée' : 'la France'}`, aide: 'Rien à faire pour l\'instant.', info: true });
+  if (aRecevoir && !lotsAttendus.length) taches.push({ cle: 'transit', nb: aRecevoir, titre: `${aRecevoir} colis en route vers la ${PAYS[lieu.pays]?.nom || 'destination'}`, aide: 'Rien à faire pour l\'instant.', info: true });
   res.json({ succes: true, lieu, taches, faitsAujourdhui, lotsPrepa: lotsPrepa.map(l => ({ code: l.code, mode: l.mode, sens: l.sens, nb: compte(l.code) })) });
 }));
 

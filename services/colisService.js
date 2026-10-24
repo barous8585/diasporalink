@@ -17,7 +17,7 @@ const nomPays = (code) => PAYS[code]?.nom || code;
 
 /**
  * Vérifie les agences de départ et de retrait et renvoie le sens d'envoi.
- * Les deux agences doivent être dans deux pays différents (France ⇄ Guinée).
+ * Une agence en Europe (France ou Belgique) et l'autre en Guinée.
  */
 async function sensDepuisAgences(codeDepart, codeRetrait) {
   const [dep, ret] = await Promise.all([Config.lieu(codeDepart), Config.lieu(codeRetrait)]);
@@ -25,7 +25,7 @@ async function sensDepuisAgences(codeDepart, codeRetrait) {
   if (!ret) throw new ErreurMetier('Agence de retrait inconnue.');
   if (ret.actif === false) throw new ErreurMetier(`L'agence ${ret.nom} est fermée.`);
   const sens = sensEntre(dep.pays, ret.pays);
-  if (!sens) throw new ErreurMetier('L\'agence de retrait doit être dans l\'autre pays.');
+  if (!sens) throw new ErreurMetier(`Pas d'envoi entre ${PAYS[dep.pays]?.nom || dep.pays} et ${PAYS[ret.pays]?.nom || ret.pays} : un des deux pays doit être la Guinée.`);
   return sens.key;
 }
 
@@ -37,12 +37,16 @@ class ErreurMetier extends Error {
 
 // ── Téléphones : format international pour pouvoir retrouver les colis ──
 // 6XXXXXXXX (9 chiffres) → +224 ; 0XXXXXXXXX (10 chiffres) → +33 ; 00… → +…
-function normTel(tel) {
+// Numéro au format international. pays = pays probable de la personne : en Belgique,
+// un mobile 04XX XX XX XX devient +32 ; sinon un 0X XX XX XX XX est français (+33).
+function normTel(tel, pays) {
   if (!tel) return tel;
   let t = String(tel).replace(/[\s.\-()]/g, '');
   if (t.startsWith('00')) t = '+' + t.slice(2);
   if (/^6\d{8}$/.test(t)) t = '+224' + t;
+  if (pays === 'BE' && /^04\d{8}$/.test(t)) t = '+32' + t.slice(1);
   if (/^0[1-9]\d{8}$/.test(t)) t = '+33' + t.slice(1);
+  if (/^0[1-9]\d{7}$/.test(t)) t = '+32' + t.slice(1); // fixe belge (9 chiffres)
   return t;
 }
 
@@ -267,8 +271,9 @@ async function deposer(agent, data) {
   const champs = ['mode', 'typeColis', 'guichet', 'description', 'nbCartons', 'valeurDeclaree', 'assurance', 'payeurArrivee'];
   const guichetAvant = colis.guichet;
   champs.forEach(k => { if (data[k] !== undefined && data[k] !== '') colis[k] = data[k]; });
-  if (data.expediteur) colis.expediteur = { nom: data.expediteur.nom, telephone: normTel(data.expediteur.telephone) };
-  if (data.destinataire) colis.destinataire = { nom: data.destinataire.nom, telephone: normTel(data.destinataire.telephone) };
+  // Téléphones normalisés une fois le sens connu (un 04… est belge pour une personne en Belgique)
+  if (data.expediteur) colis.expediteur = { nom: data.expediteur.nom, telephone: String(data.expediteur.telephone || '').trim() };
+  if (data.destinataire) colis.destinataire = { nom: data.destinataire.nom, telephone: String(data.destinataire.telephone || '').trim() };
   if (!colis.guichet) throw new ErreurMetier('Agence de retrait requise.');
   if (data.articles !== undefined) colis.articles = nettoyerArticles(config, data.articles);
 
@@ -276,6 +281,11 @@ async function deposer(agent, data) {
   // Le colis part de l'agence où il est pesé
   colis.depot = agent.lieu || data.depot || colis.depot;
   colis.sens = await sensDepuisAgences(colis.depot, colis.guichet);
+  {
+    const [paysExp, paysDest] = colis.sens.split('-');
+    if (colis.expediteur?.telephone) colis.expediteur.telephone = normTel(colis.expediteur.telephone, paysExp);
+    if (colis.destinataire?.telephone) colis.destinataire.telephone = normTel(colis.destinataire.telephone, paysDest);
+  }
   const tarif = calculerTarif(config, {
     sens: colis.sens, mode: colis.mode, poidsKg: poidsReel, typeColis: colis.typeColis,
     valeurDeclaree: colis.valeurDeclaree, assurance: colis.assurance, articles: colis.articles,
@@ -390,8 +400,8 @@ async function mettrePret(colis, agent, emplacement) {
   colis.ajouterEvenement(STATUTS.PRET, nomGuichet, { lieu: colis.guichet, agent: agent?._id });
   const config = await Config.get();
   const { soldeGnf, soldeEur } = calculerSolde(colis, config);
-  const enFrance = paysArriveeDe(colis.sens) === 'FR';
-  const reste = soldeGnf > 0 ? (enFrance ? `${soldeEur.toLocaleString('fr-FR')} €` : `${soldeGnf.toLocaleString('fr-FR')} GNF`) : '';
+  const enEuros = paysArriveeDe(colis.sens) !== 'GN';
+  const reste = soldeGnf > 0 ? (enEuros ? `${soldeEur.toLocaleString('fr-FR')} €` : `${soldeGnf.toLocaleString('fr-FR')} GNF`) : '';
   const msg = colis.livraison?.demande && colis.livraison.statut !== 'annulee'
     ? MESSAGES.pretLivraison(colis, code, reste)
     : MESSAGES.pret(colis, code, nomGuichet, reste);
@@ -599,7 +609,7 @@ async function remettre(agent, data) {
     const piece = String(data.pieceNumero || '').trim();
     if (!data.pieceVerifiee) throw new ErreurMetier('Vérifiez la pièce d\'identité.');
     if (piece.length < 4) throw new ErreurMetier('Notez le numéro de la pièce d\'identité.');
-    const tel = normTel(data.telephoneConfirme || '');
+    const tel = normTel(data.telephoneConfirme || '', paysArriveeDe(colis.sens));
     const attendus = [colis.destinataire?.telephone, colis.tiersAutorise?.telephone].filter(Boolean);
     if (!tel || !attendus.includes(tel)) throw new ErreurMetier('Le numéro de téléphone donné ne correspond pas au destinataire.', 403, 'tel_faux');
   } else if ((colis.codeEssais || 0) >= CODE_RETRAIT_ESSAIS_MAX) {
