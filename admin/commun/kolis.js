@@ -110,6 +110,75 @@
     return t;
   }
 
+  // ── Indicatif pays devant chaque champ téléphone (+33, +32, +224) ──
+  // Chaque <input type="tel"> reçoit automatiquement une liste d'indicatifs. Le numéro tapé
+  // « à la locale » (06…, 04…, 6…) est mis au format international avec l'indicatif choisi
+  // dès qu'on quitte le champ et juste avant l'envoi du formulaire : tout le reste de l'app
+  // reçoit donc toujours +33…, +32… ou +224…, sans ambiguïté entre la France et la Belgique.
+  const INDICATIFS = [
+    { pays: 'FR', code: '+33', drapeau: '🇫🇷', nom: 'France' },
+    { pays: 'BE', code: '+32', drapeau: '🇧🇪', nom: 'Belgique' },
+    { pays: 'GN', code: '+224', drapeau: '🇬🇳', nom: 'Guinée' },
+  ];
+  // Pays par défaut d'après le fuseau horaire du téléphone (Conakry, Bruxelles, sinon France)
+  let paysTelDefaut = (() => { try { const z = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; return z === 'Africa/Conakry' ? 'GN' : z === 'Europe/Brussels' ? 'BE' : 'FR'; } catch { return 'FR'; } })();
+  const indicatifDe = (pays) => INDICATIFS.find(i => i.pays === pays) || INDICATIFS[0];
+  // Pays d'un numéro déjà international (+33…, 0032…)
+  function paysDuTel(v) {
+    const t = String(v || '').replace(/[\s.\-()]/g, '').replace(/^00/, '+');
+    return t.startsWith('+') ? INDICATIFS.find(i => t.startsWith(i.code))?.pays || null : null;
+  }
+  // « 0478 12 34 56 » + Belgique → « +32478123456 » ; un numéro déjà en +… est gardé
+  function versInternational(valeur, pays) {
+    let t = String(valeur || '').replace(/[\s.\-()]/g, '');
+    if (!t) return '';
+    if (t.startsWith('00')) t = '+' + t.slice(2);
+    if (t.startsWith('+')) return t;
+    if (!/^\d{6,}$/.test(t)) return String(valeur || '').trim(); // pas un numéro : on laisse l'app l'expliquer
+    const i = indicatifDe(pays);
+    const code = i.code.slice(1);
+    if (t.startsWith(code) && t.length > code.length + 7) return '+' + t; // tapé avec l'indicatif sans « + »
+    return i.code + t.replace(/^0+/, '');
+  }
+  function equiperTel(input) {
+    if (input.dataset.indicatif || input.closest('[data-sans-indicatif]')) return;
+    const pays = paysDuTel(input.value) || input.dataset.pays || paysTelDefaut;
+    input.dataset.indicatif = pays;
+    const choix = document.createElement('select');
+    choix.className = 'saisie choix-indicatif';
+    choix.setAttribute('aria-label', 'Indicatif du pays');
+    choix.innerHTML = INDICATIFS.map(i => `<option value="${i.pays}" ${i.pays === pays ? 'selected' : ''}>${i.drapeau} ${i.code}</option>`).join('');
+    const bloc = document.createElement('span');
+    bloc.className = 'champ-tel';
+    input.before(bloc);
+    bloc.append(choix, input);
+    const convertir = () => { if (input.value) input.value = versInternational(input.value, choix.value); };
+    choix.addEventListener('change', () => { input.dataset.indicatif = choix.value; if (input.value && !paysDuTel(input.value)) convertir(); });
+    input.addEventListener('change', () => {
+      const p = paysDuTel(input.value);
+      if (p) { choix.value = p; input.dataset.indicatif = p; } else convertir();
+    });
+    input._convertirTel = convertir;
+  }
+  // Choisir l'indicatif d'un champ selon le contexte (ex. destinataire en Belgique)
+  function indicatifPour(input, pays) {
+    if (!input || !pays) return;
+    input.dataset.pays = pays;
+    const choix = input.parentElement?.querySelector('.choix-indicatif');
+    if (choix && !paysDuTel(input.value) && !input.value) { choix.value = pays; input.dataset.indicatif = pays; }
+  }
+  const equiperTout = (racine = document) => racine.querySelectorAll?.('input[type=tel]:not([data-indicatif])').forEach(equiperTel);
+  if (typeof document !== 'undefined') {
+    const demarrer = () => {
+      equiperTout();
+      new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.matches?.('input[type=tel]')) equiperTel(n); else equiperTout(n); } })
+        .observe(document.body, { childList: true, subtree: true });
+      // Avant tout envoi : numéros au format international
+      document.addEventListener('submit', (e) => e.target.querySelectorAll?.('input[type=tel]').forEach(i => i._convertirTel?.()), true);
+    };
+    if (document.body) demarrer(); else document.addEventListener('DOMContentLoaded', demarrer);
+  }
+
   // ── Icônes (tracés simples, trait) ──
   const TRACES = {
     colis: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5"/><path d="M12 12v9"/>',
@@ -200,7 +269,7 @@
           ${etape === 'tel' ? `
             <p class="muet">Entrez votre numéro. Vous recevrez un code par SMS.</p>
             <label class="champ">Téléphone
-              <input class="saisie saisie-forte" name="telephone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+224 6XX XX XX XX ou 06 XX XX XX XX" value="${esc(telephone)}" required>
+              <input class="saisie saisie-forte" name="telephone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Votre numéro" value="${esc(telephone)}" required>
             </label>
             ${nouvel ? `
               <p class="bandeau bandeau-ocre">Premier passage : indiquez votre nom.</p>
@@ -284,7 +353,7 @@
               <label class="champ">Nom <input class="saisie" name="nom" autocomplete="family-name" required></label>
             </div>` : ''}
           <label class="champ">Téléphone
-            <input class="saisie saisie-forte" name="telephone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+224 6XX XX XX XX ou 06 XX XX XX XX" required>
+            <input class="saisie saisie-forte" name="telephone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Votre numéro" required>
           </label>
           ${champMdp('motDePasse', vue === 'inscription' ? 'Mot de passe (8 caractères minimum)' : 'Mot de passe', vue === 'inscription' ? 'new-password' : 'current-password')}
           ${vue === 'inscription' ? champMdp('confirmation', 'Confirmez le mot de passe', 'new-password') : ''}
@@ -462,7 +531,7 @@
             <label class="champ">Prénom <input class="saisie" name="prenom" value="${esc(p.prenom || '')}" autocomplete="given-name" required></label>
             <label class="champ">Nom <input class="saisie" name="nom" value="${esc(p.nom || '')}" autocomplete="family-name" required></label>
           </div>
-          <label class="champ">Téléphone <input class="saisie saisie-forte" name="telephone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+224 6XX XX XX XX ou 06 XX XX XX XX" required></label>
+          <label class="champ">Téléphone <input class="saisie saisie-forte" name="telephone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Votre numéro" required></label>
           ${avecMdp ? `<p class="bandeau bandeau-bleu petit">${ic('cadenas', 'ic-sm')}<span>Ce numéro a déjà un compte. Entrez son mot de passe pour y relier Google : ensuite, un seul geste suffira pour vous connecter.</span></p>
           <label class="champ">Mot de passe du compte <input class="saisie saisie-forte" name="motDePasse" type="password" autocomplete="current-password" required></label>` : ''}
           ${erreur ? `<p class="bandeau bandeau-rouge" role="alert">${esc(erreur)}</p>` : ''}
@@ -990,7 +1059,8 @@
   };
 
   window.K = {
-    libMode, icMode, etoiles,
+    libMode, icMode, etoiles, INDICATIFS, indicatifPour, versInternational,
+    set paysTelDefaut(p) { paysTelDefaut = p || 'FR'; }, get paysTelDefaut() { return paysTelDefaut; },
     API_URL, api, session, stock, config, ErreurReseau,
     esc, gnf, eur, montant, kg, date, heure, uid, normTel, ic, toast, modale, vueConnexion, changerMotDePasse, sha256, etiquette,
     positionDuTexte, positionDuLien, gpsActuel, lienCarte, champsAdresse, brancherAdresse, choisirSurCarte, chargerLeaflet,

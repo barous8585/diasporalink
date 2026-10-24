@@ -468,3 +468,10 @@ form.pile:has(> .bloc-etape) { gap: 20px; }
 .bouton-derouler .fleche { display: inline-flex; transform: rotate(90deg); transition: transform .2s; }
 .bouton-derouler.ouvert .fleche { transform: rotate(-90deg); }
 .bloc-avis-accueil .avis-carte { box-shadow: none; border: 1px solid var(--ligne, #E3E7EF); }
+
+/* Téléphone : indicatif pays + numéro */
+.champ-tel { display: flex; gap: 6px; align-items: stretch; width: 100%; }
+.champ-tel > input { flex: 1; min-width: 0; }
+.champ-tel > .choix-indicatif { flex: 0 0 auto; width: auto; min-width: 96px; padding-left: 10px; padding-right: 26px; font-weight: 600; }
+/* Dans une grille à 2 colonnes, le téléphone prend toute la largeur (indicatif + numéro lisibles) */
+:is(.grille-2, .grille-3):has(> .champ .champ-tel) > .champ, .formulaire-grille > .champ:has(.champ-tel) { grid-column: 1 / -1; }

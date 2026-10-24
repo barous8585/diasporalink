@@ -248,6 +248,7 @@
     if (!ONGLETS[onglet] || (!visibles.includes(onglet) && !ONGLETS[onglet].cache)) onglet = visibles[0];
     document.querySelector('[data-titre]').textContent = ONGLETS[onglet].lib;
     document.body.classList.remove('deconnecte');
+    if (CTX?.pays) K.paysTelDefaut = CTX.pays; // numéros tapés par défaut dans le pays de l'agence
     dessinerNav(onglet);
     main.classList.add('entree');
     main.innerHTML = '<div class="chargement"></div>';
@@ -755,7 +756,8 @@
       $('[data-retrait]').innerHTML = optionsRetrait();
       if (etat.guichet) $('[data-retrait]').value = etat.guichet;
       $('[data-lib-retrait]').textContent = `Agence de retrait en ${paysPossibles().map(p => CONFIG.pays[p]?.nom).join(' ou ')}`;
-      form.destTel.placeholder = paysDest() === 'GN' ? '6XX XX XX XX' : paysPossibles().includes('BE') ? '+33… ou +32…' : '06 XX XX XX XX';
+      form.destTel.placeholder = paysDest() === 'GN' ? '6XX XX XX XX' : 'Numéro';
+      K.indicatifPour(form.expTel, paysDepart());
       const methodes = methodesDe(devisePaie());
       if (!methodes.some(([k]) => k === etat.methode)) etat.methode = 'especes';
       $('[data-methodes]').innerHTML = methodes.map(([k, l]) => `<button type="button" class="choix choix-ocre" style="align-items:center;text-align:center" data-methode="${k}" aria-pressed="${etat.methode === k}"><span class="nom" style="font-size:14px">${l}</span></button>`).join('');
@@ -771,6 +773,7 @@
       if (form.depot) etat.depot = form.depot.value;
       majPays();
       etat.guichet = form.guichet.value;
+      K.indicatifPour(form.destTel, paysDest()); // destinataire : indicatif du pays d'arrivée
       const poids = parseFloat(form.poidsReel.value);
       etat.typeColis = form.typeColis.value;
       $('[data-valeur]').classList.toggle('cache', !form.assurance.checked);
@@ -1064,7 +1067,7 @@
           </div>
           <div class="pile cache" style="--gap:8px" data-zone-sans-code>
             <p class="bandeau bandeau-ocre petit">${ic('alerte', 'ic-sm')}<span>Retrait sans code : demandez le <b>numéro de téléphone du destinataire</b> (sans le lui montrer), vérifiez la pièce d'identité et notez son numéro. L'administrateur est prévenu.</span></p>
-            <label class="champ">Téléphone du destinataire, donné par la personne <input class="saisie" name="telConfirme" type="tel" inputmode="tel" autocomplete="off" placeholder="${paysAgent() === 'GN' ? '6XX XX XX XX' : paysAgent() === 'BE' ? '04XX XX XX XX ou +32…' : '06 XX XX XX XX'}"></label>
+            <label class="champ">Téléphone du destinataire, donné par la personne <input class="saisie" name="telConfirme" type="tel" inputmode="tel" autocomplete="off" data-pays="${esc(paysAgent() || '')}" placeholder="Numéro"></label>
             <label class="champ">N° de la pièce d'identité <input class="saisie" name="pieceNumero" autocomplete="off" autocapitalize="characters"></label>
             <button type="button" class="btn btn-petit" data-avec-code-retour>J'ai le code finalement</button>
           </div>
