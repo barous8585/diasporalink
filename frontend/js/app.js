@@ -1156,7 +1156,8 @@
       $('[data-select-depot]').innerHTML = optionsAgences(si.depart);
       $('[data-select-retrait]').innerHTML = optionsAgences(si.arrivee);
       $('[data-lib-tel]').textContent = `Son téléphone en ${nomPays(si.arrivee)}`;
-      $('[name=telephone]').placeholder = si.arrivee === 'GN' ? '6XX XX XX XX' : si.arrivee === 'BE' ? '04XX XX XX XX ou +32…' : '06 XX XX XX XX';
+      $('[name=telephone]').placeholder = si.arrivee === 'GN' ? '6XX XX XX XX' : si.arrivee === 'BE' ? '04XX XX XX XX' : '06 XX XX XX XX';
+      K.indicatifPour($('[name=telephone]'), si.arrivee);
     };
     const maj = () => {
       stock.ecrire('brouillon_envoi', etat);
